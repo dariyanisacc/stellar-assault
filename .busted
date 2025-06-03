@@ -1,0 +1,16 @@
+return {
+  _all = {
+    ROOT = {"tests"},
+    pattern = ".*_test%.lua$",
+    verbose = true,
+    output = "utfTerminal",
+  },
+  unit = {
+    ROOT = {"tests/unit"},
+    pattern = ".*_test%.lua$",
+  },
+  integration = {
+    ROOT = {"tests/integration"},
+    pattern = ".*_test%.lua$",
+  }
+}
