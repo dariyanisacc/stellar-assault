@@ -1183,19 +1183,19 @@ function love.draw()
         love.graphics.setColor(1, 1, 1)
         love.graphics.setFont(font)
         
-        -- Title with animated glow
-        local titleGlow = 0.7 + math.sin(love.timer.getTime() * 2) * 0.3
-        love.graphics.setColor(titleGlow, titleGlow, 1)
-        love.graphics.printf("STELLAR ASSAULT", 0, 120, 800, "center")
-        
-        -- Subtitle
-        if smallFont then love.graphics.setFont(smallFont) end
-        love.graphics.setColor(0.7, 0.7, 0.7)
-        love.graphics.printf("An Endless Space Adventure", 0, 170, 800, "center")
-        love.graphics.setFont(font)
-        
         -- Draw menu based on current menu state
         if menuState == "main" then
+            -- Title with animated glow (only on main menu)
+            local titleGlow = 0.7 + math.sin(love.timer.getTime() * 2) * 0.3
+            love.graphics.setColor(titleGlow, titleGlow, 1)
+            love.graphics.printf("STELLAR ASSAULT", 0, 120, 800, "center")
+            
+            -- Subtitle
+            if smallFont then love.graphics.setFont(smallFont) end
+            love.graphics.setColor(0.7, 0.7, 0.7)
+            love.graphics.printf("An Endless Space Adventure", 0, 170, 800, "center")
+            love.graphics.setFont(font)
+            
             drawMainMenu()
         elseif menuState == "saves" then
             drawSaveSlotMenu()
@@ -1206,15 +1206,15 @@ function love.draw()
         -- Instructions
         love.graphics.setColor(0.5, 0.5, 0.5)
         if smallFont then love.graphics.setFont(smallFont) end
-        love.graphics.printf("Arrow Keys/D-Pad: Navigate | Enter/A: Select", 0, 450, 800, "center")
-        love.graphics.printf("Dodge asteroids and alien UFOs! Watch out - aliens shoot back!", 0, 470, 800, "center")
+        love.graphics.printf("Arrow Keys/D-Pad: Navigate | Enter/A: Select", 0, 520, 800, "center")
+        love.graphics.printf("Dodge asteroids and alien UFOs! Watch out - aliens shoot back!", 0, 540, 800, "center")
         if gamepad and gamepad:isGamepad() then
             love.graphics.setColor(0.3, 0.8, 0.3)
             local controllerName = gamepad:getName()
             if string.len(controllerName) > 30 then
                 controllerName = string.sub(controllerName, 1, 27) .. "..."
             end
-            love.graphics.printf("Controller: " .. controllerName, 0, 500, 800, "center")
+            love.graphics.printf("Controller: " .. controllerName, 0, 570, 800, "center")
         end
         love.graphics.setFont(font)
         
@@ -1278,9 +1278,9 @@ function love.draw()
         end
         
         -- Draw Master volume slider
-        local sliderX = 250
+        local sliderX = 200
         local sliderY = optY + optSpacing * 2 + 40  -- Offset by more than font size (32px)
-        local sliderWidth = 300
+        local sliderWidth = 250
         
         -- Background bar
         love.graphics.setColor(0.2, 0.2, 0.2)
@@ -1296,9 +1296,9 @@ function love.draw()
         love.graphics.setColor(0, 0, 0)
         love.graphics.circle("line", sliderX + sliderWidth * masterVolume, sliderY + 7.5, 10)
         
-        -- Percentage
+        -- Percentage (on the left side)
         love.graphics.setColor(1, 1, 1)
-        love.graphics.printf(math.floor(masterVolume * 100 + 0.5) .. "%", sliderX + sliderWidth + 20, sliderY - 2, 50, "left")
+        love.graphics.printf(math.floor(masterVolume * 100 + 0.5) .. "%", sliderX - 60, sliderY - 2, 50, "right")
         
         -- SFX Volume with visual slider
         if optionsSelection == 4 then
@@ -1326,9 +1326,9 @@ function love.draw()
         love.graphics.setColor(0, 0, 0)
         love.graphics.circle("line", sliderX + sliderWidth * sfxVolume, sliderY + 7.5, 10)
         
-        -- Percentage
+        -- Percentage (on the left side)
         love.graphics.setColor(1, 1, 1)
-        love.graphics.printf(math.floor(sfxVolume * 100 + 0.5) .. "%", sliderX + sliderWidth + 20, sliderY - 2, 50, "left")
+        love.graphics.printf(math.floor(sfxVolume * 100 + 0.5) .. "%", sliderX - 60, sliderY - 2, 50, "right")
         
         -- Music Volume with visual slider
         if optionsSelection == 5 then
@@ -1356,9 +1356,9 @@ function love.draw()
         love.graphics.setColor(0, 0, 0)
         love.graphics.circle("line", sliderX + sliderWidth * musicVolume, sliderY + 7.5, 10)
         
-        -- Percentage
+        -- Percentage (on the left side)
         love.graphics.setColor(1, 1, 1)
-        love.graphics.printf(math.floor(musicVolume * 100 + 0.5) .. "%", sliderX + sliderWidth + 20, sliderY - 2, 50, "left")
+        love.graphics.printf(math.floor(musicVolume * 100 + 0.5) .. "%", sliderX - 60, sliderY - 2, 50, "right")
         
         -- Back option
         if optionsSelection == 6 then
@@ -1480,7 +1480,14 @@ function drawGame()
         
         -- Draw boss lasers
         for _, laser in ipairs(bossLasers) do
-            if laser.homing then
+            if laser.color then
+                -- Custom colored lasers (for annihilator)
+                local r, g, b = laser.color[1], laser.color[2], laser.color[3]
+                love.graphics.setColor(r, g, b, 0.5) -- Glow
+                love.graphics.rectangle("fill", laser.x - 3, laser.y - 3, laser.width + 6, laser.height + 6)
+                love.graphics.setColor(r * 0.8, g * 0.8, b * 0.8) -- Main laser
+                love.graphics.rectangle("fill", laser.x, laser.y, laser.width, laser.height)
+            elseif laser.homing then
                 -- Purple homing lasers
                 love.graphics.setColor(1, 0, 1, 0.5) -- Purple glow
                 love.graphics.rectangle("fill", laser.x - 3, laser.y - 3, laser.width + 6, laser.height + 6)
@@ -3038,60 +3045,7 @@ function spawnAlien()
 end
 
 -- Boss functions
-function spawnBoss()
-    if currentLevel == 1 then
-        -- Level 1 Boss: Destroyer
-        boss = {
-            x = baseWidth/2 - 100,
-            y = -200,
-            width = 200,
-            height = 150,
-            vx = 100,
-            vy = 30,
-            health = 500,
-            maxHealth = 500,
-            phase = 1,
-            shootTimer = 0,
-            specialTimer = 0,
-            invulnerable = false,
-            invulnerableTimer = 0,
-            type = "destroyer"
-        }
-        
-        createPowerupText("ZONE 1 BOSS: DESTROYER", baseWidth/2, 100, {1, 0, 0})
-    else
-        -- Level 2 Boss: Annihilator
-        boss = {
-            x = baseWidth/2 - 120,
-            y = -250,
-            width = 240,
-            height = 180,
-            vx = 150, -- Faster movement
-            vy = 30,
-            health = 800, -- More health
-            maxHealth = 800,
-            phase = 1,
-            shootTimer = 0,
-            specialTimer = 0,
-            invulnerable = false,
-            invulnerableTimer = 0,
-            type = "annihilator",
-            rotationAngle = 0,
-            shieldActive = false,
-            shieldHealth = 100
-        }
-        
-        createPowerupText("ZONE 2 BOSS: ANNIHILATOR", baseWidth/2, 100, {1, 0, 1})
-    end
-    
-    -- Play boss music or intense sound
-    if sounds.gameover then
-        local bossSound = sounds.gameover:clone()
-        bossSound:setVolume(0.3 * sfxVolume * masterVolume)
-        bossSound:setPitch(currentLevel == 1 and 0.5 or 0.4) -- Even lower pitch for level 2
-        bossSound:play()
-    end
-end
+-- This function is replaced by the more complete version at line 4451
 
 function updateBoss(dt)
     if not boss then return end
@@ -3110,6 +3064,33 @@ function updateBoss(dt)
         -- Update rotation for Annihilator
         if boss.type == "annihilator" then
             boss.rotationAngle = boss.rotationAngle + dt * 0.5
+            
+            -- Update beam sweep if active
+            if boss.beamActive then
+                boss.beamAngle = boss.beamAngle + dt * 0.8  -- Sweep speed
+                boss.beamDuration = boss.beamDuration - dt
+                
+                -- Check beam collision with player
+                local beamX = boss.x + boss.width/2
+                local beamY = boss.y + boss.height
+                local beamEndX = beamX + math.cos(boss.beamAngle) * 1000
+                local beamEndY = beamY + math.sin(boss.beamAngle) * 1000
+                
+                -- Simple line-box collision for beam
+                if lineBoxCollision(beamX, beamY, beamEndX, beamEndY, 
+                                   player.x, player.y, player.width, player.height) then
+                    if invulnerableTime <= 0 and activePowerups.shield <= 0 then
+                        loseLife()
+                    elseif activePowerups.shield > 0 then
+                        activePowerups.shield = 0
+                        createShieldBreakEffect(player.x + player.width/2, player.y + player.height/2)
+                    end
+                end
+                
+                if boss.beamDuration <= 0 or boss.beamAngle > math.pi/4 then
+                    boss.beamActive = false
+                end
+            end
         end
         
         -- Update invulnerability
@@ -3156,41 +3137,71 @@ function updateBoss(dt)
             end
             
         elseif boss.type == "annihilator" then
-            -- Level 2 Boss patterns - more complex
+            -- Level 2 Boss patterns - unique mechanics
             if boss.phase == 1 then
                 -- Activate shield periodically
-                if not boss.shieldActive and boss.shieldHealth <= 0 and boss.specialTimer > 8 then
+                if not boss.shieldActive and boss.shieldHealth <= 0 and boss.specialTimer > 10 then
                     boss.shieldActive = true
                     boss.shieldHealth = 100
                     createPowerupText("SHIELD ACTIVATED!", boss.x + boss.width/2, boss.y + boss.height + 20, {0, 1, 1})
                 end
                 
-                if boss.shootTimer > 0.6 then
-                    bossCircularShot()
+                -- Teleport attack pattern
+                if boss.shootTimer > 1.5 then
+                    annihilatorTeleportAttack()
                     boss.shootTimer = 0
                 end
                 
-                if boss.specialTimer > 5 then
-                    bossSpiralAttack()
+                -- Special attacks rotation
+                if boss.specialTimer > 6 then
+                    local attack = math.random(1, 3)
+                    if attack == 1 then
+                        annihilatorBeamSweep()
+                    elseif attack == 2 then
+                        annihilatorMineField()
+                    else
+                        annihilatorShieldBurst()
+                    end
                     boss.specialTimer = 0
                 end
                 
                 if boss.health <= boss.maxHealth * 0.5 then
                     boss.phase = 2
-                    boss.vx = boss.vx * 1.3
-                    createPowerupText("FINAL PHASE!", boss.x + boss.width/2, boss.y + boss.height + 20, {1, 0, 1})
+                    boss.vx = boss.vx * 1.5
+                    createPowerupText("OVERDRIVE MODE!", boss.x + boss.width/2, boss.y + boss.height + 20, {1, 0, 1})
+                    -- Clear mines when entering phase 2
+                    for i = #aliens, 1, -1 do
+                        if aliens[i].type == "energyMine" then
+                            createExplosion(aliens[i].x + aliens[i].width/2, aliens[i].y + aliens[i].height/2)
+                            table.remove(aliens, i)
+                        end
+                    end
                 end
                 
             elseif boss.phase == 2 then
-                -- More aggressive patterns
-                if boss.shootTimer > 0.4 then
-                    bossCircularShot()
-                    bossSpreadShot() -- Double attack!
+                -- More aggressive patterns with teleportation
+                if boss.shootTimer > 0.8 then
+                    annihilatorTeleportAttack()
                     boss.shootTimer = 0
                 end
                 
+                -- Rapid special attacks
                 if boss.specialTimer > 3 then
-                    bossLaserWave()
+                    local attack = math.random(1, 2)
+                    if attack == 1 then
+                        annihilatorBeamSweep()
+                    else
+                        annihilatorShieldBurst()
+                        annihilatorMineField()  -- Double attack!
+                    end
+                    boss.specialTimer = 0
+                end
+                
+                -- Desperation attack at low health
+                if boss.health <= boss.maxHealth * 0.2 and not boss.desperationMode then
+                    boss.desperationMode = true
+                    createPowerupText("MAXIMUM POWER!", boss.x + boss.width/2, boss.y + boss.height + 20, {1, 1, 0})
+                    boss.shootTimer = 0
                     boss.specialTimer = 0
                 end
             end
@@ -3407,6 +3418,94 @@ function bossLaserWave()
     end
 end
 
+-- Annihilator-specific attacks
+function annihilatorBeamSweep()
+    if not boss.beamActive then
+        boss.beamActive = true
+        boss.beamAngle = -math.pi/4  -- Start from left
+        boss.beamDuration = 3
+        createPowerupText("BEAM SWEEP!", boss.x + boss.width/2, boss.y + boss.height + 20, {1, 0, 1})
+    end
+end
+
+function annihilatorTeleportAttack()
+    -- Teleport to random position and fire burst
+    local oldX = boss.x
+    boss.x = math.random(50, baseWidth - boss.width - 50)
+    
+    -- Create teleport effect at old position
+    createExplosion(oldX + boss.width/2, boss.y + boss.height/2, "teleport")
+    
+    -- Fire burst from new position
+    createPowerupText("TELEPORT!", boss.x + boss.width/2, boss.y - 20, {1, 0, 1})
+    
+    -- Fire omnidirectional burst
+    for i = 1, 16 do
+        local angle = (i / 16) * math.pi * 2
+        local laser = {
+            x = boss.x + boss.width/2,
+            y = boss.y + boss.height/2,
+            width = 10,
+            height = 20,
+            vx = math.cos(angle) * 300,
+            vy = math.sin(angle) * 300,
+            damage = 1,
+            color = {1, 0, 1}  -- Purple lasers
+        }
+        table.insert(bossLasers, laser)
+    end
+end
+
+function annihilatorMineField()
+    createPowerupText("MINES!", boss.x + boss.width/2, boss.y + boss.height + 20, {1, 0, 0.5})
+    
+    -- Deploy stationary mines
+    for i = 1, 8 do
+        local mine = {
+            x = math.random(50, baseWidth - 50),
+            y = math.random(100, baseHeight - 200),
+            width = 30,
+            height = 30,
+            vx = 0,
+            vy = 0,
+            lifeTime = 10,
+            type = "energyMine",
+            damage = 1,
+            pulseTimer = 0,
+            armed = false,
+            armTimer = 1  -- 1 second to arm
+        }
+        table.insert(aliens, mine)
+    end
+end
+
+function annihilatorShieldBurst()
+    if boss.shieldActive and boss.shieldHealth > 0 then
+        -- Shield releases energy burst when active
+        createPowerupText("SHIELD BURST!", boss.x + boss.width/2, boss.y + boss.height + 20, {0, 1, 1})
+        
+        for i = 1, 12 do
+            local angle = (i / 12) * math.pi * 2
+            local laser = {
+                x = boss.x + boss.width/2,
+                y = boss.y + boss.height/2,
+                width = 15,
+                height = 15,
+                vx = math.cos(angle) * 200,
+                vy = math.sin(angle) * 200,
+                damage = 1,
+                color = {0, 1, 1},  -- Cyan shield lasers
+                homing = true,
+                homingStrength = 50
+            }
+            table.insert(bossLasers, laser)
+        end
+        
+        -- Damage shield slightly
+        boss.shieldHealth = boss.shieldHealth - 10
+    end
+end
+
 function defeatBoss()
     -- Create massive explosion
     for i = 1, 10 do
@@ -3588,6 +3687,41 @@ function drawBoss()
     love.graphics.setFont(smallFont)
     love.graphics.printf(boss.type == "destroyer" and "DESTROYER" or "ANNIHILATOR", 
         boss.x, boss.y - 30, boss.width, "center")
+    
+    -- Draw beam sweep for Annihilator
+    if boss.type == "annihilator" and boss.beamActive then
+        local beamX = boss.x + boss.width/2
+        local beamY = boss.y + boss.height
+        local beamEndX = beamX + math.cos(boss.beamAngle) * 1000
+        local beamEndY = beamY + math.sin(boss.beamAngle) * 1000
+        
+        -- Beam warning/charging effect
+        local chargeAlpha = math.sin(love.timer.getTime() * 10) * 0.3 + 0.7
+        love.graphics.setColor(1, 0, 1, chargeAlpha * 0.3)
+        love.graphics.setLineWidth(20)
+        love.graphics.line(beamX, beamY, beamEndX, beamEndY)
+        
+        -- Main beam
+        love.graphics.setColor(1, 0, 0.8, chargeAlpha)
+        love.graphics.setLineWidth(10)
+        love.graphics.line(beamX, beamY, beamEndX, beamEndY)
+        
+        -- Core beam
+        love.graphics.setColor(1, 0.5, 1, 1)
+        love.graphics.setLineWidth(4)
+        love.graphics.line(beamX, beamY, beamEndX, beamEndY)
+        
+        -- Beam impact particles
+        for i = 1, 5 do
+            local particlePos = i / 5
+            local px = beamX + (beamEndX - beamX) * particlePos
+            local py = beamY + (beamEndY - beamY) * particlePos
+            love.graphics.setColor(1, 0, 1, math.random() * 0.5 + 0.5)
+            love.graphics.circle("fill", px + math.random(-10, 10), py + math.random(-10, 10), math.random(2, 5))
+        end
+        
+        love.graphics.setLineWidth(1)
+    end
 end
 
 -- Reset game function
@@ -3839,6 +3973,29 @@ function drawStarsExtended(x, width)
         love.graphics.setColor(1, 1, 1, star.brightness * 0.7)
         love.graphics.circle("fill", x + (star.x / baseWidth) * width, star.y, star.size)
     end
+end
+
+function drawSidePanels(x, width)
+    -- Draw decorative side panels for ultrawide displays
+    love.graphics.setColor(0.1, 0.1, 0.2, 0.8)
+    love.graphics.rectangle("fill", x, 0, 50, baseHeight)
+    love.graphics.rectangle("fill", x + width - 50, 0, 50, baseHeight)
+    
+    -- Draw panel borders
+    love.graphics.setColor(0.3, 0.3, 0.5, 1)
+    love.graphics.setLineWidth(2)
+    love.graphics.line(x + 50, 0, x + 50, baseHeight)
+    love.graphics.line(x + width - 50, 0, x + width - 50, baseHeight)
+    
+    -- Draw decorative elements
+    love.graphics.setColor(0.4, 0.4, 0.6, 0.5)
+    for i = 0, 10 do
+        local y = i * baseHeight / 10
+        love.graphics.line(x, y, x + 50, y)
+        love.graphics.line(x + width - 50, y, x + width, y)
+    end
+    
+    love.graphics.setLineWidth(1)
 end
 
 -- Input handling functions
@@ -4445,38 +4602,42 @@ function spawnBoss()
         type = "destroyer"  -- Default boss type
     }
     
-    -- Set boss type based on level
-    if currentLevel % 5 == 0 then  -- Boss every 5 levels
-        local bossLevel = currentLevel / 5
-        if bossLevel == 1 then
-            boss.type = "destroyer"
-        elseif bossLevel == 2 then
-            boss.type = "annihilator"
-            boss.rotationAngle = 0
-        elseif bossLevel == 3 then
-            boss.type = "frosttitan"
-            boss.y = groundY - 200  -- Start on ground
-            boss.legs = {}
-            for i = 1, 8 do
-                boss.legs[i] = {angle = (i / 8) * math.pi * 2, raised = false}
-            end
-        elseif bossLevel == 4 then
-            boss.type = "hivemind"
-            boss.tentacles = {}
-            for i = 1, 4 do
-                boss.tentacles[i] = {
-                    angle = (i / 4) * math.pi * 2,
-                    length = 100,
-                    targetX = 0,
-                    targetY = 0
-                }
-            end
-        else
-            boss.type = "solaroverlord"
-            boss.phases = 4
-            boss.currentPhase = 1
-            boss.solarFlareTimer = 0
+    -- Set boss type based on level (bosses appear at levels 5, 10, 15, etc.)
+    local bossLevel = math.floor((currentLevel - 1) / 5) + 1  -- Which boss number this is
+    
+    if bossLevel == 1 then  -- Levels 1-5
+        boss.type = "destroyer"
+    elseif bossLevel == 2 then  -- Levels 6-10
+        boss.type = "annihilator"
+        boss.rotationAngle = 0
+        boss.shieldActive = false
+        boss.shieldHealth = 100
+        boss.beamActive = false
+        boss.beamAngle = 0
+        boss.beamDuration = 0
+    elseif bossLevel == 3 then  -- Levels 11-15
+        boss.type = "frosttitan"
+        boss.y = groundY - 200  -- Start on ground
+        boss.legs = {}
+        for i = 1, 8 do
+            boss.legs[i] = {angle = (i / 8) * math.pi * 2, raised = false}
         end
+    elseif bossLevel == 4 then  -- Levels 16-20
+        boss.type = "hivemind"
+        boss.tentacles = {}
+        for i = 1, 4 do
+            boss.tentacles[i] = {
+                angle = (i / 4) * math.pi * 2,
+                length = 100,
+                targetX = 0,
+                targetY = 0
+            }
+        end
+    else  -- Level 21+
+        boss.type = "solaroverlord"
+        boss.phases = 4
+        boss.currentPhase = 1
+        boss.solarFlareTimer = 0
     end
     
     bossSpawned = true
@@ -4505,6 +4666,28 @@ function spawnBoss()
     
     -- Visual feedback for powerup removal
     createPowerupText("POWERUPS DISABLED!", baseWidth/2, baseHeight/2 + 100, {1, 0, 0})
+    
+    -- Boss announcement
+    local bossLevel = math.floor((currentLevel - 1) / 5) + 1
+    if bossLevel == 1 then
+        createPowerupText("ZONE 1 BOSS: DESTROYER", baseWidth/2, 100, {1, 0, 0})
+    elseif bossLevel == 2 then
+        createPowerupText("ZONE 2 BOSS: ANNIHILATOR", baseWidth/2, 100, {1, 0, 1})
+    elseif bossLevel == 3 then
+        createPowerupText("ZONE 3 BOSS: FROST TITAN", baseWidth/2, 100, {0.5, 0.8, 1})
+    elseif bossLevel == 4 then
+        createPowerupText("ZONE 4 BOSS: HIVEMIND", baseWidth/2, 100, {0.5, 1, 0.5})
+    else
+        createPowerupText("ZONE 5 BOSS: SOLAR OVERLORD", baseWidth/2, 100, {1, 0.5, 0})
+    end
+    
+    -- Play boss music
+    if sounds.gameover then
+        local bossSound = sounds.gameover:clone()
+        bossSound:setVolume(0.3 * sfxVolume * masterVolume)
+        bossSound:setPitch(0.5 - (bossLevel * 0.05)) -- Lower pitch for higher level bosses
+        bossSound:play()
+    end
 end
 
 -- Collision detection function
@@ -4513,6 +4696,39 @@ function checkCollision(a, b)
            a.x + a.width > b.x and
            a.y < b.y + b.height and
            a.y + a.height > b.y
+end
+
+function lineBoxCollision(x1, y1, x2, y2, boxX, boxY, boxW, boxH)
+    -- Check if line segment intersects with box
+    -- Using line-rectangle intersection algorithm
+    local dx = x2 - x1
+    local dy = y2 - y1
+    
+    -- Check intersection with each edge of the box
+    local tmin = 0
+    local tmax = 1
+    
+    -- Check X bounds
+    if dx ~= 0 then
+        local tx1 = (boxX - x1) / dx
+        local tx2 = (boxX + boxW - x1) / dx
+        tmin = math.max(tmin, math.min(tx1, tx2))
+        tmax = math.min(tmax, math.max(tx1, tx2))
+    elseif x1 < boxX or x1 > boxX + boxW then
+        return false
+    end
+    
+    -- Check Y bounds
+    if dy ~= 0 then
+        local ty1 = (boxY - y1) / dy
+        local ty2 = (boxY + boxH - y1) / dy
+        tmin = math.max(tmin, math.min(ty1, ty2))
+        tmax = math.min(tmax, math.max(ty1, ty2))
+    elseif y1 < boxY or y1 > boxY + boxH then
+        return false
+    end
+    
+    return tmin <= tmax
 end
 
 -- UI Draw Functions
@@ -5173,17 +5389,27 @@ function spawnEnergyMine()
 end
 
 function spawnNebulaCloud()
+    -- Create smaller clouds with gaps between them
     local cloud = {
-        x = math.random(-100, baseWidth),
-        y = -200,
-        width = 200,
-        height = 150,
-        vx = math.random(-20, 20),
-        vy = math.random(30, 50),
+        x = math.random(0, baseWidth - 120),  -- Keep within screen bounds
+        y = -150,
+        width = 120,  -- Reduced from 200 to 120
+        height = 100,  -- Reduced from 150 to 100
+        vx = math.random(-10, 10),  -- Reduced horizontal movement
+        vy = math.random(40, 60),  -- Slightly faster to clear screen quicker
         type = "nebulacloud",
         damage = 1,
         opacity = 0.3
     }
+    
+    -- Ensure there's space to navigate by not spawning if there's already a cloud nearby
+    for _, existingCloud in ipairs(asteroids) do
+        if existingCloud.type == "nebulacloud" and 
+           math.abs(existingCloud.y - cloud.y) < 200 then  -- Don't spawn if another cloud is within 200 pixels vertically
+            return  -- Skip spawning this cloud
+        end
+    end
+    
     table.insert(asteroids, cloud)  -- Use asteroids table for environmental hazards
 end
 
@@ -5316,7 +5542,7 @@ function spawnLevelEnemies(dt)
         end
         
         -- Spawn nebula clouds that damage player
-        if math.random() < 0.02 then
+        if math.random() < 0.005 then  -- Reduced from 0.02 to 0.005 (75% less frequent)
             spawnNebulaCloud()
         end
         
@@ -5731,6 +5957,6 @@ function drawLevelSelectMenu()
     -- Instructions
     love.graphics.setColor(0.5, 0.5, 0.5)
     if smallFont then love.graphics.setFont(smallFont) end
-    love.graphics.printf("Arrow Keys: Navigate | Enter: Start Level", 0, 520, 800, "center")
+    love.graphics.printf("Arrow Keys: Navigate | Enter: Start Level", 0, 460, 800, "center")
     love.graphics.setFont(font)
 end
