@@ -115,13 +115,17 @@ function love.load()
         tripleShot = 0,
         rapidFire = 0,
         shield = 0,
-        slowTime = 0
+        slowTime = 0,
+        homing = 0,
+        pierce = 0,
+        freeze = 0,
+        vampire = 0
     }
     
     -- Powerups setup
     powerups = {}
     powerupTexts = {}
-    powerupChance = 30 -- 30% chance to drop from destroyed asteroids (was 15%)
+    powerupChance = 15 -- 15% chance to drop from destroyed asteroids
     
     -- Wave system for extra challenge
     waveTimer = 0
@@ -454,6 +458,40 @@ function love.update(dt)
                 goto continue_laser
             end
             
+            -- Homing behavior
+            if laser.homing then
+                local closestEnemy = nil
+                local closestDist = 200 -- Max homing range
+                
+                -- Find closest enemy
+                for _, asteroid in ipairs(asteroids) do
+                    local dist = math.sqrt((asteroid.x + asteroid.width/2 - laser.x)^2 + 
+                                         (asteroid.y + asteroid.height/2 - laser.y)^2)
+                    if dist < closestDist then
+                        closestDist = dist
+                        closestEnemy = asteroid
+                    end
+                end
+                
+                for _, alien in ipairs(aliens) do
+                    local dist = math.sqrt((alien.x + alien.width/2 - laser.x)^2 + 
+                                         (alien.y + alien.height/2 - laser.y)^2)
+                    if dist < closestDist then
+                        closestDist = dist
+                        closestEnemy = alien
+                    end
+                end
+                
+                -- Adjust velocity toward closest enemy
+                if closestEnemy then
+                    local dx = closestEnemy.x + closestEnemy.width/2 - laser.x
+                    local dy = closestEnemy.y + closestEnemy.height/2 - laser.y
+                    local angle = math.atan2(dy, dx)
+                    laser.vx = math.cos(angle) * 300
+                    laser.speed = 500 - math.sin(angle) * 300
+                end
+            end
+            
             laser.y = laser.y - laser.speed * dt
             if laser.vx then
                 laser.x = laser.x + laser.vx * dt
@@ -563,6 +601,16 @@ function love.update(dt)
                 speedMultiplier = 0.3 -- Slow down to 30% speed
             end
             
+            -- Update freeze timer
+            if asteroid.frozen and asteroid.freezeTime then
+                asteroid.freezeTime = asteroid.freezeTime - dt
+                if asteroid.freezeTime <= 0 then
+                    asteroid.frozen = false
+                    asteroid.freezeTime = nil
+                end
+                speedMultiplier = 0 -- Frozen asteroids don't move
+            end
+            
             -- Update position with velocity
             if asteroid.vx then
                 asteroid.x = asteroid.x + (asteroid.vx * speedMultiplier) * dt
@@ -597,11 +645,28 @@ function love.update(dt)
             for j = #lasers, 1, -1 do
                 local laser = lasers[j]
                 if checkCollision(laser, asteroid) then
-                    table.remove(lasers, j)
+                    -- Handle pierce powerup
+                    if laser.pierce and laser.pierceCount < 3 then
+                        laser.pierceCount = laser.pierceCount + 1
+                    else
+                        table.remove(lasers, j)
+                    end
                     
                     -- Only damage objects that have health
                     if asteroid.health then
                         asteroid.health = asteroid.health - 1
+                        
+                        -- Freeze powerup - freeze asteroid
+                        if activePowerups.freeze > 0 and not asteroid.frozen then
+                            asteroid.frozen = true
+                            asteroid.freezeTime = 2 -- Freeze for 2 seconds
+                        end
+                        
+                        -- Vampire powerup - heal on hit
+                        if activePowerups.vampire > 0 and player.health < player.maxHealth then
+                            player.health = math.min(player.health + 1, player.maxHealth)
+                            createPowerupText("+1 HP", player.x + player.width/2, player.y - 20, {0.8, 0.2, 0.8})
+                        end
                         
                         if asteroid.health <= 0 then
                         destroyed = true
@@ -728,6 +793,16 @@ function love.update(dt)
                 speedMultiplier = 0.3 -- Slow down aliens too
             end
             
+            -- Update freeze timer
+            if alien.frozen and alien.freezeTime then
+                alien.freezeTime = alien.freezeTime - dt
+                if alien.freezeTime <= 0 then
+                    alien.frozen = false
+                    alien.freezeTime = nil
+                end
+                speedMultiplier = 0 -- Frozen aliens don't move
+            end
+            
             -- Update movement (only if alien has velocity)
             if alien.vx and alien.vy then
                 alien.x = alien.x + (alien.vx * speedMultiplier) * dt
@@ -782,8 +857,25 @@ function love.update(dt)
             for j = #lasers, 1, -1 do
                 local laser = lasers[j]
                 if checkCollision(laser, alien) then
-                    table.remove(lasers, j)
+                    -- Handle pierce powerup
+                    if laser.pierce and laser.pierceCount < 3 then
+                        laser.pierceCount = laser.pierceCount + 1
+                    else
+                        table.remove(lasers, j)
+                    end
                     alien.health = alien.health - 1
+                    
+                    -- Freeze powerup - freeze alien
+                    if activePowerups.freeze > 0 and not alien.frozen then
+                        alien.frozen = true
+                        alien.freezeTime = 2 -- Freeze for 2 seconds
+                    end
+                    
+                    -- Vampire powerup - heal on hit
+                    if activePowerups.vampire > 0 and player.health < player.maxHealth then
+                        player.health = math.min(player.health + 1, player.maxHealth)
+                        createPowerupText("+1 HP", player.x + player.width/2, player.y - 20, {0.8, 0.2, 0.8})
+                    end
                     
                     if alien.health <= 0 then
                         destroyed = true
@@ -1348,8 +1440,22 @@ function drawGame()
         
         -- Draw lasers
         for _, laser in ipairs(lasers) do
-            -- Different color for rapid fire
-            if activePowerups.rapidFire > 0 then
+            -- Different visual effects based on powerups
+            if laser.homing then
+                -- Homing lasers - Red with trail
+                love.graphics.setColor(1, 0.3, 0.3, 0.3)
+                love.graphics.rectangle("fill", laser.x - 4, laser.y, laser.width + 8, laser.height + 10)
+                love.graphics.setColor(1, 0.3, 0.3)
+                love.graphics.rectangle("fill", laser.x, laser.y, laser.width, laser.height)
+            elseif laser.pierce then
+                -- Piercing lasers - Green with core
+                love.graphics.setColor(0.5, 1, 0.5, 0.5)
+                love.graphics.rectangle("fill", laser.x - 3, laser.y, laser.width + 6, laser.height)
+                love.graphics.setColor(0.8, 1, 0.8)
+                love.graphics.rectangle("fill", laser.x, laser.y, laser.width, laser.height)
+                love.graphics.setColor(1, 1, 1)
+                love.graphics.rectangle("fill", laser.x + 1, laser.y + 2, laser.width - 2, laser.height - 4)
+            elseif activePowerups.rapidFire > 0 then
                 love.graphics.setColor(1, 1, 0, 0.5) -- Yellow glow
                 love.graphics.rectangle("fill", laser.x - 2, laser.y, laser.width + 4, laser.height)
                 love.graphics.setColor(1, 1, 0) -- Yellow laser
@@ -1686,6 +1792,12 @@ function drawGame()
                 love.graphics.rotate(asteroid.rotation)
             end
             
+            -- Draw frozen effect
+            if asteroid.frozen then
+                love.graphics.setColor(0.5, 0.8, 1, 0.5) -- Ice blue overlay
+                love.graphics.circle("fill", 0, 0, math.max(asteroid.width, asteroid.height) * 0.6)
+            end
+            
             -- Draw different types of objects in the asteroids array
             if asteroid.type == "nebulacloud" then
                 -- Draw nebula cloud
@@ -1780,6 +1892,12 @@ function drawGame()
         for _, alien in ipairs(aliens) do
             love.graphics.push()
             love.graphics.translate(alien.x + alien.width/2, alien.y + alien.height/2)
+            
+            -- Draw frozen effect
+            if alien.frozen then
+                love.graphics.setColor(0.5, 0.8, 1, 0.5) -- Ice blue overlay
+                love.graphics.circle("fill", 0, 0, math.max(alien.width, alien.height) * 0.6)
+            end
             
             -- Draw different alien types
             if alien.type == "basic" or alien.type == "scout" or alien.type == "heavy" then
@@ -2082,7 +2200,9 @@ function drawGame()
         if smallFont then love.graphics.setFont(smallFont) end
         
         if activePowerups.tripleShot > 0 or activePowerups.rapidFire > 0 or 
-           activePowerups.shield > 0 or activePowerups.slowTime > 0 then
+           activePowerups.shield > 0 or activePowerups.slowTime > 0 or
+           activePowerups.homing > 0 or activePowerups.pierce > 0 or
+           activePowerups.freeze > 0 or activePowerups.vampire > 0 then
             love.graphics.setColor(1, 1, 1)
             love.graphics.print("Active:", 10, powerupY)
             powerupY = powerupY + 15
@@ -2109,6 +2229,30 @@ function drawGame()
         if activePowerups.slowTime > 0 then
             love.graphics.setColor(0.8, 0.5, 1)
             love.graphics.print("Slow Time: " .. math.ceil(activePowerups.slowTime) .. "s", 10, powerupY)
+            powerupY = powerupY + 15
+        end
+        
+        if activePowerups.homing > 0 then
+            love.graphics.setColor(1, 0.3, 0.3)
+            love.graphics.print("Homing: " .. math.ceil(activePowerups.homing) .. "s", 10, powerupY)
+            powerupY = powerupY + 15
+        end
+        
+        if activePowerups.pierce > 0 then
+            love.graphics.setColor(0.5, 1, 0.5)
+            love.graphics.print("Pierce: " .. math.ceil(activePowerups.pierce) .. "s", 10, powerupY)
+            powerupY = powerupY + 15
+        end
+        
+        if activePowerups.freeze > 0 then
+            love.graphics.setColor(0.5, 0.8, 1)
+            love.graphics.print("Freeze: " .. math.ceil(activePowerups.freeze) .. "s", 10, powerupY)
+            powerupY = powerupY + 15
+        end
+        
+        if activePowerups.vampire > 0 then
+            love.graphics.setColor(0.8, 0.2, 0.8)
+            love.graphics.print("Vampire: " .. math.ceil(activePowerups.vampire) .. "s", 10, powerupY)
             powerupY = powerupY + 15
         end
         
@@ -2258,7 +2402,10 @@ function shootLaser()
                 width = 4,
                 height = 20,
                 speed = 500,
-                vx = i * 80 -- More angle
+                vx = i * 80, -- More angle
+                homing = activePowerups.homing > 0,
+                pierce = activePowerups.pierce > 0,
+                pierceCount = 0
             }
             table.insert(lasers, laser)
         end
@@ -2270,7 +2417,10 @@ function shootLaser()
             width = 4,
             height = 20,
             speed = 500,
-            vx = 0
+            vx = 0,
+            homing = activePowerups.homing > 0,
+            pierce = activePowerups.pierce > 0,
+            pierceCount = 0
         }
         table.insert(lasers, laser)
     end
@@ -2418,6 +2568,20 @@ function spawnPowerup(x, y)
     y = math.max(20, y) -- Don't spawn above screen
     
     local types = {"triple", "rapid", "shield", "slow"}
+    
+    -- Add level-specific powerups
+    if currentLevel == 1 and math.random(100) <= 20 then -- 20% chance for level powerup
+        table.insert(types, "homing")  -- Level 1: Homing missiles
+    elseif currentLevel == 2 and math.random(100) <= 20 then
+        table.insert(types, "pierce")  -- Level 2: Piercing shots
+    elseif currentLevel == 3 and math.random(100) <= 20 then
+        table.insert(types, "freeze")  -- Level 3: Freeze enemies
+    elseif currentLevel == 4 and math.random(100) <= 20 then
+        table.insert(types, "vampire")  -- Level 4: Life steal
+    elseif currentLevel >= 5 and math.random(100) <= 20 then
+        table.insert(types, "bomb")  -- Level 5+: Screen bomb
+    end
+    
     -- Rare chance for extra life powerup
     if math.random(100) <= 5 and lives < maxLives then -- 5% chance
         types = {"life"}
@@ -2502,6 +2666,48 @@ function collectPowerup(powerup)
             if gamepad and gamepad:isGamepad() then
                 gamepad:setVibration(1, 1, 0.2)
             end
+        end
+    elseif powerup.type == "homing" then
+        activePowerups.homing = 8 -- 8 seconds
+        createPowerupText("HOMING MISSILES!", player.x + player.width/2, player.y - 20, {1, 0.3, 0.3})
+        if gamepad and gamepad:isGamepad() then
+            gamepad:setVibration(0.6, 0.4, 0.2)
+        end
+    elseif powerup.type == "pierce" then
+        activePowerups.pierce = 7 -- 7 seconds
+        createPowerupText("PIERCING SHOTS!", player.x + player.width/2, player.y - 20, {0.5, 1, 0.5})
+        if gamepad and gamepad:isGamepad() then
+            gamepad:setVibration(0.7, 0.3, 0.2)
+        end
+    elseif powerup.type == "freeze" then
+        activePowerups.freeze = 6 -- 6 seconds
+        createPowerupText("FREEZE BEAM!", player.x + player.width/2, player.y - 20, {0.5, 0.8, 1})
+        if gamepad and gamepad:isGamepad() then
+            gamepad:setVibration(0.3, 0.6, 0.3)
+        end
+    elseif powerup.type == "vampire" then
+        activePowerups.vampire = 10 -- 10 seconds
+        createPowerupText("LIFE STEAL!", player.x + player.width/2, player.y - 20, {0.8, 0.2, 0.8})
+        if gamepad and gamepad:isGamepad() then
+            gamepad:setVibration(0.5, 0.5, 0.25)
+        end
+    elseif powerup.type == "bomb" then
+        -- Bomb is instant use, not a duration powerup
+        createPowerupText("SCREEN BOMB!", player.x + player.width/2, player.y - 20, {1, 1, 1})
+        -- Destroy all enemies on screen
+        for i = #asteroids, 1, -1 do
+            createExplosion(asteroids[i].x + asteroids[i].width/2, asteroids[i].y + asteroids[i].height/2, asteroids[i].width/2)
+            score = score + asteroids[i].points or 20
+            table.remove(asteroids, i)
+        end
+        for i = #aliens, 1, -1 do
+            createExplosion(aliens[i].x + aliens[i].width/2, aliens[i].y + aliens[i].height/2, aliens[i].width/2)
+            score = score + aliens[i].points or 50
+            table.remove(aliens, i)
+        end
+        -- Big rumble for bomb
+        if gamepad and gamepad:isGamepad() then
+            gamepad:setVibration(1, 1, 0.5)
         end
     end
     
@@ -2604,6 +2810,72 @@ function drawPowerups()
                 0, -2      -- back to bottom
             )
             love.graphics.pop()
+            
+        elseif powerup.type == "homing" then
+            -- Homing - Dark red
+            love.graphics.setColor(1, 0.3, 0.3, glow)
+            love.graphics.circle("fill", 0, 0, 12)
+            love.graphics.setColor(0.8, 0.2, 0.2)
+            love.graphics.circle("line", 0, 0, 10)
+            -- Icon: target
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.circle("line", 0, 0, 6)
+            love.graphics.circle("fill", 0, 0, 2)
+            love.graphics.line(-8, 0, -4, 0)
+            love.graphics.line(4, 0, 8, 0)
+            love.graphics.line(0, -8, 0, -4)
+            love.graphics.line(0, 4, 0, 8)
+            
+        elseif powerup.type == "pierce" then
+            -- Pierce - Green
+            love.graphics.setColor(0.5, 1, 0.5, glow)
+            love.graphics.circle("fill", 0, 0, 12)
+            love.graphics.setColor(0.3, 0.8, 0.3)
+            love.graphics.circle("line", 0, 0, 10)
+            -- Icon: arrow through
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.polygon("fill", -6, 0, -2, -3, -2, -1, 4, -1, 4, -3, 8, 0, 4, 3, 4, 1, -2, 1, -2, 3)
+            
+        elseif powerup.type == "freeze" then
+            -- Freeze - Light blue
+            love.graphics.setColor(0.5, 0.8, 1, glow)
+            love.graphics.circle("fill", 0, 0, 12)
+            love.graphics.setColor(0.3, 0.6, 1)
+            love.graphics.circle("line", 0, 0, 10)
+            -- Icon: snowflake
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.line(-6, 0, 6, 0)
+            love.graphics.line(-3, -5, 3, 5)
+            love.graphics.line(-3, 5, 3, -5)
+            for i = -4, 4, 8 do
+                love.graphics.line(i, -2, i, 2)
+            end
+            
+        elseif powerup.type == "vampire" then
+            -- Vampire - Purple
+            love.graphics.setColor(0.8, 0.2, 0.8, glow)
+            love.graphics.circle("fill", 0, 0, 12)
+            love.graphics.setColor(0.6, 0.1, 0.6)
+            love.graphics.circle("line", 0, 0, 10)
+            -- Icon: fangs
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.polygon("fill", -3, -6, -1, 0, -3, 0)
+            love.graphics.polygon("fill", 3, -6, 1, 0, 3, 0)
+            
+        elseif powerup.type == "bomb" then
+            -- Bomb - White/bright
+            love.graphics.setColor(1, 1, 1, glow)
+            love.graphics.circle("fill", 0, 0, 12)
+            love.graphics.setColor(0.8, 0.8, 0.8)
+            love.graphics.circle("line", 0, 0, 10)
+            -- Icon: explosion
+            love.graphics.setColor(0.2, 0.2, 0.2)
+            love.graphics.circle("fill", 0, 0, 5)
+            love.graphics.setColor(1, 0.5, 0)
+            for i = 0, 7 do
+                local angle = (i / 8) * math.pi * 2
+                love.graphics.line(0, 0, math.cos(angle) * 8, math.sin(angle) * 8)
+            end
         end
         
         love.graphics.pop()
@@ -3356,11 +3628,15 @@ function resetGame()
         tripleShot = 0,
         rapidFire = 0,
         shield = 0,
-        slowTime = 0
+        slowTime = 0,
+        homing = 0,
+        pierce = 0,
+        freeze = 0,
+        vampire = 0
     }
     -- Reset background color
     backgroundColor = {0.1, 0.1, 0.2}
-    powerupChance = 30
+    powerupChance = 15
     -- Recreate starfield for variety
     stars = {}
     createStarfield()
@@ -3454,7 +3730,7 @@ function startNextLevel()
         enemiesForBoss = 200
         asteroidSpawnTime = 2.0 -- Faster than level 1
         alienSpawnTime = 3.0 -- More aliens
-        powerupChance = 25 -- Slightly less powerups
+        powerupChance = 12 -- Slightly less powerups
         -- Change background color for level 2
         backgroundColor = {0.15, 0.05, 0.2} -- Purple tint
     elseif currentLevel == 3 then
@@ -3965,7 +4241,11 @@ function startGame(startLevel)
         tripleShot = 0,
         rapidFire = 0,
         shield = 0,
-        slowTime = 0
+        slowTime = 0,
+        homing = 0,
+        pierce = 0,
+        freeze = 0,
+        vampire = 0
     }
     
     -- Reset boss
@@ -4218,6 +4498,10 @@ function spawnBoss()
     activePowerups.rapidFire = 0
     activePowerups.shield = 0
     activePowerups.slowTime = 0
+    activePowerups.homing = 0
+    activePowerups.pierce = 0
+    activePowerups.freeze = 0
+    activePowerups.vampire = 0
     
     -- Visual feedback for powerup removal
     createPowerupText("POWERUPS DISABLED!", baseWidth/2, baseHeight/2 + 100, {1, 0, 0})
