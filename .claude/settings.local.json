@@ -17,7 +17,16 @@
       "Bash(cat:*)",
       "Bash(ssh:*)",
       "Bash(git tag:*)",
-      "Bash(zip:*)"
+      "Bash(zip:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(chmod:*)",
+      "Bash(rg:*)",
+      "Bash(love:*)",
+      "Bash(claude doctor)",
+      "Bash(claude:*)",
+      "Bash(claude doctor --help)",
+      "WebFetch(domain:docs.anthropic.com)"
     ],
     "deny": []
   }

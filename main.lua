@@ -13,7 +13,8 @@ alienLasers = nil
 function love.load()
     -- Window setup
     love.window.setTitle("Stellar Assault")
-    love.window.setMode(800, 600, {resizable = true, fullscreen = true}) -- Start in fullscreen
+    -- Start in windowed mode initially, will apply saved settings later
+    love.window.setMode(800, 600, {resizable = true})
     
     -- Set up scaling
     love.graphics.setDefaultFilter("nearest", "nearest")
@@ -42,6 +43,8 @@ function love.load()
     loadedSaveLevel = nil -- For displaying save info in menu
     pauseSelection = 1 -- 1 = Resume, 2 = Menu
     optionsSelection = 1 -- 1 = Resolution, 2 = Fullscreen, 3 = Master Volume, 4 = SFX Volume, 5 = Music Volume, 6 = Back
+    gameOverSelection = 1 -- 1 = Restart Level, 2 = Main Menu
+    levelAtDeath = 1 -- Level when player died
     
     -- Save system variables
     saveSlots = {nil, nil, nil} -- 3 save slots
@@ -51,7 +54,7 @@ function love.load()
     selectedLevel = 1 -- For level select menu
     
     -- Options settings
-    displayMode = "fullscreen" -- "windowed", "borderless", "fullscreen"
+    displayMode = "fullscreen" -- "windowed", "fullscreen"
     masterVolume = 1.0
     sfxVolume = 1.0
     musicVolume = 0.2  -- Default 20% for background music
@@ -217,11 +220,13 @@ function love.load()
     end
     
     -- Game statistics
+    score = 0
     highScore = 0
     totalAsteroidsDestroyed = 0
     totalShotsFired = 0
     currentCombo = 0
     maxCombo = 0
+    nextLifeScore = 5000
     
     -- Load high score if it exists
     if love.filesystem.getInfo("highscore.txt") then
@@ -248,6 +253,9 @@ function love.load()
             end
         end
     end
+    
+    -- Apply saved display mode
+    applyDisplayMode()
     
     -- Debug output to confirm state
     print("Game initialized with ultrawide support!")
@@ -319,10 +327,8 @@ function love.update(dt)
                     -- Cycle display mode left
                     if displayMode == "windowed" then
                         displayMode = "fullscreen"
-                    elseif displayMode == "borderless" then
+                    else
                         displayMode = "windowed"
-                    elseif displayMode == "fullscreen" then
-                        displayMode = "borderless"
                     end
                     applyDisplayMode()
                     playMenuSound()
@@ -353,10 +359,8 @@ function love.update(dt)
                 elseif optionsSelection == 2 then
                     -- Cycle display mode right
                     if displayMode == "windowed" then
-                        displayMode = "borderless"
-                    elseif displayMode == "borderless" then
                         displayMode = "fullscreen"
-                    elseif displayMode == "fullscreen" then
+                    else
                         displayMode = "windowed"
                     end
                     applyDisplayMode()
@@ -375,6 +379,18 @@ function love.update(dt)
                     musicVolume = math.min(1, musicVolume + 0.01 * dt * 60)
                     updateAllVolumes()
                 end
+            end
+        elseif gameState == "gameover" then
+            if leftY < -deadzone then -- Up
+                gameOverSelection = gameOverSelection - 1
+                if gameOverSelection < 1 then gameOverSelection = 2 end
+                playMenuSound()
+                menuCooldown = 0.2
+            elseif leftY > deadzone then -- Down
+                gameOverSelection = gameOverSelection + 1
+                if gameOverSelection > 2 then gameOverSelection = 1 end
+                playMenuSound()
+                menuCooldown = 0.2
             end
         end
     end
@@ -645,7 +661,18 @@ function love.update(dt)
             for j = #lasers, 1, -1 do
                 local laser = lasers[j]
                 if checkCollision(laser, asteroid) then
-                    -- Handle pierce powerup
+                    -- Special handling for nebula clouds
+                    if asteroid.type == "nebulacloud" then
+                        -- Piercing shots pass through nebula clouds
+                        if not laser.pierce then
+                            -- Non-piercing shots are absorbed by nebula
+                            table.remove(lasers, j)
+                        end
+                        -- Skip damage calculation for nebula clouds
+                        goto nextLaser
+                    end
+                    
+                    -- Handle pierce powerup for normal asteroids
                     if laser.pierce and laser.pierceCount < 3 then
                         laser.pierceCount = laser.pierceCount + 1
                     else
@@ -716,6 +743,7 @@ function love.update(dt)
                     end  -- End of if asteroid.health check
                     break
                 end
+                ::nextLaser::
             end
             
             if destroyed then
@@ -863,7 +891,13 @@ function love.update(dt)
                     else
                         table.remove(lasers, j)
                     end
-                    alien.health = alien.health - 1
+                    -- Ensure alien has health property
+                    if alien.health then
+                        alien.health = alien.health - 1
+                    else
+                        -- If no health, remove alien immediately
+                        destroyed = true
+                    end
                     
                     -- Freeze powerup - freeze alien
                     if activePowerups.freeze > 0 and not alien.frozen then
@@ -877,7 +911,7 @@ function love.update(dt)
                         createPowerupText("+1 HP", player.x + player.width/2, player.y - 20, {0.8, 0.2, 0.8})
                     end
                     
-                    if alien.health <= 0 then
+                    if alien.health and alien.health <= 0 then
                         destroyed = true
                         enemiesDefeated = enemiesDefeated + 1
                         totalAsteroidsDestroyed = totalAsteroidsDestroyed + 1 -- Count aliens too
@@ -963,6 +997,22 @@ function love.update(dt)
             if laser.y > baseHeight or laser.x < -10 or laser.x > baseWidth + 10 then
                 table.remove(alienLasers, i)
             else
+                -- Check collision with nebula clouds first (only in level 2)
+                if currentLevel == 2 then
+                    local hitNebula = false
+                    for _, asteroid in ipairs(asteroids) do
+                        if asteroid.type == "nebulacloud" and checkCollision(laser, asteroid) then
+                            -- Nebula clouds block alien lasers
+                            table.remove(alienLasers, i)
+                            hitNebula = true
+                            break
+                        end
+                    end
+                    if hitNebula then
+                        goto continue
+                    end
+                end
+                
                 -- Check collision with player
                 if checkCollision(player, laser) and invulnerableTime <= 0 then
                     if activePowerups.shield > 0 then
@@ -1090,7 +1140,7 @@ function love.update(dt)
         
         -- Level-specific updates
         if currentLevel == 3 then
-            updateIceGeysers(dt)
+            -- updateIceGeysers(dt) -- Removed ice geysers
             -- Apply gravity to lasers if in tank mode
             if vehicleMode == "tank" then
                 for _, laser in ipairs(lasers) do
@@ -1125,7 +1175,7 @@ function love.draw()
     love.graphics.push()
     if displayMode ~= "windowed" then
         local windowWidth, windowHeight = love.graphics.getDimensions()
-        -- For fullscreen and borderless, scale to fit while maintaining aspect ratio
+        -- For fullscreen, scale to fit while maintaining aspect ratio
         screenScale = math.min(windowWidth / baseWidth, windowHeight / baseHeight)
         screenOffsetX = (windowWidth - baseWidth * screenScale) / 2
         screenOffsetY = (windowHeight - baseHeight * screenScale) / 2
@@ -1230,41 +1280,19 @@ function love.draw()
         if optionsSelection == 1 then
             love.graphics.setColor(1, 1, 0)
             love.graphics.printf("> RESOLUTION: " .. resolutions[currentResolution].name .. " <", 0, optY, 800, "center")
-            if displayMode ~= "windowed" then
-                love.graphics.setColor(0.5, 0.5, 0.5)
-                if smallFont then love.graphics.setFont(smallFont) end
-                love.graphics.printf("(Windowed mode only)", 0, optY + 20, 800, "center")
-                love.graphics.setFont(font)
-            end
         else
             love.graphics.setColor(0.7, 0.7, 0.7)
             love.graphics.printf("RESOLUTION: " .. resolutions[currentResolution].name, 0, optY, 800, "center")
-            if displayMode ~= "windowed" then
-                love.graphics.setColor(0.4, 0.4, 0.4)
-                if smallFont then love.graphics.setFont(smallFont) end
-                love.graphics.printf("(Windowed mode only)", 0, optY + 20, 800, "center")
-                love.graphics.setFont(font)
-            end
         end
         
         -- Fullscreen/Display Mode option
         if optionsSelection == 2 then
             love.graphics.setColor(1, 1, 0)
-            local modeText = "WINDOWED"
-            if displayMode == "borderless" then
-                modeText = "BORDERLESS"
-            elseif displayMode == "fullscreen" then
-                modeText = "FULLSCREEN"
-            end
+            local modeText = displayMode == "fullscreen" and "FULLSCREEN" or "WINDOWED"
             love.graphics.printf("> DISPLAY MODE: " .. modeText .. " <", 0, optY + optSpacing, 800, "center")
         else
             love.graphics.setColor(0.7, 0.7, 0.7)
-            local modeText = "WINDOWED"
-            if displayMode == "borderless" then
-                modeText = "BORDERLESS"
-            elseif displayMode == "fullscreen" then
-                modeText = "FULLSCREEN"
-            end
+            local modeText = displayMode == "fullscreen" and "FULLSCREEN" or "WINDOWED"
             love.graphics.printf("DISPLAY MODE: " .. modeText, 0, optY + optSpacing, 800, "center")
         end
         
@@ -1373,7 +1401,7 @@ function love.draw()
         love.graphics.setColor(0.5, 0.5, 0.5)
         if smallFont then love.graphics.setFont(smallFont) end
         love.graphics.printf("Up/Down/D-Pad: Navigate | Left/Right/D-Pad: Adjust | Enter/A: Select | ESC/B: Back", 0, 540, 800, "center")
-        love.graphics.printf("F11/Y: Quick Display Mode Toggle", 0, 560, 800, "center")
+        love.graphics.printf("F11/Y: Quick Display Mode Toggle | F9: Refresh Audio", 0, 560, 800, "center")
         if gamepad and gamepad:isGamepad() then
             love.graphics.setColor(0.3, 0.3, 0.3)
             love.graphics.printf("Controller vibration enabled", 0, 580, 800, "center")
@@ -2155,6 +2183,33 @@ function drawGame()
         love.graphics.pop()
     end
     
+    -- Draw boss progress
+    if not boss and not levelComplete then
+        love.graphics.setColor(1, 1, 0)
+        love.graphics.print("Boss Progress:", 10, 60)
+        love.graphics.setColor(0.7, 0.7, 0.7)
+        love.graphics.print(enemiesDefeated .. "/" .. enemiesForBoss, 120, 60)
+        
+        -- Progress bar
+        local progressBarX = 10
+        local progressBarY = 80
+        local progressBarWidth = 150
+        local progressBarHeight = 8
+        local progress = enemiesDefeated / enemiesForBoss
+        
+        -- Background
+        love.graphics.setColor(0.2, 0.2, 0.2)
+        love.graphics.rectangle("fill", progressBarX, progressBarY, progressBarWidth, progressBarHeight)
+        
+        -- Fill
+        love.graphics.setColor(1, 1 - progress, 0)
+        love.graphics.rectangle("fill", progressBarX, progressBarY, progressBarWidth * progress, progressBarHeight)
+        
+        -- Border
+        love.graphics.setColor(0.5, 0.5, 0.5)
+        love.graphics.rectangle("line", progressBarX, progressBarY, progressBarWidth, progressBarHeight)
+    end
+    
         
     -- Draw enemy legend (compact)
     if smallFont then love.graphics.setFont(smallFont) end
@@ -2448,6 +2503,20 @@ end
 
 -- Explosion functions
 function createExplosion(x, y, size)
+    -- Handle string size parameter (for special effects like "teleport")
+    local numericSize = size
+    if type(size) == "string" then
+        -- Set default sizes for special explosion types
+        if size == "teleport" then
+            numericSize = 30
+        else
+            numericSize = 20 -- Default size
+        end
+    elseif type(size) ~= "number" or size == nil then
+        -- Default size for nil or invalid values
+        numericSize = 20
+    end
+    
     local explosion = {
         x = x,
         y = y,
@@ -2486,7 +2555,7 @@ function createExplosion(x, y, size)
     
     -- Controller rumble for explosions
     if gamepad and gamepad:isGamepad() then
-        local strength = math.min(1, size / 50) -- Scale rumble based on explosion size
+        local strength = math.min(1, numericSize / 50) -- Scale rumble based on explosion size
         gamepad:setVibration(strength * 0.8, strength * 0.6, 0.3) -- Left motor, right motor, duration
     end
 end
@@ -2704,12 +2773,12 @@ function collectPowerup(powerup)
         -- Destroy all enemies on screen
         for i = #asteroids, 1, -1 do
             createExplosion(asteroids[i].x + asteroids[i].width/2, asteroids[i].y + asteroids[i].height/2, asteroids[i].width/2)
-            score = score + asteroids[i].points or 20
+            -- score = score + asteroids[i].points or 20
             table.remove(asteroids, i)
         end
         for i = #aliens, 1, -1 do
             createExplosion(aliens[i].x + aliens[i].width/2, aliens[i].y + aliens[i].height/2, aliens[i].width/2)
-            score = score + aliens[i].points or 50
+            -- score = score + aliens[i].points or 50
             table.remove(aliens, i)
         end
         -- Big rumble for bomb
@@ -3051,8 +3120,12 @@ function updateBoss(dt)
     if not boss then return end
     
     -- Boss entry
-    if boss.y < 50 then
+    local entryY = boss.targetY or 50  -- Use targetY if set (for frost titan), otherwise 50
+    if boss.y < entryY then
         boss.y = boss.y + boss.vy * dt
+        if boss.y >= entryY then
+            boss.y = entryY  -- Snap to exact position
+        end
     else
         -- Boss movement pattern
         boss.x = boss.x + boss.vx * dt
@@ -3172,7 +3245,7 @@ function updateBoss(dt)
                     -- Clear mines when entering phase 2
                     for i = #aliens, 1, -1 do
                         if aliens[i].type == "energyMine" then
-                            createExplosion(aliens[i].x + aliens[i].width/2, aliens[i].y + aliens[i].height/2)
+                            createExplosion(aliens[i].x + aliens[i].width/2, aliens[i].y + aliens[i].height/2, 20)
                             table.remove(aliens, i)
                         end
                     end
@@ -3468,6 +3541,8 @@ function annihilatorMineField()
             height = 30,
             vx = 0,
             vy = 0,
+            health = 1,  -- Added health property
+            maxHealth = 1,
             lifeTime = 10,
             type = "energyMine",
             damage = 1,
@@ -3789,6 +3864,8 @@ function loseLife()
     if lives <= 0 then
         -- Game over
         gameState = "gameover"
+        levelAtDeath = currentLevel -- Store the level where player died
+        gameOverSelection = 1 -- Reset selection to "Restart Level"
         
         -- Save progress before game over
         if currentSaveSlot then
@@ -3826,6 +3903,65 @@ function loseLife()
             gamepad:setVibration(0.7, 0.7, 0.4)
         end
     end
+end
+
+-- Function to reload all audio sources (for audio device switching)
+function reloadAudioSystem()
+    -- Store current playing states
+    local musicWasPlaying = sounds.music and sounds.music:isPlaying()
+    local menuMusicWasPlaying = sounds.menuMusic and sounds.menuMusic:isPlaying()
+    
+    -- Stop all sounds
+    love.audio.stop()
+    
+    -- Reload all sound effects
+    if love.filesystem.getInfo("laser.wav") then
+        sounds.laser = love.audio.newSource("laser.wav", "static")
+        sounds.laser:setVolume(0.3 * sfxVolume * masterVolume)
+    end
+    
+    if love.filesystem.getInfo("explosion.wav") then
+        sounds.explosion = love.audio.newSource("explosion.wav", "static")
+        sounds.explosion:setVolume(0.5 * sfxVolume * masterVolume)
+    end
+    
+    if love.filesystem.getInfo("gameover.ogg") then
+        sounds.gameover = love.audio.newSource("gameover.ogg", "static")
+        sounds.gameover:setVolume(sfxVolume * masterVolume)
+    end
+    
+    if love.filesystem.getInfo("powerup.wav") then
+        sounds.powerup = love.audio.newSource("powerup.wav", "static")
+        sounds.powerup:setVolume(0.4 * sfxVolume * masterVolume)
+    end
+    
+    if love.filesystem.getInfo("menu.flac") then
+        sounds.menu = love.audio.newSource("menu.flac", "static")
+        sounds.menu:setVolume(0.3 * sfxVolume * masterVolume)
+    end
+    
+    -- Reload music
+    if love.filesystem.getInfo("background.mp3") then
+        sounds.music = love.audio.newSource("background.mp3", "stream")
+        sounds.music:setLooping(true)
+        sounds.music:setVolume(musicVolume * masterVolume)
+        if musicWasPlaying then
+            sounds.music:play()
+        end
+    end
+    
+    if love.filesystem.getInfo("menu.flac") then
+        sounds.menuMusic = love.audio.newSource("menu.flac", "stream")
+        sounds.menuMusic:setLooping(true)
+        sounds.menuMusic:setVolume(musicVolume * masterVolume * 0.8)
+        if menuMusicWasPlaying then
+            sounds.menuMusic:play()
+        end
+    end
+    
+    -- Show notification about limitation
+    createPowerupText("Audio Refreshed", baseWidth/2, baseHeight/2 - 20, {1, 1, 0})
+    createPowerupText("Restart game for device change", baseWidth/2, baseHeight/2 + 20, {1, 0.7, 0})
 end
 
 -- Start next level function
@@ -4000,6 +4136,12 @@ end
 
 -- Input handling functions
 function love.keypressed(key)
+    -- Global hotkeys
+    if key == "f9" then
+        reloadAudioSystem()
+        return
+    end
+    
     if gameState == "menu" then
         if menuState == "main" then
             -- Main menu navigation
@@ -4176,10 +4318,31 @@ function love.keypressed(key)
             playMenuSound()
         end
     elseif gameState == "gameover" then
-        if key == "return" or key == "space" then
-            startGame(1)  -- Restart at level 1 after game over
+        if key == "up" then
+            gameOverSelection = gameOverSelection - 1
+            if gameOverSelection < 1 then gameOverSelection = 2 end
+            playMenuSound()
+        elseif key == "down" then
+            gameOverSelection = gameOverSelection + 1
+            if gameOverSelection > 2 then gameOverSelection = 1 end
+            playMenuSound()
+        elseif key == "return" or key == "space" then
+            if gameOverSelection == 1 then
+                -- Restart at the level where they died
+                startGame(levelAtDeath)
+            else
+                -- Return to main menu
+                gameState = "menu"
+                menuState = "main"
+                stopAllSounds()
+                if sounds.menuMusic then
+                    sounds.menuMusic:play()
+                end
+            end
         elseif key == "escape" then
+            -- Quick return to menu
             gameState = "menu"
+            menuState = "main"
             stopAllSounds()
             if sounds.menuMusic then
                 sounds.menuMusic:play()
@@ -4240,10 +4403,8 @@ function handleOptionsLeft()
         -- Cycle display mode left
         if displayMode == "windowed" then
             displayMode = "fullscreen"
-        elseif displayMode == "borderless" then
+        else
             displayMode = "windowed"
-        elseif displayMode == "fullscreen" then
-            displayMode = "borderless"
         end
         applyDisplayMode()
         playMenuSound()
@@ -4277,10 +4438,8 @@ function handleOptionsRight()
     elseif optionsSelection == 2 then
         -- Cycle display mode right
         if displayMode == "windowed" then
-            displayMode = "borderless"
-        elseif displayMode == "borderless" then
             displayMode = "fullscreen"
-        elseif displayMode == "fullscreen" then
+        else
             displayMode = "windowed"
         end
         applyDisplayMode()
@@ -4333,8 +4492,6 @@ function applyDisplayMode()
     
     if displayMode == "fullscreen" then
         love.window.setFullscreen(true, "exclusive")
-    elseif displayMode == "borderless" then
-        love.window.setFullscreen(true, "desktop")
     else -- windowed
         love.window.setFullscreen(false)
         love.window.setMode(resolutions[currentResolution].width, resolutions[currentResolution].height, {resizable = true})
@@ -4392,6 +4549,7 @@ function startGame(startLevel)
     powerups = {}
     powerupTexts = {}
     explosions = {}
+    iceGeysers = {} -- Clear ice geysers
     
     -- Reset powerups
     activePowerups = {
@@ -4602,12 +4760,10 @@ function spawnBoss()
         type = "destroyer"  -- Default boss type
     }
     
-    -- Set boss type based on level (bosses appear at levels 5, 10, 15, etc.)
-    local bossLevel = math.floor((currentLevel - 1) / 5) + 1  -- Which boss number this is
-    
-    if bossLevel == 1 then  -- Levels 1-5
+    -- Set boss type based on specific level
+    if currentLevel == 1 then
         boss.type = "destroyer"
-    elseif bossLevel == 2 then  -- Levels 6-10
+    elseif currentLevel == 2 then
         boss.type = "annihilator"
         boss.rotationAngle = 0
         boss.shieldActive = false
@@ -4615,14 +4771,15 @@ function spawnBoss()
         boss.beamActive = false
         boss.beamAngle = 0
         boss.beamDuration = 0
-    elseif bossLevel == 3 then  -- Levels 11-15
+    elseif currentLevel == 3 then
         boss.type = "frosttitan"
-        boss.y = groundY - 200  -- Start on ground
+        boss.y = -200  -- Start off screen like other bosses
+        boss.targetY = groundY - 200  -- Where boss should end up
         boss.legs = {}
         for i = 1, 8 do
             boss.legs[i] = {angle = (i / 8) * math.pi * 2, raised = false}
         end
-    elseif bossLevel == 4 then  -- Levels 16-20
+    elseif currentLevel == 4 then
         boss.type = "hivemind"
         boss.tentacles = {}
         for i = 1, 4 do
@@ -4633,7 +4790,7 @@ function spawnBoss()
                 targetY = 0
             }
         end
-    else  -- Level 21+
+    elseif currentLevel == 5 then
         boss.type = "solaroverlord"
         boss.phases = 4
         boss.currentPhase = 1
@@ -4668,24 +4825,26 @@ function spawnBoss()
     createPowerupText("POWERUPS DISABLED!", baseWidth/2, baseHeight/2 + 100, {1, 0, 0})
     
     -- Boss announcement
-    local bossLevel = math.floor((currentLevel - 1) / 5) + 1
-    if bossLevel == 1 then
+    if currentLevel == 1 then
         createPowerupText("ZONE 1 BOSS: DESTROYER", baseWidth/2, 100, {1, 0, 0})
-    elseif bossLevel == 2 then
+    elseif currentLevel == 2 then
         createPowerupText("ZONE 2 BOSS: ANNIHILATOR", baseWidth/2, 100, {1, 0, 1})
-    elseif bossLevel == 3 then
+    elseif currentLevel == 3 then
         createPowerupText("ZONE 3 BOSS: FROST TITAN", baseWidth/2, 100, {0.5, 0.8, 1})
-    elseif bossLevel == 4 then
+    elseif currentLevel == 4 then
         createPowerupText("ZONE 4 BOSS: HIVEMIND", baseWidth/2, 100, {0.5, 1, 0.5})
-    else
+    elseif currentLevel == 5 then
         createPowerupText("ZONE 5 BOSS: SOLAR OVERLORD", baseWidth/2, 100, {1, 0.5, 0})
+    else
+        -- For levels beyond 5, just show a generic boss
+        createPowerupText("BOSS INCOMING!", baseWidth/2, 100, {1, 0, 0})
     end
     
     -- Play boss music
     if sounds.gameover then
         local bossSound = sounds.gameover:clone()
         bossSound:setVolume(0.3 * sfxVolume * masterVolume)
-        bossSound:setPitch(0.5 - (bossLevel * 0.05)) -- Lower pitch for higher level bosses
+        bossSound:setPitch(0.5 - (math.min(currentLevel, 5) * 0.05)) -- Lower pitch for higher level bosses
         bossSound:play()
     end
 end
@@ -4740,19 +4899,40 @@ function drawGameOver()
     -- Game Over text
     love.graphics.setColor(1, 0, 0)
     if font then love.graphics.setFont(font) end
-    love.graphics.printf("GAME OVER", 0, baseHeight/2 - 100, baseWidth, "center")
+    love.graphics.printf("GAME OVER", 0, baseHeight/2 - 150, baseWidth, "center")
     
     -- Stats
     love.graphics.setColor(1, 1, 1)
-    love.graphics.printf("Level Reached: " .. currentLevel, 0, baseHeight/2 - 50, baseWidth, "center")
+    if smallFont then love.graphics.setFont(smallFont) end
+    love.graphics.printf("Level " .. levelAtDeath .. " Failed", 0, baseHeight/2 - 80, baseWidth, "center")
     love.graphics.setColor(0.7, 0.7, 0.7)
-    love.graphics.printf("Enemies Defeated: " .. totalAsteroidsDestroyed, 0, baseHeight/2, baseWidth, "center")
+    love.graphics.printf("Enemies Defeated: " .. totalAsteroidsDestroyed, 0, baseHeight/2 - 50, baseWidth, "center")
+    
+    -- Menu options
+    if font then love.graphics.setFont(font) end
+    
+    -- Restart Level option
+    if gameOverSelection == 1 then
+        love.graphics.setColor(1, 1, 0)
+        love.graphics.printf("> RESTART LEVEL " .. levelAtDeath .. " <", 0, baseHeight/2 + 40, baseWidth, "center")
+    else
+        love.graphics.setColor(0.7, 0.7, 0.7)
+        love.graphics.printf("RESTART LEVEL " .. levelAtDeath, 0, baseHeight/2 + 40, baseWidth, "center")
+    end
+    
+    -- Main Menu option
+    if gameOverSelection == 2 then
+        love.graphics.setColor(1, 1, 0)
+        love.graphics.printf("> MAIN MENU <", 0, baseHeight/2 + 80, baseWidth, "center")
+    else
+        love.graphics.setColor(0.7, 0.7, 0.7)
+        love.graphics.printf("MAIN MENU", 0, baseHeight/2 + 80, baseWidth, "center")
+    end
     
     -- Instructions
     if smallFont then love.graphics.setFont(smallFont) end
-    love.graphics.setColor(0.7, 0.7, 0.7)
-    love.graphics.printf("Press ENTER to play again", 0, baseHeight/2 + 100, baseWidth, "center")
-    love.graphics.printf("Press ESC to return to menu", 0, baseHeight/2 + 120, baseWidth, "center")
+    love.graphics.setColor(0.5, 0.5, 0.5)
+    love.graphics.printf("Arrow Keys/D-Pad: Navigate | Enter/A: Select | ESC/B: Quick to Menu", 0, baseHeight/2 + 150, baseWidth, "center")
     
     if font then love.graphics.setFont(font) end
 end
@@ -4983,11 +5163,11 @@ function drawIceMoonTerrain()
         end
     end
     
-    -- Draw ice geysers
-    for _, geyser in ipairs(iceGeysers) do
-        love.graphics.setColor(0.7, 0.9, 1, geyser.alpha)
-        love.graphics.rectangle("fill", geyser.x - 15, geyser.y, 30, geyser.height)
-    end
+    -- Draw ice geysers (removed)
+    -- for _, geyser in ipairs(iceGeysers) do
+    --     love.graphics.setColor(0.7, 0.9, 1, geyser.alpha)
+    --     love.graphics.rectangle("fill", geyser.x - 15, geyser.y, 30, geyser.height)
+    -- end
 end
 
 -- Level 4 - Mothership functions
@@ -5285,10 +5465,10 @@ function spawnOrganicPod()
         height = 60,
         vy = 50,
         vx = 0,
-        health = 5,
-        maxHealth = 5,
+        health = 3,  -- Reduced from 5
+        maxHealth = 3,  -- Reduced from 5
         spawnTimer = 0,
-        spawnCooldown = 3,
+        spawnCooldown = 5,  -- Increased from 3 (spawns less frequently)
         type = "organicpod"
     }
     table.insert(aliens, pod)
@@ -5300,13 +5480,13 @@ function spawnSecurityDrone()
         y = math.random(50, 200),
         width = 40,
         height = 40,
-        vx = math.random(80, 120) * (math.random() > 0.5 and 1 or -1),
+        vx = math.random(60, 90) * (math.random() > 0.5 and 1 or -1),  -- Reduced speed from 80-120
         vy = 0,
         health = 2,
         maxHealth = 2,
         shootTimer = 0,
-        shootCooldown = 1.5,
-        shootInterval = 1.5,
+        shootCooldown = 2.5,  -- Increased from 1.5
+        shootInterval = 2.5,  -- Increased from 1.5
         type = "securitydrone",
         patrolling = true
     }
@@ -5443,11 +5623,11 @@ function spawnRepairBot()
         height = 35,
         vx = 0,
         vy = math.random(30, 50),
-        health = 2,
-        maxHealth = 2,
-        healRadius = 150,
+        health = 1,  -- Reduced from 2
+        maxHealth = 1,  -- Reduced from 2
+        healRadius = 100,  -- Reduced from 150
         healTimer = 0,
-        healCooldown = 2,
+        healCooldown = 3,  -- Increased from 2
         type = "repairbot"
     }
     table.insert(aliens, bot)
@@ -5462,10 +5642,10 @@ function spawnTentacle()
         height = 120,
         vx = 0,
         vy = 0,
-        health = 4,
-        maxHealth = 4,
+        health = 2,  -- Reduced from 4
+        maxHealth = 2,  -- Reduced from 4
         attackTimer = 0,
-        attackCooldown = 2.5,
+        attackCooldown = 3.5,  -- Increased from 2.5
         side = side,
         type = "tentacle",
         static = true
@@ -5563,16 +5743,16 @@ function spawnLevelEnemies(dt)
         
     elseif currentLevel == 4 then
         -- Level 4: Mothership Interior - Organic/mechanical enemies
-        if math.random() < 0.02 then
+        if math.random() < 0.008 then  -- Reduced from 0.02 (60% less)
             spawnOrganicPod()
         end
-        if math.random() < 0.03 then
+        if math.random() < 0.012 then  -- Reduced from 0.03 (60% less)
             spawnSecurityDrone()
         end
-        if math.random() < 0.01 then
+        if math.random() < 0.005 then  -- Reduced from 0.01 (50% less)
             spawnRepairBot()  -- Heals other enemies
         end
-        if math.random() < 0.015 then
+        if math.random() < 0.007 then  -- Reduced from 0.015 (53% less)
             spawnTentacle()  -- Wall-mounted enemy
         end
         
@@ -5959,4 +6139,28 @@ function drawLevelSelectMenu()
     if smallFont then love.graphics.setFont(smallFont) end
     love.graphics.printf("Arrow Keys: Navigate | Enter: Start Level", 0, 460, 800, "center")
     love.graphics.setFont(font)
+end
+
+-- Gamepad hot-plugging support
+function love.joystickadded(joystick)
+    if not gamepad and joystick:isGamepad() then
+        gamepad = joystick
+        print("Gamepad connected: " .. gamepad:getName())
+    end
+end
+
+function love.joystickremoved(joystick)
+    if gamepad and gamepad == joystick then
+        gamepad = nil
+        print("Gamepad disconnected")
+        -- Check if another gamepad is available
+        local joysticks = love.joystick.getJoysticks()
+        for _, j in ipairs(joysticks) do
+            if j:isGamepad() then
+                gamepad = j
+                print("Switched to gamepad: " .. gamepad:getName())
+                break
+            end
+        end
+    end
 end
