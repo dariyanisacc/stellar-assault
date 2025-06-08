@@ -173,6 +173,16 @@ function love.load()
     shadeZones = {}
     plasmaStorms = {}
     
+    -- Developer cheats (for debugging)
+    cheatsEnabled = false
+    debugMode = false
+    godMode = false
+    infinitePowerups = false
+    rapidFireCheat = false
+    showHitboxes = false
+    showFPS = false
+    noclipMode = false
+    
     -- Fonts
     font = love.graphics.newFont(32)  -- Bigger main font
     smallFont = love.graphics.newFont(18)  -- Bigger small font
@@ -513,8 +523,27 @@ function love.update(dt)
                 laser.x = laser.x + laser.vx * dt
             end
             
-            -- Remove lasers that go off screen
-            if laser.y < -laser.height or laser.x < 0 or laser.x > baseWidth then
+            -- Check collision with doors in level 4
+            local hitDoor = false
+            if currentLevel == 4 then
+                for _, door in ipairs(doors) do
+                    -- Check if laser hits the left part of the door
+                    if laser.x >= leftWall and laser.x <= door.gapX and 
+                       laser.y >= door.y and laser.y <= door.y + door.height then
+                        hitDoor = true
+                        break
+                    end
+                    -- Check if laser hits the right part of the door
+                    if laser.x >= door.gapX + door.gapWidth and laser.x <= rightWall and
+                       laser.y >= door.y and laser.y <= door.y + door.height then
+                        hitDoor = true
+                        break
+                    end
+                end
+            end
+            
+            -- Remove lasers that go off screen or hit doors
+            if laser.y < -laser.height or laser.x < 0 or laser.x > baseWidth or hitDoor then
                 table.remove(lasers, i)
             end
             ::continue_laser::
@@ -990,11 +1019,58 @@ function love.update(dt)
                 goto continue
             end
             
-            laser.x = laser.x + laser.vx * dt
-            laser.y = laser.y + laser.vy * dt
+            -- Handle special laser types
+            if laser.type == "freezeWave" or laser.type == "psychicWave" then
+                -- Expanding freeze wave
+                laser.radius = (laser.radius or 10) + (laser.speed or 200) * dt
+                if laser.radius > (laser.maxRadius or 300) then
+                    table.remove(alienLasers, i)
+                    goto continue
+                end
+                
+                -- Check collision with player using radius
+                local dx = (player.x + player.width/2) - laser.x
+                local dy = (player.y + player.height/2) - laser.y
+                local distance = math.sqrt(dx*dx + dy*dy)
+                
+                if distance < laser.radius and invulnerableTime <= 0 then
+                    if activePowerups.shield > 0 then
+                        activePowerups.shield = 0
+                        createShieldBreakEffect(player.x + player.width/2, player.y + player.height/2)
+                    else
+                        loseLife()
+                    end
+                end
+                goto continue
+            end
             
-            -- Remove lasers that go off screen
-            if laser.y > baseHeight or laser.x < -10 or laser.x > baseWidth + 10 then
+            -- Normal projectile movement
+            if laser.vx and laser.vy then
+                laser.x = laser.x + laser.vx * dt
+                laser.y = laser.y + laser.vy * dt
+            end
+            
+            -- Check collision with doors in level 4
+            local hitDoor = false
+            if currentLevel == 4 and laser.vx and laser.vy then -- Only check for normal projectiles
+                for _, door in ipairs(doors) do
+                    -- Check if laser hits the left part of the door
+                    if laser.x >= leftWall and laser.x <= door.gapX and 
+                       laser.y >= door.y and laser.y <= door.y + door.height then
+                        hitDoor = true
+                        break
+                    end
+                    -- Check if laser hits the right part of the door
+                    if laser.x >= door.gapX + door.gapWidth and laser.x <= rightWall and
+                       laser.y >= door.y and laser.y <= door.y + door.height then
+                        hitDoor = true
+                        break
+                    end
+                end
+            end
+            
+            -- Remove lasers that go off screen or hit doors
+            if laser.y > baseHeight or laser.x < -10 or laser.x > baseWidth + 10 or hitDoor then
                 table.remove(alienLasers, i)
             else
                 -- Check collision with nebula clouds first (only in level 2)
@@ -1047,6 +1123,18 @@ function love.update(dt)
             if not laser then
                 table.remove(bossLasers, i)
             else
+                -- Handle delayed lasers
+                if laser.delay and laser.delay > 0 then
+                    laser.delay = laser.delay - dt
+                    if laser.delay > 0 then
+                        goto continueBossLaser
+                    end
+                end
+                
+                -- Ensure vx and vy exist
+                if not laser.vx then laser.vx = 0 end
+                if not laser.vy then laser.vy = 0 end
+                
                 laser.x = laser.x + laser.vx * dt
                 laser.y = laser.y + laser.vy * dt
             
@@ -1095,8 +1183,27 @@ function love.update(dt)
                 laser.vx = math.sin(laser.waveTime * 3 + laser.waveOffset) * 50
             end
             
-            -- Remove lasers that go off screen
-            if laser.y > baseHeight or laser.x < -50 or laser.x > baseWidth + 50 or laser.y < -50 then
+            -- Check collision with doors in level 4
+            local hitDoor = false
+            if currentLevel == 4 then
+                for _, door in ipairs(doors) do
+                    -- Check if laser hits the left part of the door
+                    if laser.x >= leftWall and laser.x <= door.gapX and 
+                       laser.y >= door.y and laser.y <= door.y + door.height then
+                        hitDoor = true
+                        break
+                    end
+                    -- Check if laser hits the right part of the door
+                    if laser.x >= door.gapX + door.gapWidth and laser.x <= rightWall and
+                       laser.y >= door.y and laser.y <= door.y + door.height then
+                        hitDoor = true
+                        break
+                    end
+                end
+            end
+            
+            -- Remove lasers that go off screen or hit doors
+            if laser.y > baseHeight or laser.x < -50 or laser.x > baseWidth + 50 or laser.y < -50 or hitDoor then
                 table.remove(bossLasers, i)
             else
                 -- Check collision with player
@@ -1119,6 +1226,7 @@ function love.update(dt)
                     end
                 end
             end
+            ::continueBossLaser::
             end
         end
         
@@ -1134,7 +1242,10 @@ function love.update(dt)
         -- Update active powerup timers
         for powerup, time in pairs(activePowerups) do
             if time > 0 then
-                activePowerups[powerup] = time - dt
+                -- Don't decrease timer if infinite powerups is on
+                if not infinitePowerups then
+                    activePowerups[powerup] = time - dt
+                end
             end
         end
         
@@ -1499,15 +1610,40 @@ function drawGame()
         
         -- Draw alien lasers
         for _, laser in ipairs(alienLasers) do
-            -- Red alien lasers
-            love.graphics.setColor(1, 0.2, 0.2, 0.5) -- Red glow
-            love.graphics.rectangle("fill", laser.x - 2, laser.y, laser.width + 4, laser.height)
-            love.graphics.setColor(1, 0, 0) -- Red laser
-            love.graphics.rectangle("fill", laser.x, laser.y, laser.width, laser.height)
+            if laser.type == "freezeWave" then
+                -- Draw expanding freeze wave
+                local alpha = 0.5 * (1 - (laser.radius / laser.maxRadius))
+                love.graphics.setColor(0.5, 0.8, 1, alpha)
+                love.graphics.setLineWidth(3)
+                love.graphics.circle("line", laser.x, laser.y, laser.radius)
+                love.graphics.setColor(0.3, 0.6, 1, alpha * 0.5)
+                love.graphics.circle("line", laser.x, laser.y, laser.radius - 5)
+                love.graphics.setLineWidth(1)
+            elseif laser.type == "psychicWave" then
+                -- Draw expanding psychic wave
+                local alpha = 0.6 * (1 - (laser.radius / laser.maxRadius))
+                love.graphics.setColor(0.8, 0.4, 0.8, alpha)
+                love.graphics.setLineWidth(4)
+                love.graphics.circle("line", laser.x, laser.y, laser.radius)
+                love.graphics.setColor(1, 0.6, 1, alpha * 0.7)
+                love.graphics.circle("line", laser.x, laser.y, laser.radius - 8)
+                love.graphics.setLineWidth(1)
+            else
+                -- Normal alien lasers
+                love.graphics.setColor(1, 0.2, 0.2, 0.5) -- Red glow
+                love.graphics.rectangle("fill", laser.x - 2, laser.y, laser.width + 4, laser.height)
+                love.graphics.setColor(1, 0, 0) -- Red laser
+                love.graphics.rectangle("fill", laser.x, laser.y, laser.width, laser.height)
+            end
         end
         
         -- Draw boss lasers
         for _, laser in ipairs(bossLasers) do
+            -- Skip delayed lasers
+            if laser.delay and laser.delay > 0 then
+                goto skipBossLaserDraw
+            end
+            
             if laser.color then
                 -- Custom colored lasers (for annihilator)
                 local r, g, b = laser.color[1], laser.color[2], laser.color[3]
@@ -1540,6 +1676,7 @@ function drawGame()
                 love.graphics.setColor(1, 0.4, 0) -- Orange
                 love.graphics.rectangle("fill", laser.x, laser.y, laser.width, laser.height)
             end
+            ::skipBossLaserDraw::
         end
         
         -- Draw explosions
@@ -1800,6 +1937,12 @@ function drawGame()
             love.graphics.setLineWidth(1)
             
             love.graphics.pop()
+            
+            -- Draw hitbox if enabled
+            if showHitboxes then
+                love.graphics.setColor(0, 1, 0, 0.5)
+                love.graphics.rectangle("line", player.x, player.y, player.width, player.height)
+            end
         end
         
         -- Draw boss
@@ -1921,6 +2064,12 @@ function drawGame()
             end
             
             love.graphics.pop()
+            
+            -- Draw hitbox if enabled
+            if showHitboxes then
+                love.graphics.setColor(1, 0, 0, 0.5)
+                love.graphics.rectangle("line", asteroid.x, asteroid.y, asteroid.width, asteroid.height)
+            end
         end
         
         -- Draw aliens
@@ -2114,6 +2263,12 @@ function drawGame()
             end
             
             love.graphics.pop()
+            
+            -- Draw hitbox if enabled
+            if showHitboxes then
+                love.graphics.setColor(1, 1, 0, 0.5)
+                love.graphics.rectangle("line", alien.x, alien.y, alien.width, alien.height)
+            end
         end
         
     -- Draw score and instructions
@@ -2403,6 +2558,56 @@ function drawGame()
         love.graphics.circle("fill", radarCenterX, radarCenterY + radarRadius * 0.7, 3)
         
         love.graphics.setFont(font)
+        
+        -- Debug info display
+        if debugMode then
+            love.graphics.setFont(smallFont)
+            local debugX = baseWidth - 200
+            local debugY = 10
+            love.graphics.setColor(1, 1, 0)
+            love.graphics.print("DEBUG MODE", debugX, debugY)
+            debugY = debugY + 15
+            
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.print("Enemies: " .. #asteroids + #aliens, debugX, debugY)
+            debugY = debugY + 15
+            love.graphics.print("Lasers: " .. #lasers, debugX, debugY)
+            debugY = debugY + 15
+            love.graphics.print("Enemy Lasers: " .. #alienLasers + #bossLasers, debugX, debugY)
+            debugY = debugY + 15
+            love.graphics.print("Powerups: " .. #powerups, debugX, debugY)
+            debugY = debugY + 15
+            love.graphics.print("Enemies Defeated: " .. enemiesDefeated .. "/" .. enemiesForBoss, debugX, debugY)
+            debugY = debugY + 15
+            
+            if boss then
+                love.graphics.print("Boss HP: " .. boss.health .. "/" .. boss.maxHealth, debugX, debugY)
+                debugY = debugY + 15
+                love.graphics.print("Boss Phase: " .. boss.phase, debugX, debugY)
+                debugY = debugY + 15
+            end
+            
+            love.graphics.print("Invuln Time: " .. string.format("%.1f", invulnerableTime), debugX, debugY)
+            debugY = debugY + 15
+            
+            love.graphics.setFont(font)
+        end
+        
+        -- FPS display
+        if showFPS then
+            love.graphics.setFont(smallFont)
+            love.graphics.setColor(0, 1, 0)
+            love.graphics.print("FPS: " .. love.timer.getFPS(), baseWidth - 80, baseHeight - 30)
+            love.graphics.setFont(font)
+        end
+        
+        -- Cheat mode indicator
+        if cheatsEnabled then
+            love.graphics.setFont(smallFont)
+            love.graphics.setColor(1, 1, 0, 0.7)
+            love.graphics.print("CHEATS ENABLED", baseWidth/2 - 50, baseHeight - 20)
+            love.graphics.setFont(font)
+        end
 end
 
 function drawPowerupBar(x, y, width, current, max, color)
@@ -3278,6 +3483,109 @@ function updateBoss(dt)
                     boss.specialTimer = 0
                 end
             end
+        elseif boss.type == "frosttitan" then
+            -- Level 3 Boss patterns - Frost Titan
+            -- Update leg animation
+            for i, leg in ipairs(boss.legs) do
+                leg.raised = (math.sin(love.timer.getTime() * 2 + i) > 0.5)
+            end
+            
+            if boss.phase == 1 then
+                -- Ice shard barrage
+                if boss.shootTimer > 1.8 then
+                    frostTitanIceShards()
+                    boss.shootTimer = 0
+                end
+                
+                -- Special attacks
+                if boss.specialTimer > 5 then
+                    local attack = math.random(1, 3)
+                    if attack == 1 then
+                        frostTitanFreezingWave()
+                    elseif attack == 2 then
+                        frostTitanIceBeam()
+                    else
+                        frostTitanSummonGeysers()
+                    end
+                    boss.specialTimer = 0
+                end
+                
+                if boss.health <= boss.maxHealth * 0.5 then
+                    boss.phase = 2
+                    boss.vx = boss.vx * 1.3
+                    createPowerupText("BLIZZARD MODE!", boss.x + boss.width/2, boss.y + boss.height + 20, {0.5, 0.8, 1})
+                end
+                
+            elseif boss.phase == 2 then
+                -- More aggressive ice attacks
+                if boss.shootTimer > 1.2 then
+                    frostTitanIceShards()
+                    boss.shootTimer = 0
+                end
+                
+                -- Rapid special attacks
+                if boss.specialTimer > 3 then
+                    local attack = math.random(1, 2)
+                    if attack == 1 then
+                        frostTitanIceBeam()
+                        frostTitanFreezingWave() -- Double attack!
+                    else
+                        frostTitanSummonGeysers()
+                    end
+                    boss.specialTimer = 0
+                end
+            end
+        elseif boss.type == "hivemind" then
+            -- Level 4 Boss patterns - Hivemind
+            -- Update tentacle movement
+            if boss.tentacles then
+                for i, tentacle in ipairs(boss.tentacles) do
+                    tentacle.angle = tentacle.angle + dt * 0.5
+                end
+            end
+            
+            if boss.phase == 1 then
+                -- Organic projectiles
+                if boss.shootTimer > 1.5 then
+                    hivemindOrganicBarrage()
+                    boss.shootTimer = 0
+                end
+                
+                -- Special attacks
+                if boss.specialTimer > 5 then
+                    local attack = math.random(1, 3)
+                    if attack == 1 then
+                        hivemindTentacleSwipe()
+                    elseif attack == 2 then
+                        hivemindSpawnMinions()
+                    else
+                        hivemindPsychicWave()
+                    end
+                    boss.specialTimer = 0
+                end
+                
+                if boss.health <= boss.maxHealth * 0.5 then
+                    boss.phase = 2
+                    boss.vx = boss.vx * 1.4
+                    createPowerupText("RAGE MODE!", boss.x + boss.width/2, boss.y + boss.height + 20, {0.8, 0.2, 0.2})
+                end
+                
+            elseif boss.phase == 2 then
+                -- More aggressive patterns
+                if boss.shootTimer > 1.0 then
+                    hivemindOrganicBarrage()
+                    boss.shootTimer = 0
+                end
+                
+                -- Rapid attacks
+                if boss.specialTimer > 3 then
+                    hivemindTentacleSwipe()
+                    if math.random() > 0.5 then
+                        hivemindSpawnMinions() -- Extra minions
+                    end
+                    boss.specialTimer = 0
+                end
+            end
         end
         
         -- Check laser collisions with boss
@@ -3581,6 +3889,193 @@ function annihilatorShieldBurst()
     end
 end
 
+-- Frost Titan attack functions
+function frostTitanIceShards()
+    createPowerupText("ICE BARRAGE!", boss.x + boss.width/2, boss.y + boss.height + 20, {0.5, 0.8, 1})
+    
+    -- Fire ice shards in a spread pattern
+    local shardCount = boss.phase == 2 and 7 or 5
+    local spreadAngle = math.pi / 3  -- 60 degree spread
+    
+    for i = 1, shardCount do
+        local angle = math.pi/2 + (i - (shardCount + 1)/2) * (spreadAngle / shardCount)
+        local shard = {
+            x = boss.x + boss.width/2,
+            y = boss.y + boss.height,
+            width = 12,
+            height = 20,
+            vx = math.cos(angle) * 250,
+            vy = math.sin(angle) * 250,
+            damage = 1,
+            color = {0.6, 0.8, 1},  -- Ice blue
+            type = "iceShard"
+        }
+        table.insert(bossLasers, shard)
+    end
+end
+
+function frostTitanFreezingWave()
+    createPowerupText("FREEZE WAVE!", boss.x + boss.width/2, boss.y + boss.height + 20, {0.3, 0.6, 1})
+    
+    -- Create expanding freeze wave
+    local wave = {
+        x = boss.x + boss.width/2,
+        y = boss.y + boss.height/2,
+        width = 10,
+        height = 10,
+        radius = 10,
+        maxRadius = 300,
+        speed = 200,
+        damage = 1,
+        type = "freezeWave",
+        color = {0.5, 0.8, 1, 0.5}
+    }
+    table.insert(alienLasers, wave)
+end
+
+function frostTitanIceBeam()
+    createPowerupText("ICE BEAM!", boss.x + boss.width/2, boss.y + boss.height + 20, {0, 0.5, 1})
+    
+    -- Calculate angle to player
+    local dx = player.x + player.width/2 - (boss.x + boss.width/2)
+    local dy = player.y + player.height/2 - (boss.y + boss.height/2)
+    local angle = math.atan2(dy, dx)
+    
+    -- Create continuous ice beam (multiple projectiles)
+    for i = 1, 10 do
+        local delay = i * 0.1
+        local beam = {
+            x = boss.x + boss.width/2,
+            y = boss.y + boss.height/2,
+            width = 20,
+            height = 20,
+            vx = math.cos(angle) * 400,
+            vy = math.sin(angle) * 400,
+            damage = 1,
+            color = {0.3, 0.6, 1},
+            type = "iceBeam",
+            delay = delay  -- Staggered firing
+        }
+        table.insert(bossLasers, beam)
+    end
+end
+
+function frostTitanSummonGeysers()
+    createPowerupText("ICE GEYSERS!", boss.x + boss.width/2, boss.y + boss.height + 20, {0.7, 0.9, 1})
+    
+    -- Spawn ice geysers at random positions
+    local geyserCount = boss.phase == 2 and 5 or 3
+    
+    for i = 1, geyserCount do
+        local geyser = {
+            x = math.random(50, baseWidth - 50),
+            y = groundY,
+            width = 40,
+            height = 10,
+            warningTime = 1,  -- Warning before eruption
+            activeTime = 0,
+            maxActiveTime = 2,
+            damage = 1,
+            type = "iceGeyser",
+            erupted = false
+        }
+        table.insert(iceGeysers, geyser)
+    end
+end
+
+-- Hivemind attack functions
+function hivemindOrganicBarrage()
+    createPowerupText("ORGANIC BARRAGE!", boss.x + boss.width/2, boss.y + boss.height + 20, {0.5, 1, 0.5})
+    
+    -- Fire organic projectiles in a spread
+    local projectileCount = boss.phase == 2 and 7 or 5
+    local spreadAngle = math.pi / 2
+    
+    for i = 1, projectileCount do
+        local angle = math.pi/2 + (i - (projectileCount + 1)/2) * (spreadAngle / projectileCount)
+        local projectile = {
+            x = boss.x + boss.width/2,
+            y = boss.y + boss.height,
+            width = 16,
+            height = 16,
+            vx = math.cos(angle) * 200,
+            vy = math.sin(angle) * 200,
+            damage = 1,
+            color = {0.6, 0.8, 0.6},
+            type = "organic"
+        }
+        table.insert(bossLasers, projectile)
+    end
+end
+
+function hivemindTentacleSwipe()
+    createPowerupText("TENTACLE SWIPE!", boss.x + boss.width/2, boss.y + boss.height + 20, {0.3, 0.6, 0.3})
+    
+    -- Create sweeping tentacle projectiles
+    if boss.tentacles then
+        for i, tentacle in ipairs(boss.tentacles) do
+            local baseX = boss.x + boss.width/2 + math.cos(tentacle.angle) * boss.width/3
+            local baseY = boss.y + boss.height/2 + math.sin(tentacle.angle) * boss.height/3
+            
+            -- Launch projectile from tentacle tip
+            local projectile = {
+                x = baseX,
+                y = baseY,
+                width = 20,
+                height = 20,
+                vx = math.cos(tentacle.angle) * 300,
+                vy = math.sin(tentacle.angle) * 300,
+                damage = 1,
+                color = {0.4, 0.6, 0.4},
+                type = "tentacle"
+            }
+            table.insert(bossLasers, projectile)
+        end
+    end
+end
+
+function hivemindSpawnMinions()
+    createPowerupText("SPAWN MINIONS!", boss.x + boss.width/2, boss.y + boss.height + 20, {0.8, 0.8, 0.4})
+    
+    -- Spawn small organic pods as minions
+    local minionCount = boss.phase == 2 and 3 or 2
+    
+    for i = 1, minionCount do
+        local minion = {
+            x = boss.x + boss.width/2 + math.random(-100, 100),
+            y = boss.y + boss.height,
+            width = 30,
+            height = 30,
+            vy = 100,
+            vx = math.random(-50, 50),
+            health = 1,
+            maxHealth = 1,
+            type = "organicminion",
+            shootTimer = 0
+        }
+        table.insert(aliens, minion)
+    end
+end
+
+function hivemindPsychicWave()
+    createPowerupText("PSYCHIC WAVE!", boss.x + boss.width/2, boss.y + boss.height + 20, {0.8, 0.4, 0.8})
+    
+    -- Create expanding psychic wave
+    local wave = {
+        x = boss.x + boss.width/2,
+        y = boss.y + boss.height/2,
+        width = 10,
+        height = 10,
+        radius = 10,
+        maxRadius = 350,
+        speed = 250,
+        damage = 1,
+        type = "psychicWave",
+        color = {0.8, 0.4, 0.8, 0.5}
+    }
+    table.insert(alienLasers, wave)
+end
+
 function defeatBoss()
     -- Create massive explosion
     for i = 1, 10 do
@@ -3724,16 +4219,140 @@ function drawBoss()
         end
         
         love.graphics.pop()
+    elseif boss.type == "frosttitan" then
+        -- Level 3 Boss - Frost Titan (mechanical ice spider)
+        -- Main body (icy blue metallic)
+        love.graphics.setColor(0.5, 0.7, 0.9)
+        love.graphics.circle("fill", 0, 0, boss.width/3)
+        
+        -- Ice armor plating
+        love.graphics.setColor(0.7, 0.8, 0.95)
+        local plates = 8
+        for i = 1, plates do
+            local angle = (i / plates) * math.pi * 2
+            local x = math.cos(angle) * boss.width/4
+            local y = math.sin(angle) * boss.height/4
+            love.graphics.polygon("fill",
+                x - 15, y - 10,
+                x + 15, y - 10,
+                x + 10, y + 10,
+                x - 10, y + 10
+            )
+        end
+        
+        -- Draw legs
+        love.graphics.setColor(0.4, 0.6, 0.8)
+        for i, leg in ipairs(boss.legs) do
+            local legAngle = leg.angle
+            local legLength = 80
+            local segmentLength = legLength / 2
+            
+            -- First segment
+            local x1 = math.cos(legAngle) * boss.width/3
+            local y1 = math.sin(legAngle) * boss.height/3
+            local x2 = x1 + math.cos(legAngle + (leg.raised and -0.5 or 0.5)) * segmentLength
+            local y2 = y1 + math.sin(legAngle + (leg.raised and -0.5 or 0.5)) * segmentLength
+            
+            love.graphics.setLineWidth(8)
+            love.graphics.line(x1, y1, x2, y2)
+            
+            -- Second segment
+            local x3 = x2 + math.cos(legAngle + (leg.raised and 0.5 or 1)) * segmentLength
+            local y3 = y2 + math.sin(legAngle + (leg.raised and 0.5 or 1)) * segmentLength
+            love.graphics.line(x2, y2, x3, y3)
+            
+            -- Leg tip
+            love.graphics.setColor(0.3, 0.5, 0.7)
+            love.graphics.circle("fill", x3, y3, 5)
+            love.graphics.setColor(0.4, 0.6, 0.8)
+        end
+        love.graphics.setLineWidth(1)
+        
+        -- Core (icy blue pulsing)
+        local coreColor = boss.phase == 1 and {0.3, 0.6, 1} or {0, 0.8, 1}
+        love.graphics.setColor(coreColor)
+        local pulse = math.sin(love.timer.getTime() * 3) * 0.2 + 0.8
+        love.graphics.circle("fill", 0, 0, 25 * pulse)
+        
+        -- Ice crystal formations
+        love.graphics.setColor(0.8, 0.9, 1, 0.7)
+        for i = 1, 6 do
+            local angle = (i / 6) * math.pi * 2 + love.timer.getTime() * 0.2
+            local dist = 40 + math.sin(love.timer.getTime() * 2 + i) * 10
+            local cx = math.cos(angle) * dist
+            local cy = math.sin(angle) * dist
+            love.graphics.polygon("fill",
+                cx, cy - 10,
+                cx + 5, cy,
+                cx, cy + 10,
+                cx - 5, cy
+            )
+        end
+        
+        -- Frost aura
+        love.graphics.setColor(0.5, 0.8, 1, 0.3)
+        love.graphics.circle("line", 0, 0, boss.width/2 + 10)
+        love.graphics.circle("line", 0, 0, boss.width/2 + 20)
+    elseif boss.type == "hivemind" then
+        -- Level 4 Boss - Organic hivemind
+        -- Main organic body
+        love.graphics.setColor(0.4, 0.6, 0.4)
+        love.graphics.ellipse("fill", 0, 0, boss.width/2, boss.height/2)
+        
+        -- Pulsing organic tissue
+        local pulse = math.sin(love.timer.getTime() * 2) * 0.1 + 0.9
+        love.graphics.setColor(0.5, 0.7, 0.5, pulse)
+        love.graphics.ellipse("fill", 0, 0, boss.width/2.5, boss.height/2.5)
+        
+        -- Tentacles
+        if boss.tentacles then
+            love.graphics.setColor(0.3, 0.5, 0.3)
+            for i, tentacle in ipairs(boss.tentacles) do
+                local baseX = math.cos(tentacle.angle) * boss.width/3
+                local baseY = math.sin(tentacle.angle) * boss.height/3
+                
+                -- Draw tentacle segments
+                love.graphics.setLineWidth(15)
+                for j = 1, 5 do
+                    local segmentAngle = tentacle.angle + math.sin(love.timer.getTime() * 2 + i + j * 0.5) * 0.3
+                    local segX = baseX + math.cos(segmentAngle) * j * 20
+                    local segY = baseY + math.sin(segmentAngle) * j * 20
+                    love.graphics.circle("fill", segX, segY, 15 - j * 2)
+                end
+                love.graphics.setLineWidth(1)
+            end
+        end
+        
+        -- Eyes/nodes
+        love.graphics.setColor(0.8, 0.2, 0.2)
+        for i = 1, 6 do
+            local angle = (i / 6) * math.pi * 2 + love.timer.getTime() * 0.3
+            local eyeX = math.cos(angle) * boss.width/4
+            local eyeY = math.sin(angle) * boss.height/4
+            love.graphics.circle("fill", eyeX, eyeY, 8)
+            
+            -- Eye glow
+            love.graphics.setColor(1, 0.4, 0.4, 0.5)
+            love.graphics.circle("fill", eyeX, eyeY, 12)
+        end
+        
+        -- Central core
+        love.graphics.setColor(0.6, 0.9, 0.6)
+        love.graphics.circle("fill", 0, 0, 20)
+        love.graphics.setColor(0.8, 1, 0.8, 0.5)
+        love.graphics.circle("fill", 0, 0, 25)
     end
     
-    -- Engine glow (common to both bosses)
-    love.graphics.setColor(1, 0.5, 0, 0.8)
-    local enginePositions = boss.type == "destroyer" and 
-        {{-80, -boss.height/2 - 10}, {-40, -boss.height/2 - 10}, {20, -boss.height/2 - 10}, {60, -boss.height/2 - 10}} or
-        {{-100, -boss.height/2 - 10}, {-50, -boss.height/2 - 10}, {0, -boss.height/2 - 10}, {50, -boss.height/2 - 10}, {100, -boss.height/2 - 10}}
-    
-    for _, pos in ipairs(enginePositions) do
-        love.graphics.rectangle("fill", pos[1], pos[2], 20, 15)
+    -- Engine glow (only for flying bosses)
+    if boss.type ~= "frosttitan" then
+        love.graphics.setColor(1, 0.5, 0, 0.8)
+        local enginePositions = boss.type == "destroyer" and 
+            {{-80, -boss.height/2 - 10}, {-40, -boss.height/2 - 10}, {20, -boss.height/2 - 10}, {60, -boss.height/2 - 10}} or
+            {{-100, -boss.height/2 - 10}, {-50, -boss.height/2 - 10}, {0, -boss.height/2 - 10}, {50, -boss.height/2 - 10}, {100, -boss.height/2 - 10}}
+        
+        for _, pos in ipairs(enginePositions) do
+            love.graphics.rectangle("fill", pos[1], pos[2], 20, 15)
+        end
     end
     
     -- Boss health bar
@@ -3758,10 +4377,24 @@ function drawBoss()
     love.graphics.pop()
     
     -- Boss name
-    love.graphics.setColor(boss.type == "destroyer" and {1, 0, 0} or {1, 0, 1})
+    local nameColor = {1, 0, 0} -- default red
+    local bossName = "BOSS"
+    if boss.type == "destroyer" then
+        nameColor = {1, 0, 0}
+        bossName = "DESTROYER"
+    elseif boss.type == "annihilator" then
+        nameColor = {1, 0, 1}
+        bossName = "ANNIHILATOR"
+    elseif boss.type == "frosttitan" then
+        nameColor = {0.5, 0.8, 1}
+        bossName = "FROST TITAN"
+    elseif boss.type == "hivemind" then
+        nameColor = {0.5, 1, 0.5}
+        bossName = "HIVEMIND"
+    end
+    love.graphics.setColor(nameColor)
     love.graphics.setFont(smallFont)
-    love.graphics.printf(boss.type == "destroyer" and "DESTROYER" or "ANNIHILATOR", 
-        boss.x, boss.y - 30, boss.width, "center")
+    love.graphics.printf(bossName, boss.x, boss.y - 30, boss.width, "center")
     
     -- Draw beam sweep for Annihilator
     if boss.type == "annihilator" and boss.beamActive then
@@ -3858,6 +4491,13 @@ end
 
 -- Function to handle losing a life
 function loseLife()
+    -- Check for god mode
+    if godMode then
+        invulnerableTime = 2  -- Still give invulnerability frames
+        createPowerupText("GOD MODE ACTIVE", player.x + player.width/2, player.y - 20, {1, 1, 0})
+        return
+    end
+    
     lives = lives - 1
     currentCombo = 0 -- Reset combo
     
@@ -4136,6 +4776,107 @@ end
 
 -- Input handling functions
 function love.keypressed(key)
+    -- Developer cheats (F1-F8 keys)
+    if key == "f1" then
+        -- Toggle cheat mode
+        cheatsEnabled = not cheatsEnabled
+        if cheatsEnabled then
+            createPowerupText("CHEATS ENABLED", baseWidth/2, baseHeight/2, {1, 1, 0})
+        else
+            createPowerupText("CHEATS DISABLED", baseWidth/2, baseHeight/2, {1, 0, 0})
+        end
+        return
+    end
+    
+    -- Only process other cheats if cheats are enabled
+    if cheatsEnabled then
+        if key == "f2" then
+            -- God mode (infinite lives)
+            godMode = not godMode
+            if godMode then
+                lives = 999
+                createPowerupText("GOD MODE ON", baseWidth/2, baseHeight/2, {0, 1, 0})
+            else
+                lives = 3
+                createPowerupText("GOD MODE OFF", baseWidth/2, baseHeight/2, {1, 0, 0})
+            end
+        elseif key == "f3" then
+            -- Infinite powerups
+            infinitePowerups = not infinitePowerups
+            if infinitePowerups then
+                -- Activate all powerups
+                activePowerups.tripleShot = 9999
+                activePowerups.rapidFire = 9999
+                activePowerups.shield = 9999
+                activePowerups.slowTime = 9999
+                activePowerups.homing = 9999
+                activePowerups.pierce = 9999
+                activePowerups.freeze = 9999
+                activePowerups.vampire = 9999
+                createPowerupText("INFINITE POWERUPS ON", baseWidth/2, baseHeight/2, {0, 1, 1})
+            else
+                -- Reset powerups
+                for k, v in pairs(activePowerups) do
+                    activePowerups[k] = 0
+                end
+                createPowerupText("INFINITE POWERUPS OFF", baseWidth/2, baseHeight/2, {1, 0, 0})
+            end
+        elseif key == "f4" then
+            -- Skip to next level
+            if gameState == "playing" then
+                currentLevel = currentLevel + 1
+                score = score + 5000
+                enemiesDefeated = 0
+                boss = nil
+                bossSpawned = false
+                asteroids = {}
+                aliens = {}
+                alienLasers = {}
+                bossLasers = {}
+                createPowerupText("SKIPPED TO LEVEL " .. currentLevel, baseWidth/2, baseHeight/2, {1, 1, 0})
+            end
+        elseif key == "f5" then
+            -- Spawn boss immediately
+            if gameState == "playing" and not boss then
+                enemiesDefeated = enemiesForBoss
+                createPowerupText("SPAWNING BOSS", baseWidth/2, baseHeight/2, {1, 0, 1})
+            end
+        elseif key == "f6" then
+            -- Toggle hitboxes
+            showHitboxes = not showHitboxes
+            createPowerupText(showHitboxes and "HITBOXES ON" or "HITBOXES OFF", baseWidth/2, baseHeight/2, {1, 1, 0})
+        elseif key == "f7" then
+            -- Toggle FPS display
+            showFPS = not showFPS
+            createPowerupText(showFPS and "FPS ON" or "FPS OFF", baseWidth/2, baseHeight/2, {1, 1, 0})
+        elseif key == "f8" then
+            -- Toggle debug mode (shows extra info)
+            debugMode = not debugMode
+            createPowerupText(debugMode and "DEBUG MODE ON" or "DEBUG MODE OFF", baseWidth/2, baseHeight/2, {1, 1, 0})
+        elseif key == "1" then
+            -- Give extra life
+            if gameState == "playing" then
+                lives = math.min(lives + 1, 99)
+                createPowerupText("+1 LIFE", baseWidth/2, baseHeight/2, {0, 1, 0})
+            end
+        elseif key == "2" then
+            -- Clear screen of enemies
+            if gameState == "playing" then
+                asteroids = {}
+                aliens = {}
+                alienLasers = {}
+                bossLasers = {}
+                createPowerupText("SCREEN CLEARED", baseWidth/2, baseHeight/2, {0, 1, 1})
+            end
+        elseif key == "3" then
+            -- Max score
+            if gameState == "playing" then
+                score = 999999
+                createPowerupText("MAX SCORE", baseWidth/2, baseHeight/2, {1, 1, 0})
+            end
+        end
+    end
+    
     -- Global hotkeys
     if key == "f9" then
         reloadAudioSystem()
@@ -5144,16 +5885,16 @@ function drawIceMoonTerrain()
     love.graphics.setColor(0.8, 0.9, 1, 1)
     love.graphics.rectangle("fill", 0, groundY, baseWidth, baseHeight - groundY)
     
-    -- Draw ice formations
-    love.graphics.setColor(0.6, 0.7, 0.9, 0.8)
-    for i = 0, baseWidth, 100 do
-        local height = math.sin(i * 0.02 + love.timer.getTime() * 0.1) * 30 + 40
-        love.graphics.polygon("fill",
-            i - 20, groundY,
-            i, groundY - height,
-            i + 20, groundY
-        )
-    end
+    -- Draw ice formations (removed per user request)
+    -- love.graphics.setColor(0.6, 0.7, 0.9, 0.8)
+    -- for i = 0, baseWidth, 100 do
+    --     local height = math.sin(i * 0.02 + love.timer.getTime() * 0.1) * 30 + 40
+    --     love.graphics.polygon("fill",
+    --         i - 20, groundY,
+    --         i, groundY - height,
+    --         i + 20, groundY
+    --     )
+    -- end
     
     -- Draw snow particles
     love.graphics.setColor(1, 1, 1, 0.6)
@@ -5308,11 +6049,28 @@ function updateMothershipDoors(dt)
 end
 
 function spawnDoor()
+    -- Ensure gap is wide enough and well-positioned
+    local minGapWidth = 180  -- Increased from 150 for easier passage
+    local margin = 80  -- Minimum distance from walls
+    
+    -- Calculate valid range for gap placement
+    local minGapX = leftWall + margin
+    local maxGapX = rightWall - minGapWidth - margin
+    
+    -- Ensure we have valid range
+    if maxGapX <= minGapX then
+        -- Corridor too narrow, center the gap
+        local corridorCenter = (leftWall + rightWall) / 2
+        gapX = corridorCenter - minGapWidth / 2
+    else
+        gapX = math.random(minGapX, maxGapX)
+    end
+    
     local door = {
         y = -100,
         height = 50,
-        gapX = math.random(leftWall + 50, rightWall - 200),
-        gapWidth = 150,
+        gapX = gapX,
+        gapWidth = minGapWidth,
         speed = 100 + currentLevel * 10
     }
     table.insert(doors, door)
@@ -5369,6 +6127,11 @@ function updateSolarFlares(dt)
     -- Update flares
     for i = #solarFlares, 1, -1 do
         local flare = solarFlares[i]
+        
+        -- Ensure alpha exists
+        if not flare.alpha then
+            flare.alpha = 0
+        end
         
         if flare.growing then
             flare.alpha = math.min(flare.alpha + dt * 2, 1)
@@ -5675,6 +6438,7 @@ function spawnFireElemental()
 end
 
 function createSolarFlare()
+    -- Create a horizontal moving flare (different from vertical warning flares)
     local flare = {
         x = math.random() > 0.5 and -100 or baseWidth,
         y = math.random(100, baseHeight - 100),
@@ -5684,9 +6448,11 @@ function createSolarFlare()
         vy = 0,
         type = "solarflare",
         damage = 2,
-        lifeTime = 5
+        lifeTime = 5,
+        alpha = 1,  -- Add alpha for consistency
+        growing = false  -- Not a growing flare
     }
-    table.insert(solarFlares, flare)
+    table.insert(aliens, flare)  -- Add to aliens instead of solarFlares
 end
 
 -- Update spawn logic based on level
@@ -5728,9 +6494,10 @@ function spawnLevelEnemies(dt)
         
     elseif currentLevel == 3 then
         -- Level 3: Ice Moon - Ground combat, no asteroids
-        if math.random() < 0.015 then  -- Reduced from 0.03
-            spawnIceTurret()
-        end
+        -- Ice turrets removed per user request
+        -- if math.random() < 0.015 then  -- Reduced from 0.03
+        --     spawnIceTurret()
+        -- end
         if math.random() < 0.01 then   -- Reduced from 0.02
             spawnHoverTank()
         end
