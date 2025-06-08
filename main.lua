@@ -1297,6 +1297,7 @@ function love.update(dt)
         elseif currentLevel == 5 then
             updateHeatMeter(dt)
             updateSolarFlares(dt)
+            updateShadeZones(dt)
         end
         
         -- Handle level complete transition
@@ -2329,21 +2330,15 @@ function drawGame()
     -- Draw shade zones on top of entities for level 5
     if currentLevel == 5 then
         for _, zone in ipairs(shadeZones) do
-            -- Draw more visible shade zone with border
-            love.graphics.setColor(0, 0, 0.2, 0.7)  -- Much more visible dark blue
+            -- Draw semi-transparent cool blue shade zone
+            love.graphics.setColor(0.2, 0.3, 0.5, 0.3)  -- Cool blue with 30% opacity
             love.graphics.rectangle("fill", zone.x, zone.y, zone.width, zone.height)
             
-            -- Add a glowing border to make it more noticeable
-            love.graphics.setColor(0, 0.5, 1, 0.8)  -- Blue glow border
-            love.graphics.setLineWidth(3)
+            -- Subtle glowing border
+            love.graphics.setColor(0.4, 0.6, 1, 0.5)  -- Light blue border with 50% opacity
+            love.graphics.setLineWidth(2)
             love.graphics.rectangle("line", zone.x, zone.y, zone.width, zone.height)
             love.graphics.setLineWidth(1)
-            
-            -- Add "SHADE" text in the center
-            love.graphics.setColor(0, 0.8, 1, 0.9)
-            if smallFont then love.graphics.setFont(smallFont) end
-            love.graphics.printf("SHADE", zone.x, zone.y + zone.height/2 - 10, zone.width, "center")
-            if font then love.graphics.setFont(font) end
         end
     end
         
@@ -5580,6 +5575,9 @@ function startGame(startLevel)
     powerupTexts = {}
     explosions = {}
     iceGeysers = {} -- Clear ice geysers
+    shadeZones = {} -- Clear shade zones
+    solarFlares = {} -- Clear solar flares
+    plasmaStorms = {} -- Clear plasma storms
     
     -- Reset powerups
     activePowerups = {
@@ -5703,13 +5701,14 @@ function nextLevel()
         gravity = 0
         createPowerupText("APPROACHING SOLAR CORONA", baseWidth/2, 100, {1, 0.5, 0})
         
-        -- Create shade zones
+        -- Start with some initial shade zones already visible
         for i = 1, 3 do
             local zone = {
-                x = math.random(100, baseWidth - 200),
-                y = math.random(100, baseHeight - 200),
+                x = math.random(100, baseWidth - 250),
+                y = 100 + (i-1) * 200,  -- Spread across screen
                 width = 150,
-                height = 150
+                height = 150,
+                vy = 50  -- Slower downward velocity
             }
             table.insert(shadeZones, zone)
         end
@@ -6390,9 +6389,36 @@ function updateHeatMeter(dt)
     end
 end
 
+function updateShadeZones(dt)
+    -- Spawn new shade zones periodically
+    if #shadeZones < 4 and math.random() < 0.03 then  -- 3% chance per frame when less than 4
+        local zone = {
+            x = math.random(100, baseWidth - 250),
+            y = -150,  -- Start above screen
+            width = 150,
+            height = 150,
+            vy = 50  -- Same speed as initial zones
+        }
+        table.insert(shadeZones, zone)
+    end
+    
+    -- Update existing shade zones
+    for i = #shadeZones, 1, -1 do
+        local zone = shadeZones[i]
+        
+        -- Move shade zones down
+        zone.y = zone.y + zone.vy * dt
+        
+        -- Remove zones that go off screen
+        if zone.y > baseHeight + 200 then
+            table.remove(shadeZones, i)
+        end
+    end
+end
+
 function updateSolarFlares(dt)
     -- Spawn solar flares
-    if math.random() < 0.005 then
+    if math.random() < 0.003 then  -- Reduced from 0.005 (40% less)
         local flare = {
             y = math.random(100, baseHeight - 100),
             height = 50,
@@ -6820,7 +6846,7 @@ function spawnLevelEnemies(dt)
             spawnFireElemental()  -- New enemy type
         end
         -- Solar flares as environmental hazard
-        if math.random() < 0.001 then  -- Reduced from 0.003 (67% less)
+        if math.random() < 0.0005 then  -- Reduced from 0.001 (50% less)
             createSolarFlare()
         end
         
