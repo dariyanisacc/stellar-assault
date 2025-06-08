@@ -38,6 +38,11 @@ function love.load()
     bossAttackTimer = 0
     levelCompleteTimer = 0
     
+    -- Game ending variables
+    gameComplete = false
+    endingTimer = 0
+    shipLandingY = -100
+    
     -- Menu variables
     menuSelection = 1 -- 1 = Play, 2 = Level Select, 3 = Options, 4 = Quit
     loadedSaveLevel = nil -- For displaying save info in menu
@@ -1304,11 +1309,24 @@ function love.update(dt)
         if levelComplete and levelCompleteTimer > 0 then
             levelCompleteTimer = levelCompleteTimer - dt
             if levelCompleteTimer <= 0 then
-                gameState = "levelcomplete"
+                if gameComplete then
+                    gameState = "ending"
+                    endingTimer = 0
+                else
+                    gameState = "levelcomplete"
+                end
             end
         end
     elseif gameState == "levelcomplete" then
         -- Level complete state doesn't need updates
+    elseif gameState == "ending" then
+        -- Update ending sequence
+        endingTimer = endingTimer + dt
+        
+        -- Ship landing animation
+        if endingTimer > 2 and shipLandingY < 300 then
+            shipLandingY = shipLandingY + dt * 100
+        end
     elseif gameState == "gameover" then
         -- Game over state doesn't need updates
     end -- This closes the 'if gameState' block
@@ -1556,6 +1574,8 @@ function love.draw()
         drawGame()
     elseif gameState == "levelcomplete" then
         drawLevelComplete()
+    elseif gameState == "ending" then
+        drawEnding()
     elseif gameState == "paused" then
         drawPaused()
     elseif gameState == "gameover" then
@@ -4320,7 +4340,14 @@ function defeatBoss()
     
     -- Victory message
     createPowerupText("BOSS DEFEATED!", baseWidth/2, 200, {0, 1, 0})
-    createPowerupText("ZONE COMPLETE!", baseWidth/2, 250, {1, 1, 0})
+    
+    if currentLevel == 5 then
+        -- Game complete!
+        createPowerupText("GALAXY SAVED!", baseWidth/2, 250, {1, 1, 0})
+        gameComplete = true
+    else
+        createPowerupText("ZONE COMPLETE!", baseWidth/2, 250, {1, 1, 0})
+    end
     
     -- Mark level as complete
     levelComplete = true
@@ -5377,6 +5404,24 @@ function love.keypressed(key)
         if key == "return" or key == "space" then
             nextLevel()
         end
+    elseif gameState == "ending" then
+        if key == "return" or key == "space" then
+            if endingTimer > 10 then
+                -- Return to main menu
+                gameState = "menu"
+                menuState = "main"
+                gameComplete = false
+                currentLevel = 1
+                lives = 3
+                score = 0
+                shipLandingY = -100
+                endingTimer = 0
+                stopAllSounds()
+                if sounds.menuMusic then
+                    sounds.menuMusic:play()
+                end
+            end
+        end
     end
 end
 
@@ -5996,6 +6041,126 @@ function drawPaused()
     love.graphics.printf("Return to Menu", 0, baseHeight/2 + 30, baseWidth, "center")
     
     if font then love.graphics.setFont(font) end
+end
+
+function drawEnding()
+    -- Space background
+    local endingBg = {0.05, 0.05, 0.15} -- Dark blue space
+    love.graphics.setColor(endingBg)
+    love.graphics.rectangle("fill", 0, 0, baseWidth, baseHeight)
+    
+    -- Draw simple stars for ending
+    love.graphics.setColor(1, 1, 1)
+    for i = 1, 100 do
+        local x = (i * 73) % baseWidth
+        local y = (i * 37) % baseHeight
+        local size = (i % 3) + 1
+        local alpha = 0.3 + (i % 5) * 0.1
+        love.graphics.setColor(1, 1, 1, alpha)
+        love.graphics.circle("fill", x, y, size)
+    end
+    
+    -- Planet surface at bottom
+    love.graphics.setColor(0.3, 0.5, 0.2) -- Green planet surface
+    love.graphics.rectangle("fill", 0, baseHeight - 150, baseWidth, 150)
+    
+    -- Landing pad
+    love.graphics.setColor(0.5, 0.5, 0.6)
+    love.graphics.rectangle("fill", baseWidth/2 - 100, baseHeight - 160, 200, 20)
+    love.graphics.setColor(1, 1, 0)
+    love.graphics.rectangle("line", baseWidth/2 - 100, baseHeight - 160, 200, 20)
+    
+    -- Draw ship landing
+    if endingTimer > 2 then
+        local landingY = math.min(shipLandingY, baseHeight - 200)
+        love.graphics.push()
+        love.graphics.translate(baseWidth/2, landingY)
+        love.graphics.scale(1.5, 1.5)
+        
+        -- Draw player ship
+        love.graphics.setColor(0.2, 0.4, 0.7)
+        love.graphics.polygon("fill",
+            0, -30,      -- nose
+            -12, -10,    -- left front
+            -12, 10,     -- left mid
+            -8, 25,      -- left back
+            8, 25,       -- right back
+            12, 10,      -- right mid
+            12, -10,     -- right front
+            0, -30       -- nose
+        )
+        
+        -- Wings
+        love.graphics.setColor(0.3, 0.6, 0.8)
+        love.graphics.polygon("fill",
+            -12, -5,
+            -25, 5,
+            -25, 20,
+            -12, 15
+        )
+        love.graphics.polygon("fill",
+            12, -5,
+            25, 5,
+            25, 20,
+            12, 15
+        )
+        
+        -- Engine glow if still landing
+        if shipLandingY < baseHeight - 200 then
+            love.graphics.setColor(1, 0.6, 0.2, 0.8)
+            love.graphics.circle("fill", -8, 25, 8)
+            love.graphics.circle("fill", 8, 25, 8)
+            love.graphics.circle("fill", 0, 28, 10)
+        end
+        
+        love.graphics.pop()
+    end
+    
+    -- Text display
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.setFont(font)
+    
+    if endingTimer < 2 then
+        -- Fade in title
+        local alpha = math.min(endingTimer / 2, 1)
+        love.graphics.setColor(1, 1, 1, alpha)
+        love.graphics.printf("MISSION COMPLETE", 0, 100, baseWidth, "center")
+    else
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.printf("MISSION COMPLETE", 0, 100, baseWidth, "center")
+    end
+    
+    if endingTimer > 3 then
+        local alpha = math.min((endingTimer - 3) / 1, 1)
+        love.graphics.setColor(1, 1, 0, alpha)
+        love.graphics.printf("GALAXY SAVED!", 0, 150, baseWidth, "center")
+    end
+    
+    -- Story text
+    if endingTimer > 5 and shipLandingY >= baseHeight - 200 then
+        local alpha = math.min((endingTimer - 5) / 1, 1)
+        love.graphics.setColor(0.8, 0.8, 1, alpha)
+        if smallFont then love.graphics.setFont(smallFont) end
+        love.graphics.printf("You have successfully defeated the Solar Overlord", 0, 250, baseWidth, "center")
+        love.graphics.printf("and saved the galaxy from destruction.", 0, 270, baseWidth, "center")
+        love.graphics.printf("The allied planets are forever in your debt.", 0, 310, baseWidth, "center")
+    end
+    
+    -- Credits
+    if endingTimer > 8 then
+        local alpha = math.min((endingTimer - 8) / 1, 1)
+        love.graphics.setColor(0.5, 0.5, 0.5, alpha)
+        love.graphics.printf("Thank you for playing STELLAR ASSAULT", 0, 400, baseWidth, "center")
+    end
+    
+    -- Return to menu prompt
+    if endingTimer > 10 then
+        local blinkAlpha = 0.5 + math.sin(love.timer.getTime() * 3) * 0.5
+        love.graphics.setColor(1, 1, 1, blinkAlpha)
+        love.graphics.printf("Press ENTER to return to menu", 0, 500, baseWidth, "center")
+    end
+    
+    love.graphics.setFont(font)
 end
 
 function drawLevelComplete()
