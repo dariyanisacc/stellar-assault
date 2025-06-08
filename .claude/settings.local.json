@@ -26,7 +26,8 @@
       "Bash(claude doctor)",
       "Bash(claude:*)",
       "Bash(claude doctor --help)",
-      "WebFetch(domain:docs.anthropic.com)"
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(open:*)"
     ],
     "deny": []
   }

@@ -108,7 +108,7 @@ function love.load()
     -- Lasers setup
     lasers = {}
     laserCooldown = 0
-    laserCooldownTime = 0.5 -- Can shoot every 0.5 seconds (was 0.3)
+    laserCooldownTime = 0.3  -- Increased fire rate from 0.5 -- Can shoot every 0.5 seconds (was 0.3)
     
     -- Explosions setup
     explosions = {}
@@ -462,7 +462,7 @@ function love.update(dt)
         laserCooldown = laserCooldown - dt
         local currentCooldown = laserCooldownTime
         if activePowerups.rapidFire > 0 then
-            currentCooldown = 0.1 -- Much faster shooting
+            currentCooldown = 0.08 -- Even faster shooting with rapid fire
         end
         
         local shouldShoot = love.keyboard.isDown("space")
@@ -1183,6 +1183,38 @@ function love.update(dt)
                 laser.vx = math.sin(laser.waveTime * 3 + laser.waveOffset) * 50
             end
             
+            -- Update heat wave lasers
+            if laser.type == "heatWave" and laser.lifeTime then
+                laser.lifeTime = laser.lifeTime - dt
+                if laser.lifeTime <= 0 then
+                    table.remove(bossLasers, i)
+                    goto continueBossLaser
+                end
+            end
+            
+            -- Update solar burst
+            if laser.type == "solarBurst" and laser.radius and laser.maxRadius then
+                laser.radius = laser.radius + laser.speed * dt
+                if laser.radius >= laser.maxRadius then
+                    table.remove(bossLasers, i)
+                    goto continueBossLaser
+                end
+                
+                -- Check circular collision with player
+                local dx = (player.x + player.width/2) - laser.x
+                local dy = (player.y + player.height/2) - laser.y
+                local dist = math.sqrt(dx*dx + dy*dy)
+                
+                if dist < laser.radius and invulnerableTime <= 0 then
+                    if activePowerups.shield > 0 then
+                        activePowerups.shield = 0
+                        createShieldBreakEffect(player.x + player.width/2, player.y + player.height/2)
+                    else
+                        loseLife()
+                    end
+                end
+            end
+            
             -- Check collision with doors in level 4
             local hitDoor = false
             if currentLevel == 4 then
@@ -1669,6 +1701,29 @@ function drawGame()
                 love.graphics.rectangle("fill", laser.x - 2, laser.y - 2, laser.width + 4, laser.height + 4)
                 love.graphics.setColor(0, 0.8, 1) -- Cyan
                 love.graphics.rectangle("fill", laser.x, laser.y, laser.width, laser.height)
+            elseif laser.type == "solarFlare" then
+                -- Solar flares - bright orange/yellow
+                love.graphics.setColor(1, 0.7, 0, 0.8) -- Orange glow
+                love.graphics.circle("fill", laser.x + laser.width/2, laser.y + laser.height/2, laser.width/2 + 5)
+                love.graphics.setColor(1, 1, 0) -- Yellow center
+                love.graphics.circle("fill", laser.x + laser.width/2, laser.y + laser.height/2, laser.width/2)
+            elseif laser.type == "heatWave" then
+                -- Heat wave - vertical orange columns
+                if laser.lifeTime then
+                    local alpha = (laser.alpha or 0.5) * (laser.lifeTime / 0.5)
+                    love.graphics.setColor(1, 0.3, 0, alpha)
+                    love.graphics.rectangle("fill", laser.x, laser.y, laser.width, laser.height)
+                end
+            elseif laser.type == "solarBurst" then
+                -- Expanding solar burst
+                if laser.radius and laser.maxRadius then
+                    local progress = laser.radius / laser.maxRadius
+                    local alpha = (1 - progress) * 0.6
+                    love.graphics.setColor(1, 0.5, 0, alpha)
+                    love.graphics.circle("fill", laser.x, laser.y, laser.radius)
+                    love.graphics.setColor(1, 0.8, 0, alpha * 0.5)
+                    love.graphics.circle("line", laser.x, laser.y, laser.radius)
+                end
             else
                 -- Orange spread lasers
                 love.graphics.setColor(1, 0.5, 0, 0.5) -- Orange glow
@@ -2270,6 +2325,27 @@ function drawGame()
                 love.graphics.rectangle("line", alien.x, alien.y, alien.width, alien.height)
             end
         end
+        
+    -- Draw shade zones on top of entities for level 5
+    if currentLevel == 5 then
+        for _, zone in ipairs(shadeZones) do
+            -- Draw more visible shade zone with border
+            love.graphics.setColor(0, 0, 0.2, 0.7)  -- Much more visible dark blue
+            love.graphics.rectangle("fill", zone.x, zone.y, zone.width, zone.height)
+            
+            -- Add a glowing border to make it more noticeable
+            love.graphics.setColor(0, 0.5, 1, 0.8)  -- Blue glow border
+            love.graphics.setLineWidth(3)
+            love.graphics.rectangle("line", zone.x, zone.y, zone.width, zone.height)
+            love.graphics.setLineWidth(1)
+            
+            -- Add "SHADE" text in the center
+            love.graphics.setColor(0, 0.8, 1, 0.9)
+            if smallFont then love.graphics.setFont(smallFont) end
+            love.graphics.printf("SHADE", zone.x, zone.y + zone.height/2 - 10, zone.width, "center")
+            if font then love.graphics.setFont(font) end
+        end
+    end
         
     -- Draw score and instructions
     love.graphics.setColor(1, 1, 1)
@@ -3586,6 +3662,53 @@ function updateBoss(dt)
                     boss.specialTimer = 0
                 end
             end
+        elseif boss.type == "solaroverlord" then
+            -- Level 5 Boss patterns - Solar Overlord
+            if boss.phase == 1 then
+                -- Basic solar attacks
+                if boss.shootTimer > 1.5 then
+                    solarOverlordSolarFlare()
+                    boss.shootTimer = 0
+                end
+                
+                -- Special attacks
+                if boss.specialTimer > 5 then
+                    local attack = math.random(1, 3)
+                    if attack == 1 then
+                        solarOverlordHeatWave()
+                    elseif attack == 2 then
+                        solarOverlordPlasmaBarrage()
+                    else
+                        solarOverlordSolarBurst()
+                    end
+                    boss.specialTimer = 0
+                end
+                
+                if boss.health <= boss.maxHealth * 0.5 then
+                    boss.phase = 2
+                    boss.vx = boss.vx * 1.5
+                    createPowerupText("SOLAR STORM!", boss.x + boss.width/2, boss.y + boss.height + 20, {1, 0.5, 0})
+                end
+                
+            elseif boss.phase == 2 then
+                -- More aggressive solar attacks
+                if boss.shootTimer > 1.0 then
+                    solarOverlordSolarFlare()
+                    boss.shootTimer = 0
+                end
+                
+                -- Rapid special attacks
+                if boss.specialTimer > 3 then
+                    local attack = math.random(1, 2)
+                    if attack == 1 then
+                        solarOverlordHeatWave()
+                        solarOverlordPlasmaBarrage() -- Double attack!
+                    else
+                        solarOverlordSolarBurst()
+                    end
+                    boss.specialTimer = 0
+                end
+            end
         end
         
         -- Check laser collisions with boss
@@ -4076,6 +4199,111 @@ function hivemindPsychicWave()
     table.insert(alienLasers, wave)
 end
 
+-- Solar Overlord attack functions
+function solarOverlordSolarFlare()
+    local centerX = boss.x + boss.width/2
+    local centerY = boss.y + boss.height
+    
+    createPowerupText("SOLAR FLARE!", boss.x + boss.width/2, boss.y + boss.height + 20, {1, 0.5, 0})
+    
+    -- Create multiple solar flares
+    for i = 1, 3 do
+        local flare = {
+            x = centerX + math.random(-60, 60),
+            y = centerY,
+            width = 20,
+            height = 20,
+            vx = math.random(-50, 50),
+            vy = math.random(100, 200),
+            damage = 2,
+            type = "solarFlare",
+            color = {1, 0.7, 0}
+        }
+        table.insert(bossLasers, flare)
+    end
+    
+    -- Play sound
+    if sounds.laser then
+        local flareSound = sounds.laser:clone()
+        flareSound:setPitch(0.5)
+        flareSound:setVolume(0.5 * sfxVolume * masterVolume)
+        flareSound:play()
+    end
+end
+
+function solarOverlordHeatWave()
+    createPowerupText("HEAT WAVE!", boss.x + boss.width/2, boss.y + boss.height + 20, {1, 0.3, 0})
+    
+    -- Create horizontal heat wave
+    for i = -8, 8 do
+        local laser = {
+            x = boss.x + boss.width/2 + i * 20,
+            y = boss.y + boss.height,
+            width = 15,
+            height = baseHeight,
+            vx = 0,
+            vy = 0,
+            damage = 1,
+            lifeTime = 0.5,
+            type = "heatWave",
+            alpha = 0.5,
+            delay = math.abs(i) * 0.05
+        }
+        table.insert(bossLasers, laser)
+    end
+end
+
+function solarOverlordPlasmaBarrage()
+    local centerX = boss.x + boss.width/2
+    local centerY = boss.y + boss.height
+    
+    createPowerupText("PLASMA BARRAGE!", boss.x + boss.width/2, boss.y + boss.height + 20, {1, 1, 0})
+    
+    -- Shoot plasma bolts in a cone pattern
+    for i = -3, 3 do
+        local angle = i * 15 * math.pi / 180
+        local speed = 250
+        
+        local plasma = {
+            x = centerX,
+            y = centerY,
+            width = 15,
+            height = 15,
+            vx = math.sin(angle) * speed,
+            vy = math.cos(angle) * speed,
+            damage = 1,
+            homing = true,
+            homingTime = 2,
+            color = {1, 0.8, 0}
+        }
+        table.insert(bossLasers, plasma)
+    end
+end
+
+function solarOverlordSolarBurst()
+    createPowerupText("SOLAR BURST!", boss.x + boss.width/2, boss.y + boss.height + 20, {1, 0.2, 0})
+    
+    -- Create expanding solar burst
+    local burst = {
+        x = boss.x + boss.width/2,
+        y = boss.y + boss.height/2,
+        width = 30,
+        height = 30,
+        radius = 30,
+        maxRadius = 300,
+        speed = 200,
+        damage = 2,
+        type = "solarBurst",
+        color = {1, 0.5, 0, 0.6}
+    }
+    table.insert(bossLasers, burst)
+    
+    -- Screen shake effect
+    if gamepad and gamepad:isGamepad() then
+        gamepad:setVibration(0.8, 0.8, 0.3)
+    end
+end
+
 function defeatBoss()
     -- Create massive explosion
     for i = 1, 10 do
@@ -4341,6 +4569,64 @@ function drawBoss()
         love.graphics.circle("fill", 0, 0, 20)
         love.graphics.setColor(0.8, 1, 0.8, 0.5)
         love.graphics.circle("fill", 0, 0, 25)
+    elseif boss.type == "solaroverlord" then
+        -- Level 5 Boss - Solar Overlord
+        -- Main body (molten metal appearance)
+        love.graphics.setColor(0.8, 0.4, 0.1)
+        love.graphics.ellipse("fill", 0, 0, boss.width/2, boss.height/2)
+        
+        -- Lava cracks
+        love.graphics.setColor(1, 0.6, 0.2)
+        love.graphics.setLineWidth(3)
+        for i = 1, 8 do
+            local angle = (i / 8) * math.pi * 2
+            local x1 = math.cos(angle) * boss.width/4
+            local y1 = math.sin(angle) * boss.height/4
+            local x2 = math.cos(angle) * boss.width/2.5
+            local y2 = math.sin(angle) * boss.height/2.5
+            love.graphics.line(x1, y1, x2, y2)
+        end
+        love.graphics.setLineWidth(1)
+        
+        -- Solar panels/armor
+        love.graphics.setColor(0.6, 0.3, 0.1)
+        for i = 1, 6 do
+            local angle = (i / 6) * math.pi * 2 + love.timer.getTime() * 0.1
+            local px = math.cos(angle) * boss.width/3
+            local py = math.sin(angle) * boss.height/3
+            love.graphics.polygon("fill",
+                px - 25, py - 15,
+                px + 25, py - 15,
+                px + 20, py + 15,
+                px - 20, py + 15
+            )
+        end
+        
+        -- Molten core (pulsing)
+        local coreGlow = math.sin(love.timer.getTime() * 4) * 0.3 + 0.7
+        love.graphics.setColor(1, 0.3, 0, coreGlow)
+        love.graphics.circle("fill", 0, 0, 35)
+        love.graphics.setColor(1, 0.8, 0, coreGlow * 0.5)
+        love.graphics.circle("fill", 0, 0, 45)
+        
+        -- Heat radiation effect
+        love.graphics.setColor(1, 0.5, 0, 0.3)
+        local heatRadius = 60 + math.sin(love.timer.getTime() * 3) * 10
+        love.graphics.circle("line", 0, 0, heatRadius)
+        love.graphics.circle("line", 0, 0, heatRadius + 10)
+        
+        -- Solar flare emitters
+        love.graphics.setColor(1, 0.7, 0)
+        for i = 1, 4 do
+            local angle = (i / 4) * math.pi * 2 + love.timer.getTime() * 0.5
+            local fx = math.cos(angle) * (boss.width/2 - 30)
+            local fy = math.sin(angle) * (boss.height/2 - 30)
+            love.graphics.circle("fill", fx, fy, 10)
+            
+            -- Emitter glow
+            love.graphics.setColor(1, 1, 0, 0.4)
+            love.graphics.circle("fill", fx, fy, 15)
+        end
     end
     
     -- Engine glow (only for flying bosses)
@@ -4391,6 +4677,9 @@ function drawBoss()
     elseif boss.type == "hivemind" then
         nameColor = {0.5, 1, 0.5}
         bossName = "HIVEMIND"
+    elseif boss.type == "solaroverlord" then
+        nameColor = {1, 0.5, 0}
+        bossName = "SOLAR OVERLORD"
     end
     love.graphics.setColor(nameColor)
     love.graphics.setFont(smallFont)
@@ -5324,10 +5613,10 @@ function startGame(startLevel)
     end
     
     -- Set spawn rates based on level
-    asteroidSpawnTime = 2.0 - (currentLevel - 1) * 0.3
-    asteroidSpawnTime = math.max(0.8, asteroidSpawnTime)
-    alienSpawnTime = 3.0 - (currentLevel - 1) * 0.4
-    alienSpawnTime = math.max(1.2, alienSpawnTime)
+    asteroidSpawnTime = 4.0 - (currentLevel - 1) * 0.15
+    asteroidSpawnTime = math.max(2.5, asteroidSpawnTime)
+    alienSpawnTime = 5.0 - (currentLevel - 1) * 0.2
+    alienSpawnTime = math.max(3.0, alienSpawnTime)
     
     -- Stop menu music and start game music
     stopAllSounds()
@@ -5955,11 +6244,7 @@ function drawSolarEffects()
         love.graphics.rectangle("fill", 0, flare.y - flare.height/2, baseWidth, flare.height)
     end
     
-    -- Shade zones
-    love.graphics.setColor(0, 0, 0, 0.3)
-    for _, zone in ipairs(shadeZones) do
-        love.graphics.rectangle("fill", zone.x, zone.y, zone.width, zone.height)
-    end
+    -- Shade zones are now drawn later for better visibility
     
     -- Heat meter UI
     if heatMeter > 0 then
@@ -6079,7 +6364,7 @@ end
 function updateHeatMeter(dt)
     if currentLevel == 5 then
         -- Increase heat over time
-        heatMeter = math.min(heatMeter + dt * 5, maxHeat)
+        heatMeter = math.min(heatMeter + dt * 3, maxHeat)  -- Slower heat buildup (was 5)
         
         -- Check if player is in shade zone
         local inShade = false
@@ -6092,7 +6377,7 @@ function updateHeatMeter(dt)
         
         -- Cool down in shade
         if inShade then
-            heatMeter = math.max(0, heatMeter - dt * 20)
+            heatMeter = math.max(0, heatMeter - dt * 60)  -- Cool down much faster in shade (was 20)
         end
         
         -- Take damage if overheated
@@ -6465,14 +6750,14 @@ function spawnLevelEnemies(dt)
                 spawnAsteroid()
             end
             asteroidTimer = 0
-            asteroidSpawnTime = math.max(0.8, asteroidSpawnTime - 0.02)
+            asteroidSpawnTime = math.max(1.5, asteroidSpawnTime - 0.01)  -- Slower difficulty ramp
         end
         
         alienTimer = alienTimer + dt
         if alienTimer >= alienSpawnTime then
             spawnSpaceFighter()  -- Basic space fighters
             alienTimer = 0
-            alienSpawnTime = math.max(1.2, alienSpawnTime - 0.03)
+            alienSpawnTime = math.max(2.0, alienSpawnTime - 0.015)  -- Slower difficulty ramp
         end
         
     elseif currentLevel == 2 then
@@ -6525,17 +6810,17 @@ function spawnLevelEnemies(dt)
         
     elseif currentLevel == 5 then
         -- Level 5: Solar Corona - Heat-based enemies
-        if math.random() < 0.03 then
+        if math.random() < 0.005 then  -- Reduced from 0.015 (67% less)
             spawnPlasmaOrb()
         end
-        if math.random() < 0.02 then
+        if math.random() < 0.004 then  -- Reduced from 0.01 (60% less)
             spawnSolarFighter()
         end
-        if math.random() < 0.01 then
+        if math.random() < 0.002 then  -- Reduced from 0.005 (60% less)
             spawnFireElemental()  -- New enemy type
         end
         -- Solar flares as environmental hazard
-        if math.random() < 0.005 then
+        if math.random() < 0.001 then  -- Reduced from 0.003 (67% less)
             createSolarFlare()
         end
         
