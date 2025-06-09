@@ -21,6 +21,29 @@ function love.load()
     
     -- Game variables (initialize before anything else)
     gameState = "menu" -- Start in menu state
+    
+    -- Intro variables
+    introTimer = 0
+    introTextIndex = 1
+    introLineTimer = 0
+    introComplete = false
+    introBackstory = {
+        "The year is 2157...",
+        "",
+        "Earth's last space station, Stellar Outpost Prime,",
+        "has sent a distress signal from the outer rim.",
+        "",
+        "A massive alien armada has been detected,",
+        "heading straight for Earth.",
+        "",
+        "You are Lieutenant Kai Chen,",
+        "Earth's most skilled starfighter pilot.",
+        "",
+        "Your mission: Hold the line.",
+        "Give Earth time to prepare its defenses.",
+        "",
+        "You are humanity's last hope."
+    }
     enemiesDefeated = 0 -- Counter for boss spawning
     enemiesForBoss = 150 -- Enemies needed to spawn boss (will vary by level)
     lives = 3 -- Start with 3 lives
@@ -416,6 +439,26 @@ function love.update(dt)
         -- Options menu doesn't need updates
     elseif gameState == "paused" then
         -- Game is paused, don't update gameplay
+    elseif gameState == "intro" then
+        -- Update intro timer
+        introTimer = introTimer + dt
+        
+        -- Only allow continuing after 5 seconds
+        if introTimer > 5 then
+            -- Check if space is pressed to start game
+            local shouldAdvance = love.keyboard.isDown("space")
+            
+            -- Gamepad support for intro
+            if gamepad and gamepad:isGamepad() then
+                shouldAdvance = shouldAdvance or gamepad:isGamepadDown("a")
+            end
+            
+            if shouldAdvance then
+                -- Start the game
+                gameState = "playing"
+            end
+        end
+        
     elseif gameState == "playing" then
         -- Player movement with keyboard (omnidirectional)
         if love.keyboard.isDown("left") and player.x > 0 then
@@ -1415,20 +1458,22 @@ function love.draw()
             drawLevelSelectMenu()
         end
         
-        -- Instructions
-        love.graphics.setColor(0.5, 0.5, 0.5)
-        if smallFont then love.graphics.setFont(smallFont) end
-        love.graphics.printf("Arrow Keys/D-Pad: Navigate | Enter/A: Select", 0, 520, 800, "center")
-        love.graphics.printf("Dodge asteroids and alien UFOs! Watch out - aliens shoot back!", 0, 540, 800, "center")
-        if gamepad and gamepad:isGamepad() then
-            love.graphics.setColor(0.3, 0.8, 0.3)
-            local controllerName = gamepad:getName()
-            if string.len(controllerName) > 30 then
-                controllerName = string.sub(controllerName, 1, 27) .. "..."
+        -- Instructions (only show on main menu)
+        if menuState == "main" then
+            love.graphics.setColor(0.5, 0.5, 0.5)
+            if smallFont then love.graphics.setFont(smallFont) end
+            love.graphics.printf("Arrow Keys/D-Pad: Navigate | Enter/A: Select", 0, 520, 800, "center")
+            love.graphics.printf("Dodge asteroids and alien UFOs! Watch out - aliens shoot back!", 0, 540, 800, "center")
+            if gamepad and gamepad:isGamepad() then
+                love.graphics.setColor(0.3, 0.8, 0.3)
+                local controllerName = gamepad:getName()
+                if string.len(controllerName) > 30 then
+                    controllerName = string.sub(controllerName, 1, 27) .. "..."
+                end
+                love.graphics.printf("Controller: " .. controllerName, 0, 570, 800, "center")
             end
-            love.graphics.printf("Controller: " .. controllerName, 0, 570, 800, "center")
+            love.graphics.setFont(font)
         end
-        love.graphics.setFont(font)
         
     elseif gameState == "options" then
         -- Options menu with improved visuals
@@ -1569,6 +1614,50 @@ function love.draw()
             love.graphics.printf("Controller vibration enabled", 0, 580, 800, "center")
         end
         if font then love.graphics.setFont(font) end
+        
+    elseif gameState == "intro" then
+        -- Draw dark overlay for better text contrast
+        love.graphics.setColor(0, 0, 0, 0.7)
+        love.graphics.rectangle("fill", 0, 0, baseWidth, baseHeight)
+        
+        -- Draw title
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.setFont(font)
+        love.graphics.printf("STELLAR ASSAULT", 0, 50, baseWidth, "center")
+        
+        -- Use smaller font for backstory if available
+        if smallFont then 
+            love.graphics.setFont(smallFont)
+        end
+        
+        -- Draw all backstory text at once
+        local y = 120
+        local lineHeight = smallFont and 25 or 35  -- Adjust line height based on font
+        local maxWidth = baseWidth - 160  -- More padding on sides
+        
+        love.graphics.setColor(0.9, 0.9, 1)
+        for i = 1, #introBackstory do
+            local line = introBackstory[i]
+            if line == "" then
+                y = y + lineHeight * 0.5  -- Half height for empty lines
+            else
+                love.graphics.printf(line, 80, y, maxWidth, "center")
+                y = y + lineHeight
+            end
+        end
+        
+        -- Reset to normal font
+        if font then love.graphics.setFont(font) end
+        
+        -- Skip hint (show after 5 seconds)
+        if introTimer > 5 then
+            love.graphics.setColor(0.5, 0.5, 0.5, 0.5 + math.sin(love.timer.getTime() * 2) * 0.5)
+            local continueText = "Press SPACE to continue"
+            if gamepad and gamepad:isGamepad() then
+                continueText = "Press A to continue"
+            end
+            love.graphics.printf(continueText, 0, baseHeight - 60, baseWidth, "center")
+        end
         
     elseif gameState == "playing" then
         drawGame()
@@ -2366,17 +2455,23 @@ function drawGame()
     love.graphics.setColor(1, 1, 1)
     if smallFont then love.graphics.setFont(smallFont) end
     
-    -- Draw zone/level
-    love.graphics.setColor(0.7, 0.7, 1)
-    love.graphics.print("Zone " .. currentLevel, 10, 10)
+    -- Top left UI panel background (expanded height)
+    love.graphics.setColor(0, 0, 0, 0.6)
+    love.graphics.rectangle("fill", 5, 5, 180, 110, 5)
+    love.graphics.setColor(0.7, 0.7, 1, 0.8)
+    love.graphics.rectangle("line", 5, 5, 180, 110, 5)
     
-    -- Draw lives
-    love.graphics.setColor(1, 0.2, 0.2)
-    love.graphics.print("Lives:", 10, 30)
-    -- Draw life indicators as small ships
+    -- Draw zone/level with better styling
+    love.graphics.setColor(0.9, 0.9, 1)
+    love.graphics.print("ZONE " .. currentLevel, 15, 15)
+    
+    -- Draw lives with better spacing
+    love.graphics.setColor(1, 0.3, 0.3)
+    love.graphics.print("Lives:", 15, 40)
+    -- Draw life indicators as small ships with better spacing
     for i = 1, lives do
-        local lifeX = 60 + (i - 1) * 30
-        local lifeY = 38
+        local lifeX = 70 + (i - 1) * 25
+        local lifeY = 48
         love.graphics.push()
         love.graphics.translate(lifeX, lifeY)
         love.graphics.scale(0.35, 0.35) -- Small ships
@@ -2429,133 +2524,158 @@ function drawGame()
         love.graphics.pop()
     end
     
-    -- Draw boss progress
+    -- Draw boss progress with better layout
     if not boss and not levelComplete then
         love.graphics.setColor(1, 1, 0)
-        love.graphics.print("Boss Progress:", 10, 60)
-        love.graphics.setColor(0.7, 0.7, 0.7)
-        love.graphics.print(enemiesDefeated .. "/" .. enemiesForBoss, 120, 60)
+        love.graphics.print("Boss Progress:", 15, 70)
         
         -- Progress bar
-        local progressBarX = 10
-        local progressBarY = 80
-        local progressBarWidth = 150
-        local progressBarHeight = 8
+        local progressBarX = 15
+        local progressBarY = 88
+        local progressBarWidth = 155
+        local progressBarHeight = 10
         local progress = enemiesDefeated / enemiesForBoss
         
         -- Background
         love.graphics.setColor(0.2, 0.2, 0.2)
-        love.graphics.rectangle("fill", progressBarX, progressBarY, progressBarWidth, progressBarHeight)
+        love.graphics.rectangle("fill", progressBarX, progressBarY, progressBarWidth, progressBarHeight, 2)
         
         -- Fill
         love.graphics.setColor(1, 1 - progress, 0)
-        love.graphics.rectangle("fill", progressBarX, progressBarY, progressBarWidth * progress, progressBarHeight)
+        love.graphics.rectangle("fill", progressBarX, progressBarY, progressBarWidth * progress, progressBarHeight, 2)
         
         -- Border
-        love.graphics.setColor(0.5, 0.5, 0.5)
-        love.graphics.rectangle("line", progressBarX, progressBarY, progressBarWidth, progressBarHeight)
+        love.graphics.setColor(0.7, 0.7, 0.7)
+        love.graphics.rectangle("line", progressBarX, progressBarY, progressBarWidth, progressBarHeight, 2)
+        
+        -- Progress text
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.printf(enemiesDefeated .. "/" .. enemiesForBoss, progressBarX, progressBarY - 2, progressBarWidth, "center")
     end
     
         
+    -- Enemy legend panel background
+    love.graphics.setColor(0, 0, 0, 0.6)
+    love.graphics.rectangle("fill", baseWidth - 130, 5, 125, 200, 5)
+    love.graphics.setColor(0.7, 0.7, 1, 0.8)
+    love.graphics.rectangle("line", baseWidth - 130, 5, 125, 200, 5)
+    
     -- Draw enemy legend (compact)
     if smallFont then love.graphics.setFont(smallFont) end
-    love.graphics.setColor(1, 1, 1, 0.7)
-    love.graphics.print("Enemies:", 680, 105)
+    love.graphics.setColor(1, 1, 1, 0.9)
+    love.graphics.print("ENEMIES", baseWidth - 120, 15)
     
-    -- Asteroids column
+    -- Asteroids section
+    local legendX = baseWidth - 115
+    local legendY = 40
+    
     love.graphics.setColor(0.8, 0.5, 0.3)
-    love.graphics.circle("fill", 690, 125, 4)
-    love.graphics.setColor(1, 1, 1, 0.7)
-    love.graphics.print("15", 700, 118)
+    love.graphics.circle("fill", legendX, legendY, 4)
+    love.graphics.setColor(1, 1, 1, 0.8)
+    love.graphics.print("15", legendX + 15, legendY - 7)
     
     love.graphics.setColor(0.9, 0.7, 0.4)
-    love.graphics.circle("fill", 690, 140, 3)
-    love.graphics.setColor(1, 1, 1, 0.7)
-    love.graphics.print("30", 700, 133)
+    love.graphics.circle("fill", legendX, legendY + 20, 3)
+    love.graphics.setColor(1, 1, 1, 0.8)
+    love.graphics.print("30", legendX + 15, legendY + 13)
     
     love.graphics.setColor(0.6, 0.3, 0.2)
-    love.graphics.circle("fill", 690, 155, 5)
-    love.graphics.setColor(1, 1, 1, 0.7)
-    love.graphics.print("45", 700, 148)
+    love.graphics.circle("fill", legendX, legendY + 40, 5)
+    love.graphics.setColor(1, 1, 1, 0.8)
+    love.graphics.print("45", legendX + 15, legendY + 33)
     
     love.graphics.setColor(0.7, 0.7, 0.8)
-    love.graphics.circle("fill", 690, 170, 4)
-    love.graphics.setColor(1, 1, 1, 0.7)
-    love.graphics.print("40", 700, 163)
+    love.graphics.circle("fill", legendX, legendY + 60, 4)
+    love.graphics.setColor(1, 1, 1, 0.8)
+    love.graphics.print("40", legendX + 15, legendY + 53)
     
-    -- UFOs column
+    -- UFOs section with divider
+    love.graphics.setColor(0.5, 0.5, 0.5, 0.5)
+    love.graphics.line(legendX - 10, legendY + 85, legendX + 100, legendY + 85)
+    
+    legendY = legendY + 95
     love.graphics.setColor(0.5, 0.5, 0.6)
-    love.graphics.ellipse("fill", 735, 125, 6, 2)
-    love.graphics.setColor(1, 1, 1, 0.7)
-    love.graphics.print("60", 745, 118)
+    love.graphics.ellipse("fill", legendX, legendY, 6, 2)
+    love.graphics.setColor(1, 1, 1, 0.8)
+    love.graphics.print("60", legendX + 15, legendY - 7)
     
     love.graphics.setColor(0.4, 0.6, 0.8)
-    love.graphics.ellipse("fill", 735, 140, 5, 2)
-    love.graphics.setColor(1, 1, 1, 0.7)
-    love.graphics.print("75", 745, 133)
+    love.graphics.ellipse("fill", legendX, legendY + 20, 5, 2)
+    love.graphics.setColor(1, 1, 1, 0.8)
+    love.graphics.print("75", legendX + 15, legendY + 13)
     
     love.graphics.setColor(0.3, 0.3, 0.4)
-    love.graphics.ellipse("fill", 735, 155, 7, 3)
-    love.graphics.setColor(1, 1, 1, 0.7)
-    love.graphics.print("120", 740, 148)
+    love.graphics.ellipse("fill", legendX, legendY + 40, 7, 3)
+    love.graphics.setColor(1, 1, 1, 0.8)
+    love.graphics.print("120", legendX + 15, legendY + 33)
     
-    -- Warning
-    love.graphics.setColor(1, 0.2, 0.2)
-    love.graphics.print("⚠ UFOs shoot!", 675, 180)
         
-        -- Draw active powerups
-        local powerupY = 420
+        -- Draw active powerups with background panel
+        local powerupY = 120
         if smallFont then love.graphics.setFont(smallFont) end
         
         if activePowerups.tripleShot > 0 or activePowerups.rapidFire > 0 or 
            activePowerups.shield > 0 or activePowerups.slowTime > 0 or
            activePowerups.homing > 0 or activePowerups.pierce > 0 or
            activePowerups.freeze > 0 or activePowerups.vampire > 0 then
+            
+            -- Count active powerups for panel height
+            local powerupCount = 0
+            for _, v in pairs(activePowerups) do
+                if v > 0 then powerupCount = powerupCount + 1 end
+            end
+            
+            -- Powerup panel background (adjusted height)
+            love.graphics.setColor(0, 0, 0, 0.6)
+            love.graphics.rectangle("fill", 5, powerupY - 10, 180, 30 + powerupCount * 18, 5)
+            love.graphics.setColor(0.7, 0.7, 1, 0.8)
+            love.graphics.rectangle("line", 5, powerupY - 10, 180, 30 + powerupCount * 18, 5)
+            
             love.graphics.setColor(1, 1, 1)
-            love.graphics.print("Active:", 10, powerupY)
-            powerupY = powerupY + 15
+            love.graphics.print("ACTIVE POWERUPS", 15, powerupY)
+            powerupY = powerupY + 20
         end
         
         if activePowerups.tripleShot > 0 then
             love.graphics.setColor(1, 0.5, 0)
-            love.graphics.print("Triple Shot: " .. math.ceil(activePowerups.tripleShot) .. "s", 10, powerupY)
-            powerupY = powerupY + 15
+            love.graphics.print("Triple Shot: " .. math.ceil(activePowerups.tripleShot) .. "s", 15, powerupY)
+            powerupY = powerupY + 18
         end
         
         if activePowerups.rapidFire > 0 then
             love.graphics.setColor(1, 1, 0)
-            love.graphics.print("Rapid Fire: " .. math.ceil(activePowerups.rapidFire) .. "s", 10, powerupY)
-            powerupY = powerupY + 15
+            love.graphics.print("Rapid Fire: " .. math.ceil(activePowerups.rapidFire) .. "s", 15, powerupY)
+            powerupY = powerupY + 18
         end
         
         if activePowerups.shield > 0 then
             love.graphics.setColor(0, 1, 1)
-            love.graphics.print("Shield: " .. math.ceil(activePowerups.shield) .. "s", 10, powerupY)
-            powerupY = powerupY + 15
+            love.graphics.print("Shield: " .. math.ceil(activePowerups.shield) .. "s", 15, powerupY)
+            powerupY = powerupY + 18
         end
         
         if activePowerups.slowTime > 0 then
             love.graphics.setColor(0.8, 0.5, 1)
-            love.graphics.print("Slow Time: " .. math.ceil(activePowerups.slowTime) .. "s", 10, powerupY)
-            powerupY = powerupY + 15
+            love.graphics.print("Slow Time: " .. math.ceil(activePowerups.slowTime) .. "s", 15, powerupY)
+            powerupY = powerupY + 18
         end
         
         if activePowerups.homing > 0 then
             love.graphics.setColor(1, 0.3, 0.3)
-            love.graphics.print("Homing: " .. math.ceil(activePowerups.homing) .. "s", 10, powerupY)
-            powerupY = powerupY + 15
+            love.graphics.print("Homing: " .. math.ceil(activePowerups.homing) .. "s", 15, powerupY)
+            powerupY = powerupY + 18
         end
         
         if activePowerups.pierce > 0 then
             love.graphics.setColor(0.5, 1, 0.5)
-            love.graphics.print("Pierce: " .. math.ceil(activePowerups.pierce) .. "s", 10, powerupY)
-            powerupY = powerupY + 15
+            love.graphics.print("Pierce: " .. math.ceil(activePowerups.pierce) .. "s", 15, powerupY)
+            powerupY = powerupY + 18
         end
         
         if activePowerups.freeze > 0 then
             love.graphics.setColor(0.5, 0.8, 1)
-            love.graphics.print("Freeze: " .. math.ceil(activePowerups.freeze) .. "s", 10, powerupY)
-            powerupY = powerupY + 15
+            love.graphics.print("Freeze: " .. math.ceil(activePowerups.freeze) .. "s", 15, powerupY)
+            powerupY = powerupY + 18
         end
         
         if activePowerups.vampire > 0 then
@@ -2564,15 +2684,23 @@ function drawGame()
             powerupY = powerupY + 15
         end
         
-        -- Mini radar
+        -- Mini radar with panel
+        local radarY = baseHeight - 150
+        
+        -- Radar panel background
+        love.graphics.setColor(0, 0, 0, 0.6)
+        love.graphics.rectangle("fill", 5, radarY - 10, 130, 145, 5)
+        love.graphics.setColor(0.7, 0.7, 1, 0.8)
+        love.graphics.rectangle("line", 5, radarY - 10, 130, 145, 5)
+        
         love.graphics.setColor(0, 1, 1)
         if smallFont then love.graphics.setFont(smallFont) end
-        love.graphics.print("RADAR", 10, 480)
+        love.graphics.print("RADAR", 15, radarY)
         
         -- Radar background
-        local radarCenterX = 60
-        local radarCenterY = 540
-        local radarRadius = 40
+        local radarCenterX = 70
+        local radarCenterY = radarY + 70
+        local radarRadius = 45
         
         love.graphics.setColor(0, 0.3, 0.3, 0.5)
         love.graphics.circle("fill", radarCenterX, radarCenterY, radarRadius)
@@ -5207,14 +5335,15 @@ function love.keypressed(key)
                 playMenuSound()
             elseif key == "return" or key == "space" then
                 if menuSelection == 1 then
-                    -- Play - go to save slots
-                    menuState = "saves"
-                    selectedSaveSlot = 1
+                    -- New Game - show intro then start at level 1
+                    currentLevel = 1
+                    lives = 3
+                    startGame(1, false)  -- Start with intro
                     playMenuSound()
                 elseif menuSelection == 2 then
-                    -- Level Select
-                    menuState = "levelselect"
-                    selectedLevel = 1
+                    -- Load Game - go to save slots
+                    menuState = "saves"
+                    selectedSaveSlot = 1
                     playMenuSound()
                 elseif menuSelection == 3 then
                     -- Options
@@ -5246,13 +5375,13 @@ function love.keypressed(key)
                     if saveSlots[selectedSaveSlot] then
                         -- Load existing save
                         if loadFromSlot(selectedSaveSlot) then
-                            startGame(currentLevel)  -- Use loaded level
+                            startGame(currentLevel, true)  -- Use loaded level, skip intro
                         end
                     else
-                        -- Create new save
+                        -- Create new save (this is accessed via Load Game menu)
                         currentLevel = 1
                         lives = 3
-                        startGame(1)  -- Start at level 1 for new save
+                        startGame(1, false)  -- Start at level 1 for new save, show intro
                     end
                 end
             elseif key == "delete" or key == "backspace" then
@@ -5307,7 +5436,7 @@ function love.keypressed(key)
                 elseif selectedLevel <= maxUnlockedLevel then
                     -- Start selected level
                     lives = 3
-                    startGame(selectedLevel)  -- Pass the selected level
+                    startGame(selectedLevel, true)  -- Pass the selected level, skip intro
                 end
             elseif key == "escape" then
                 menuState = "main"
@@ -5381,7 +5510,7 @@ function love.keypressed(key)
         elseif key == "return" or key == "space" then
             if gameOverSelection == 1 then
                 -- Restart at the level where they died
-                startGame(levelAtDeath)
+                startGame(levelAtDeath, true)  -- Skip intro when restarting
             else
                 -- Return to main menu
                 gameState = "menu"
@@ -5584,8 +5713,19 @@ function updateScaling()
 end
 
 -- Game state functions
-function startGame(startLevel)
-    gameState = "playing"
+function startGame(startLevel, skipIntro)
+    -- Reset intro variables
+    introTimer = 0
+    introTextIndex = 1
+    introLineTimer = 0
+    introComplete = false
+    
+    -- Go to intro state or directly to playing based on skipIntro parameter
+    if skipIntro then
+        gameState = "playing"
+    else
+        gameState = "intro"
+    end
     enemiesDefeated = 0
     lives = 3
     currentLevel = startLevel or 1  -- Use provided level or default to 1
@@ -7205,22 +7345,22 @@ function drawMainMenu()
     local menuY = 250
     local menuSpacing = 60
     
-    -- Play option
+    -- New Game option
     if menuSelection == 1 then
         love.graphics.setColor(1, 1, 0)
-        love.graphics.printf("> PLAY <", 0, menuY, 800, "center")
+        love.graphics.printf("> NEW GAME <", 0, menuY, 800, "center")
     else
         love.graphics.setColor(0.7, 0.7, 0.7)
-        love.graphics.printf("PLAY", 0, menuY, 800, "center")
+        love.graphics.printf("NEW GAME", 0, menuY, 800, "center")
     end
     
-    -- Level Select option
+    -- Load Game option
     if menuSelection == 2 then
         love.graphics.setColor(1, 1, 0)
-        love.graphics.printf("> LEVEL SELECT <", 0, menuY + menuSpacing, 800, "center")
+        love.graphics.printf("> LOAD GAME <", 0, menuY + menuSpacing, 800, "center")
     else
         love.graphics.setColor(0.7, 0.7, 0.7)
-        love.graphics.printf("LEVEL SELECT", 0, menuY + menuSpacing, 800, "center")
+        love.graphics.printf("LOAD GAME", 0, menuY + menuSpacing, 800, "center")
     end
     
     -- Options option
