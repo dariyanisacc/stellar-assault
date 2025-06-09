@@ -6550,15 +6550,36 @@ function drawSolarEffects()
     
     -- Shade zones are now drawn later for better visibility
     
-    -- Heat meter UI
+    -- Heat meter UI (moved to bottom left, above radar)
     if heatMeter > 0 then
+        local heatX = 10
+        local heatY = baseHeight - 280  -- Position above radar
+        local heatWidth = 200
+        local heatHeight = 20
         local heatPercent = heatMeter / maxHeat
+        
+        -- Background
+        love.graphics.setColor(0, 0, 0, 0.7)
+        love.graphics.rectangle("fill", heatX - 2, heatY - 2, heatWidth + 4, heatHeight + 4, 3, 3)
+        
+        -- Heat bar
         local heatColor = {1, 1 - heatPercent, 0}
         love.graphics.setColor(heatColor)
-        love.graphics.rectangle("fill", 10, 10, 200 * heatPercent, 20)
+        love.graphics.rectangle("fill", heatX, heatY, heatWidth * heatPercent, heatHeight, 2, 2)
+        
+        -- Border
         love.graphics.setColor(1, 1, 1)
-        love.graphics.rectangle("line", 10, 10, 200, 20)
-        love.graphics.print("HEAT", 220, 10)
+        love.graphics.rectangle("line", heatX, heatY, heatWidth, heatHeight, 2, 2)
+        
+        -- Label
+        love.graphics.setFont(love.graphics.newFont(12))
+        love.graphics.print("HEAT", heatX + heatWidth + 10, heatY + 2)
+        
+        -- Warning indicator
+        if heatPercent > 0.7 then
+            love.graphics.setColor(1, 0, 0, math.sin(love.timer.getTime() * 10) * 0.5 + 0.5)
+            love.graphics.print("WARNING!", heatX + heatWidth/2 - 30, heatY - 20)
+        end
     end
     
     -- Plasma storms
