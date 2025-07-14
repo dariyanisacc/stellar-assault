@@ -31,10 +31,22 @@ function OptionsState:enter()
         {width = 2560, height = 1440, name = "2560x1440 (16:9)"}
     }
     
-    -- Menu items
+    -- New: Display mode options as list
+    self.displayModes = {"windowed", "fullscreen", "borderless"}
+    
+    -- Find current index (default to 3 for borderless if not set)
+    local dmValue = 3  -- Default to borderless
+    for i, mode in ipairs(self.displayModes) do
+        if mode == (displayMode or "borderless") then
+            dmValue = i
+            break
+        end
+    end
+    
+    -- Menu items (change Display Mode to list type)
     self.menuItems = {
         {name = "Resolution", type = "list", value = currentResolution or 1},
-        {name = "Display Mode", type = "toggle", value = displayMode or "windowed"},
+        {name = "Display Mode", type = "list", value = dmValue},  -- Changed from toggle
         {name = "Master Volume", type = "slider", value = masterVolume or 1.0},
         {name = "SFX Volume", type = "slider", value = sfxVolume or 1.0},
         {name = "Music Volume", type = "slider", value = musicVolume or 0.2},
@@ -144,9 +156,11 @@ function OptionsState:draw()
         local text = item.name
         
         if item.type == "list" then
-            text = text .. ": " .. self.resolutions[item.value].name
-        elseif item.type == "toggle" then
-            text = text .. ": " .. (item.value == "fullscreen" and "Fullscreen" or "Windowed")
+            if item.name == "Resolution" then
+                text = text .. ": " .. self.resolutions[item.value].name
+            elseif item.name == "Display Mode" then
+                text = text .. ": " .. self.displayModes[item.value]:gsub("^%l", string.upper)  -- e.g., "Borderless"
+            end
         elseif item.type == "slider" then
             text = text .. ": " .. math.floor(item.value * 100) .. "%"
         end
@@ -182,7 +196,10 @@ function OptionsState:draw()
     -- Instructions
     lg.setFont(smallFont or lg.newFont(14))
     lg.setColor(0.5, 0.5, 0.5)
-    local instructions = "Arrow Keys: Navigate | Enter: Select | Left/Right: Adjust"
+    local nav = inputHints[lastInputType].navigate or "Arrow Keys"
+    local select = inputHints[lastInputType].select or "Enter"
+    local adjust = lastInputType == "gamepad" and "Left/Right Stick" or "Left/Right"
+    local instructions = nav .. ": Navigate | " .. select .. ": Select | " .. adjust .. ": Adjust"
     local instructWidth = lg.getFont():getWidth(instructions)
     lg.print(instructions, self.screenWidth/2 - instructWidth/2, self.screenHeight - 40)
 end
@@ -230,9 +247,6 @@ function OptionsState:keypressed(key)
                 self.controlsSelection = 1
                 self:setupControlsMenu()
             end
-        elseif item.type == "toggle" then
-            item.value = item.value == "windowed" and "fullscreen" or "windowed"
-            if menuSelectSound then menuSelectSound:play() end
         end
     elseif key == "escape" then
         stateManager:switch("menu")
@@ -252,8 +266,9 @@ function OptionsState:adjustValue(direction)
     
     if item.type == "list" then
         item.value = item.value + direction
-        if item.value < 1 then item.value = #self.resolutions end
-        if item.value > #self.resolutions then item.value = 1 end
+        local maxValue = (item.name == "Resolution") and #self.resolutions or #self.displayModes
+        if item.value < 1 then item.value = maxValue end
+        if item.value > maxValue then item.value = 1 end
         if menuSelectSound then menuSelectSound:play() end
     elseif item.type == "slider" then
         -- For continuous adjustment, direction is already scaled by dt
@@ -286,17 +301,47 @@ function OptionsState:applySettings()
     
     -- Apply display mode
     local modeItem = self.menuItems[2]
-    displayMode = modeItem.value
+    displayMode = self.displayModes[modeItem.value]
     
-    -- Apply window settings
-    local flags = {
-        fullscreen = displayMode == "fullscreen",
-        resizable = true,
-        minwidth = constants.window.minWidth,
-        minheight = constants.window.minHeight
-    }
-    
-    lw.setMode(resolution.width, resolution.height, flags)
+    -- Apply window settings based on mode
+    if displayMode == "borderless" then
+        -- Get desktop dimensions
+        local dw, dh = love.window.getDesktopDimensions()
+        
+        -- Set to borderless at desktop size in one step
+        love.window.setMode(dw, dh, {
+            fullscreen = false,
+            borderless = true,
+            resizable = false,
+            vsync = 1,
+            display = 1,
+            minwidth = constants.window.minWidth,
+            minheight = constants.window.minHeight
+        })
+        
+        -- Position at 0,0 and maximize
+        love.window.setPosition(0, 0)
+        love.window.maximize()
+        
+    elseif displayMode == "fullscreen" then
+        -- Exclusive fullscreen
+        love.window.setMode(resolution.width, resolution.height, {
+            fullscreen = true,
+            fullscreentype = "exclusive",
+            resizable = false,
+            minwidth = constants.window.minWidth,
+            minheight = constants.window.minHeight
+        })
+        
+    else  -- windowed
+        love.window.setMode(resolution.width, resolution.height, {
+            fullscreen = false,
+            borderless = false,
+            resizable = true,
+            minwidth = constants.window.minWidth,
+            minheight = constants.window.minHeight
+        })
+    end
     
     -- Reinitialize starfield
     if initStarfield then
@@ -397,7 +442,10 @@ function OptionsState:drawControlsMenu()
     -- Instructions
     lg.setFont(smallFont or lg.newFont(14))
     lg.setColor(0.5, 0.5, 0.5)
-    local instructions = "Arrow Keys: Navigate | Enter: Remap | ESC: Back"
+    local nav = inputHints[lastInputType].navigate or "Arrow Keys"
+    local remap = inputHints[lastInputType].action or "Enter"
+    local back = inputHints[lastInputType].back or "ESC"
+    local instructions = nav .. ": Navigate | " .. remap .. ": Remap | " .. back .. ": Back"
     local instructWidth = lg.getFont():getWidth(instructions)
     lg.print(instructions, self.screenWidth/2 - instructWidth/2, self.screenHeight - 40)
 end

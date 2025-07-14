@@ -34,10 +34,16 @@ end
 -- AI behaviors
 local behaviors = {}
 
-behaviors.move_left = function(enemy, dt, player)
-    enemy.x = enemy.x - enemy.speed * dt
-    return behaviors.move_left
+behaviors.move_down = function(enemy, dt, player)
+    -- Move downward with side-to-side waving (Galaga-style)
+    enemy.y = enemy.y + enemy.speed * dt
+    enemy.behaviorState.time = (enemy.behaviorState.time or 0) + dt
+    enemy.x = enemy.x + math.sin(enemy.behaviorState.time * 3) * 60 * dt  -- Wave side to side
+    return behaviors.move_down
 end
+
+-- Keep move_left for compatibility but redirect to move_down
+behaviors.move_left = behaviors.move_down
 
 behaviors.move_to_player = function(enemy, dt, player)
     if not player then return behaviors.move_left end
@@ -59,9 +65,9 @@ end
 behaviors.dive_attack = function(enemy, dt, player)
     enemy.behaviorState.time = (enemy.behaviorState.time or 0) + dt
     
-    -- Sine wave movement pattern
-    enemy.y = enemy.y + math.sin(enemy.behaviorState.time * 2) * 150 * dt
-    enemy.x = enemy.x - enemy.speed * dt
+    -- Dive downward with increasing speed and side-to-side movement
+    enemy.y = enemy.y + enemy.speed * (1 + enemy.behaviorState.time * 0.5) * dt
+    enemy.x = enemy.x + math.sin(enemy.behaviorState.time * 4) * 100 * dt
     
     return behaviors.dive_attack
 end
@@ -69,47 +75,63 @@ end
 behaviors.zigzag = function(enemy, dt, player)
     enemy.behaviorState.time = (enemy.behaviorState.time or 0) + dt
     
-    -- Zigzag pattern
-    enemy.x = enemy.x - enemy.speed * dt
-    enemy.y = enemy.y + math.cos(enemy.behaviorState.time * 4) * 200 * dt
+    -- Zigzag pattern moving downward
+    enemy.y = enemy.y + enemy.speed * dt
+    enemy.x = enemy.x + math.cos(enemy.behaviorState.time * 4) * 200 * dt
     
     return behaviors.zigzag
 end
 
 behaviors.formation = function(enemy, dt, player)
-    -- Formation flying - maintain relative position
-    local targetX = (enemy.behaviorState.formationX or 700) - enemy.behaviorState.time * 50
-    local targetY = enemy.behaviorState.formationY or enemy.y
-    
     enemy.behaviorState.time = (enemy.behaviorState.time or 0) + dt
     
-    -- Move towards formation position
-    local dx = targetX - enemy.x
-    local dy = targetY - enemy.y
-    
-    enemy.x = enemy.x + dx * dt * 2
-    enemy.y = enemy.y + dy * dt * 2
+    if not enemy.behaviorState.inFormation then
+        -- Move to formation position at top of screen
+        local targetX = enemy.behaviorState.formationX or enemy.x
+        local targetY = enemy.behaviorState.formationY or 100  -- Formation at top
+        
+        local dx = targetX - enemy.x
+        local dy = targetY - enemy.y
+        
+        enemy.x = enemy.x + dx * dt * 2
+        enemy.y = enemy.y + dy * dt * 2
+        
+        -- Check if in formation
+        if math.abs(dx) < 5 and math.abs(dy) < 5 then
+            enemy.behaviorState.inFormation = true
+        end
+    else
+        -- Once in formation, wave side to side and occasionally dive
+        enemy.x = enemy.x + math.sin(enemy.behaviorState.time * 2) * 30 * dt
+        
+        -- Occasionally break formation and dive
+        if math.random() < 0.001 then  -- Small chance each frame
+            enemy.behaviorState.inFormation = false
+            enemy.behavior = behaviors.dive_attack
+            enemy.behaviorState.time = 0
+        end
+    end
     
     return behaviors.formation
 end
 
 behaviors.spiral = function(enemy, dt, player)
     enemy.behaviorState.time = (enemy.behaviorState.time or 0) + dt
-    enemy.behaviorState.radius = (enemy.behaviorState.radius or 50) + dt * 20
-    
-    -- Spiral pattern
-    local angle = enemy.behaviorState.time * 3
-    local centerX = enemy.behaviorState.startX or enemy.x
-    local centerY = enemy.behaviorState.startY or enemy.y
-    
-    enemy.x = centerX + math.cos(angle) * enemy.behaviorState.radius - enemy.behaviorState.time * 30
-    enemy.y = centerY + math.sin(angle) * enemy.behaviorState.radius
+    enemy.behaviorState.radius = (enemy.behaviorState.radius or 30) + dt * 15
     
     -- Store initial position
     if not enemy.behaviorState.startX then
         enemy.behaviorState.startX = enemy.x
         enemy.behaviorState.startY = enemy.y
     end
+    
+    -- Spiral pattern moving downward
+    local angle = enemy.behaviorState.time * 3
+    local centerX = enemy.behaviorState.startX
+    local centerY = enemy.behaviorState.startY + enemy.behaviorState.time * enemy.speed
+    
+    enemy.x = centerX + math.cos(angle) * enemy.behaviorState.radius
+    enemy.y = centerY + math.sin(angle) * enemy.behaviorState.radius * 0.5  -- Flatten spiral vertically
     
     return behaviors.spiral
 end
@@ -153,10 +175,10 @@ behaviors.kamikaze = function(enemy, dt, player)
         -- Flash red to indicate kamikaze mode
         enemy.color = {1, 0.2, 0.2, 1}
     else
-        -- Normal movement until damaged
-        enemy.x = enemy.x - enemy.speed * dt
-        enemy.y = enemy.y + math.sin(enemy.behaviorState.time or 0) * 50 * dt
+        -- Normal movement until damaged (move down with waving)
+        enemy.y = enemy.y + enemy.speed * dt
         enemy.behaviorState.time = (enemy.behaviorState.time or 0) + dt
+        enemy.x = enemy.x + math.sin(enemy.behaviorState.time * 2) * 50 * dt
     end
     
     return behaviors.kamikaze
@@ -279,9 +301,9 @@ function WaveManager:spawnEnemy()
     
     local enemy = self:getFromPool() or Enemy:new()
     
-    -- Position at right edge of screen
-    enemy.x = love.graphics.getWidth() + enemy.width
-    enemy.y = love.math.random(50, love.graphics.getHeight() - 50)
+    -- Position at top of screen (Galaga-style)
+    enemy.x = love.math.random(50, love.graphics.getWidth() - 50)
+    enemy.y = -enemy.height
     
     -- Apply type configuration
     enemy.speed = enemyType.speed * (1 + self.waveNumber * 0.05)
@@ -301,9 +323,13 @@ function WaveManager:spawnEnemy()
     
     -- Special setup for formation enemies
     if enemyType.behavior == "formation" then
-        enemy.behaviorState.formationX = love.graphics.getWidth() - 100
-        enemy.behaviorState.formationY = enemy.y
+        -- Calculate formation position (grid at top of screen)
+        local formationIndex = self.enemiesSpawned % 10  -- 10 enemies per row
+        local row = math.floor(self.enemiesSpawned / 10)
+        enemy.behaviorState.formationX = 100 + formationIndex * 60  -- 60 pixels apart
+        enemy.behaviorState.formationY = 50 + row * 50  -- 50 pixels between rows
         enemy.behaviorState.time = 0
+        enemy.behaviorState.inFormation = false
     end
     
     table.insert(self.enemies, enemy)
@@ -341,8 +367,8 @@ function WaveManager:update(dt)
             end
         end
         
-        -- Remove if off screen or dead
-        if enemy.x < -enemy.width * 2 or not enemy.active then
+        -- Remove if off bottom of screen or dead
+        if enemy.y > love.graphics.getHeight() + enemy.height or not enemy.active then
             enemy.active = false
             table.insert(self.pool, enemy)
             table.remove(self.enemies, i)
@@ -380,9 +406,9 @@ function WaveManager:draw()
         -- Draw sprite if available, otherwise fall back to rectangles
         if sprite then
             love.graphics.setColor(1, 1, 1, 1)
-            -- Calculate scale to fit enemy dimensions
-            local scaleX = enemy.width / sprite:getWidth()
-            local scaleY = enemy.height / sprite:getHeight()
+            -- Calculate scale to fit enemy dimensions * 4
+            local scaleX = (enemy.width / sprite:getWidth()) * 4
+            local scaleY = (enemy.height / sprite:getHeight()) * 4
             -- Draw centered at enemy position
             love.graphics.draw(sprite, enemy.x + enemy.width/2, enemy.y + enemy.height/2, 
                               0, scaleX, scaleY, sprite:getWidth()/2, sprite:getHeight()/2)

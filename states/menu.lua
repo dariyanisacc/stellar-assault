@@ -140,7 +140,10 @@ function MenuState:drawMainMenu()
     -- Draw instructions
     lg.setFont(smallFont or lg.newFont(14))
     lg.setColor(0.7, 0.7, 0.7)
-    local instructions = "Arrow Keys/D-Pad: Navigate | Enter/A: Select | Escape/B: Back"
+    local nav = inputHints[lastInputType].navigate or "Arrow Keys/D-Pad"
+    local select = inputHints[lastInputType].select or "Enter/A"
+    local back = inputHints[lastInputType].back or "Escape/B"
+    local instructions = nav .. ": Navigate | " .. select .. ": Select | " .. back .. ": Back"
     local instructWidth = lg.getFont():getWidth(instructions)
     lg.print(instructions, self.screenWidth/2 - instructWidth/2, self.screenHeight - 30)
 end
@@ -503,7 +506,10 @@ function MenuState:drawShipSelect()
     -- Instructions
     lg.setFont(smallFont or lg.newFont(14))
     lg.setColor(0.7, 0.7, 0.7)
-    local instructions = "Left/Right: Select | Enter: Confirm | Escape: Back"
+    local nav = lastInputType == "gamepad" and "D-Pad" or "Left/Right"
+    local confirm = inputHints[lastInputType].confirm or "Enter"
+    local back = inputHints[lastInputType].back or "Escape"
+    local instructions = nav .. ": Select | " .. confirm .. ": Confirm | " .. back .. ": Back"
     local instructWidth = lg.getFont():getWidth(instructions)
     lg.print(instructions, self.screenWidth/2 - instructWidth/2, self.screenHeight - 30)
 end

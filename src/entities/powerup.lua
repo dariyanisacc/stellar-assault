@@ -43,6 +43,12 @@ local POWERUP_TYPES = {
         icon = ">>",
         duration = 6,
         description = "Speed Boost"
+    },
+    coolant = {
+        color = {0, 0.5, 1},    -- ice blue
+        icon = "C",
+        duration = 10,          -- cooling boost duration
+        description = "Heat Coolant"
     }
 }
 

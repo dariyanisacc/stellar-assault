@@ -88,7 +88,8 @@ function IntroState:draw()
     if self.timer > 2 then
         lg.setFont(smallFont or lg.newFont(14))
         lg.setColor(0.5, 0.5, 0.5, alpha)
-        local skipText = "Press SPACE to skip"
+        local skipKey = inputHints[lastInputType].skip or "SPACE"
+        local skipText = "Press " .. skipKey .. " to skip"
         local skipWidth = lg.getFont():getWidth(skipText)
         lg.print(skipText, self.screenWidth/2 - skipWidth/2, self.screenHeight - 40)
     end

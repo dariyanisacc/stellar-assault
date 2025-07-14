@@ -60,7 +60,10 @@ function PauseState:draw()
     -- Instructions
     lg.setFont(smallFont or lg.newFont(14))
     lg.setColor(0.5, 0.5, 0.5)
-    local instructions = "Arrow Keys: Navigate | Enter: Select | ESC: Resume"
+    local nav = inputHints[lastInputType].navigate or "Arrow Keys"
+    local select = inputHints[lastInputType].select or "Enter"
+    local resume = inputHints[lastInputType].back or "ESC"
+    local instructions = nav .. ": Navigate | " .. select .. ": Select | " .. resume .. ": Resume"
     local instructWidth = lg.getFont():getWidth(instructions)
     lg.print(instructions, self.screenWidth/2 - instructWidth/2, boxY + boxHeight - 40)
 end

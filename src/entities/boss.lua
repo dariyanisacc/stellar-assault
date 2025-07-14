@@ -39,7 +39,7 @@ function Boss:update(dt, bullets)
 end
 
 function Boss:draw()
-    lg.draw(self.sprite, self.x, self.y, 0, 1, 1,
+    lg.draw(self.sprite, self.x, self.y, 0, 4, 4,
             self.sprite:getWidth()/2, self.sprite:getHeight()/2)
     -- optional hp bar
     lg.rectangle("fill", self.x-48, self.y-70, 96 * (self.hp/self.maxHP), 6)

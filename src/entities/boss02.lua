@@ -176,7 +176,7 @@ function Boss02:draw()
     lg.setColor(r, g, b, 1)
     
     if self.sprite then
-        lg.draw(self.sprite, 0, 0, 0, self.scale, self.scale,
+        lg.draw(self.sprite, 0, 0, 0, self.scale * 4, self.scale * 4,
                 self.sprite:getWidth()/2, self.sprite:getHeight()/2)
     else
         -- fallback shape

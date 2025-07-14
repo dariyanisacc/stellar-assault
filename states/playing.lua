@@ -137,8 +137,8 @@ function PlayingState:initializeGame()
         -- Heat system
         heat = 0,                -- Current heat level (0-100)
         maxHeat = 100,           -- Max before overheat
-        heatRate = 10 * (shipConfig.heatMultiplier or 1),  -- Heat added per shot (adjusted by ship type)
-        coolRate = 20,           -- Cooling per second when not shooting
+        heatRate = 4 * (shipConfig.heatMultiplier or 1),  -- Heat added per shot (adjusted by ship type) - reduced from 10 to 4
+        coolRate = 30,           -- Cooling per second when not shooting - increased from 20 to 30
         overheatPenalty = 2,     -- Seconds unable to shoot on overheat
         overheatTimer = 0        -- Timer when overheated
     }
@@ -195,6 +195,14 @@ function PlayingState:initializeGame()
     self.combo = 0
     self.comboTimer = 0
     self.comboMultiplier = 1
+    
+    -- UI state
+    self.showControlsHint = true
+    self.controlsHintTimer = 30  -- Show for 30 seconds
+    self.controlsHintAlpha = 1
+    self.previousScore = score  -- For score animation
+    self.scoreAnimTimer = 0
+    self.scoreAnimScale = 1
 end
 
 function PlayingState:update(dt)
@@ -216,6 +224,28 @@ function PlayingState:update(dt)
             self.combo = 0
             self.comboMultiplier = 1
         end
+    end
+    
+    -- Update UI timers
+    if self.showControlsHint and self.controlsHintTimer > 0 then
+        self.controlsHintTimer = self.controlsHintTimer - dt
+        if self.controlsHintTimer <= 3 then  -- Fade out in last 3 seconds
+            self.controlsHintAlpha = self.controlsHintTimer / 3
+        end
+        if self.controlsHintTimer <= 0 then
+            self.showControlsHint = false
+        end
+    end
+    
+    -- Update score animation
+    if score ~= self.previousScore then
+        self.scoreAnimTimer = 0.3
+        self.scoreAnimScale = 1.2
+        self.previousScore = score
+    end
+    if self.scoreAnimTimer > 0 then
+        self.scoreAnimTimer = self.scoreAnimTimer - dt
+        self.scoreAnimScale = 1 + (self.scoreAnimTimer / 0.3) * 0.2
     end
     
     -- Update timers
@@ -251,6 +281,14 @@ function PlayingState:update(dt)
             self.waveStartTimer = self.waveStartTimer - dt
             if self.waveStartTimer <= 0 and not self.waveManager:isActive() then
                 self.waveManager:startWave()
+            end
+        end
+        
+        -- Safety check: Force all enemies to spawn from top (in case any spawn from bottom)
+        for _, enemy in ipairs(self.waveManager.enemies) do
+            if enemy.y > self.screenHeight - 50 then  -- If spawned near bottom
+                enemy.y = -enemy.height  -- Reset to top
+                enemy.vy = nil  -- Clear any upward velocity
             end
         end
     end
@@ -333,16 +371,17 @@ function PlayingState:updatePlayer(dt)
     player.x = player.x + player.vx * dt
     player.y = player.y + player.vy * dt
     
-    -- Bound to screen
-    player.x = max(player.width/2, min(self.screenWidth - player.width/2, player.x))
-    player.y = max(player.height/2, min(self.screenHeight - player.height/2, player.y))
-    
-    -- Stop velocity if hitting walls
-    if player.x <= player.width/2 or player.x >= self.screenWidth - player.width/2 then
-        player.vx = 0
+    -- Screen wrapping
+    if player.x < -player.width/2 then
+        player.x = self.screenWidth + player.width/2
+    elseif player.x > self.screenWidth + player.width/2 then
+        player.x = -player.width/2
     end
-    if player.y <= player.height/2 or player.y >= self.screenHeight - player.height/2 then
-        player.vy = 0
+    
+    if player.y < -player.height/2 then
+        player.y = self.screenHeight + player.height/2
+    elseif player.y > self.screenHeight + player.height/2 then
+        player.y = -player.height/2
     end
     
     -- Update teleport cooldown
@@ -360,7 +399,9 @@ function PlayingState:updatePlayer(dt)
     
     -- Cool down heat when not shooting
     if not self.keys.shoot and player.heat > 0 then
-        player.heat = math.max(0, player.heat - player.coolRate * dt)
+        -- Apply coolant boost if active
+        local coolMultiplier = activePowerups.coolant and 1.5 or 1
+        player.heat = math.max(0, player.heat - player.coolRate * dt * coolMultiplier)
     end
     
     -- Handle overheat timer
@@ -368,6 +409,16 @@ function PlayingState:updatePlayer(dt)
         player.overheatTimer = player.overheatTimer - dt
         if player.overheatTimer <= 0 then
             player.heat = 0  -- Reset heat after penalty
+        end
+    end
+    
+    -- Create heat particles when heat is high
+    local heatPercent = player.heat / player.maxHeat
+    if heatPercent > 0.6 then
+        -- More particles at higher heat
+        local particleChance = (heatPercent - 0.6) * 2.5  -- 0 to 1 chance
+        if random() < particleChance * dt then
+            self:createHeatParticle()
         end
     end
     
@@ -393,10 +444,32 @@ function PlayingState:updateAsteroids(dt)
     
     for i = #asteroids, 1, -1 do
         local asteroid = asteroids[i]
-        asteroid.y = asteroid.y + (baseSpeed + speedIncrease * currentLevel) * levelMultiplier * dt
+        
+        -- Handle fragment movement (from splitting)
+        if asteroid.vx then
+            asteroid.x = asteroid.x + asteroid.vx * dt
+            asteroid.vx = asteroid.vx * 0.98  -- Slight friction
+            
+            -- Wrap horizontally
+            if asteroid.x < -asteroid.size then
+                asteroid.x = self.screenWidth + asteroid.size
+            elseif asteroid.x > self.screenWidth + asteroid.size then
+                asteroid.x = -asteroid.size
+            end
+        end
+        
+        if asteroid.vy then
+            asteroid.y = asteroid.y + asteroid.vy * dt
+            -- Fragments still fall but with their initial velocity
+            asteroid.vy = asteroid.vy + (baseSpeed * 0.5) * dt  -- Add gravity effect
+        else
+            -- Normal asteroid falling
+            asteroid.y = asteroid.y + (baseSpeed + speedIncrease * currentLevel) * levelMultiplier * dt
+        end
+        
         asteroid.rotation = asteroid.rotation + asteroid.rotationSpeed * dt
         
-        -- Remove if off screen
+        -- Remove if off screen (bottom only)
         if asteroid.y > self.screenHeight + asteroid.size then
             table.remove(asteroids, i)
         end
@@ -408,12 +481,29 @@ function PlayingState:updateAliens(dt)
     for i = #aliens, 1, -1 do
         local alien = aliens[i]
         
-        -- Movement AI
-        alien.y = alien.y + constants.alien.speed * dt
+        -- Movement based on velocity
+        if alien.vx then
+            alien.x = alien.x + alien.vx * dt
+        else
+            -- Legacy movement for old aliens
+            alien.y = alien.y + constants.alien.speed * dt
+        end
         
-        -- Simple side-to-side movement
+        if alien.vy then
+            -- Force downward movement
+            alien.vy = math.abs(alien.vy)
+            alien.y = alien.y + alien.vy * dt
+        end
+        
+        -- Simple side-to-side or up-down wave movement
         alien.waveTimer = alien.waveTimer + dt
-        alien.x = alien.x + sin(alien.waveTimer * 2) * 50 * dt
+        if alien.vx and alien.vx ~= 0 then
+            -- Moving horizontally, wave vertically
+            alien.y = alien.y + sin(alien.waveTimer * 2) * 30 * dt
+        else
+            -- Moving vertically, wave horizontally
+            alien.x = alien.x + sin(alien.waveTimer * 2) * 50 * dt
+        end
         
         -- Shooting
         alien.shootTimer = alien.shootTimer - dt
@@ -422,8 +512,11 @@ function PlayingState:updateAliens(dt)
             alien.shootTimer = constants.alien.shootInterval
         end
         
-        -- Remove if off screen
-        if alien.y > self.screenHeight + alien.height then
+        -- Remove if off screen in any direction
+        if alien.y > self.screenHeight + alien.height or 
+           alien.y < -alien.height or
+           alien.x > self.screenWidth + alien.width or 
+           alien.x < -alien.width then
             table.remove(aliens, i)
         end
     end
@@ -440,6 +533,11 @@ function PlayingState:updateLasers(dt)
         end
     end
     
+    -- Log warning if approaching capacity
+    if #lasers > 90 then
+        logger.warn("Laser pool near capacity: %d / %d", #lasers, maxLasers)
+    end
+    
     -- Update player lasers
     for i = #lasers, 1, -1 do
         local laser = lasers[i]
@@ -453,10 +551,15 @@ function PlayingState:updateLasers(dt)
             laser.y = laser.y - constants.laser.speed * dt
         end
         
-        -- Remove if off screen
-        if laser.y < -laser.height or
-           laser.x < -laser.width or
-           laser.x > self.screenWidth + laser.width then
+        -- Screen wrapping for lasers (horizontal only)
+        if laser.x < -laser.width then
+            laser.x = self.screenWidth + laser.width
+        elseif laser.x > self.screenWidth + laser.width then
+            laser.x = -laser.width
+        end
+        
+        -- Remove if off screen (vertical only)
+        if laser.y < -laser.height or laser.y > self.screenHeight + laser.height then
             self.laserPool:release(laser)
             table.remove(lasers, i)
         end
@@ -515,6 +618,16 @@ function PlayingState:updateExplosions(dt)
             explosion.vy = explosion.vy + 100 * dt  -- Gravity
             explosion.vx = explosion.vx * (1 - dt)  -- Drag
             explosion.vy = explosion.vy * (1 - dt)  -- Drag
+            
+            -- Rotate debris particles
+            if explosion.rotation then
+                explosion.rotation = explosion.rotation + (explosion.rotationSpeed or 0) * dt
+            end
+            
+            -- Fade out particles
+            if explosion.color and explosion.life < 0.3 then
+                explosion.color[4] = explosion.life / 0.3
+            end
             
             if explosion.life <= 0 then
                 self.particlePool:release(explosion)
@@ -607,8 +720,12 @@ function PlayingState:shootLaser()
             table.insert(lasers, rightLaser)
         end
         
-        -- Add heat
-        player.heat = math.min(player.maxHeat, player.heat + player.heatRate)
+        -- NEW: Skip heat addition during weapon powerups
+        local isWeaponPowerupActive = activePowerups.rapid or activePowerups.multiShot or activePowerups.spread
+        if not isWeaponPowerupActive then
+            -- Add heat (reduced rate for balance)
+            player.heat = math.min(player.maxHeat, player.heat + player.heatRate)
+        end
         
         if laserSound then
             laserSound:stop()
@@ -616,10 +733,22 @@ function PlayingState:shootLaser()
         end
         
         -- Set cooldown based on ship fireRate and powerups
+        local baseCooldown
         if activePowerups.rapid then
-            self.shootCooldown = 0.1 * (player.fireRateMultiplier or 1)
+            baseCooldown = 0.1 * (player.fireRateMultiplier or 1)
         else
-            self.shootCooldown = shipConfig.fireRate * (player.fireRateMultiplier or 1)
+            baseCooldown = shipConfig.fireRate * (player.fireRateMultiplier or 1)
+        end
+        
+        -- Apply graduated heat penalty to fire rate
+        local heatPercent = player.heat / player.maxHeat
+        if heatPercent > 0.75 then
+            -- Gradually slow fire rate as heat increases above 75%
+            -- At 75% heat: no penalty, at 100% heat: 50% slower fire rate
+            local penalty = 1 + (heatPercent - 0.75) * 2
+            self.shootCooldown = baseCooldown * penalty
+        else
+            self.shootCooldown = baseCooldown
         end
         
         -- Multi-shot powerup (adds additional shots to the sides)
@@ -698,14 +827,21 @@ function PlayingState:spawnAsteroid()
 end
 
 function PlayingState:spawnAlien()
+    local direction = "top"  -- Force top-only spawning (Galaga-style)
+
     local alien = {
-        x = random(40, self.screenWidth - 40),
-        y = -40,
         width = constants.alien.width,
         height = constants.alien.height,
         shootTimer = constants.alien.shootInterval,
         waveTimer = random() * pi * 2
     }
+    
+    -- Only top spawning: start above screen, move downward with horizontal waving
+    alien.x = random(40, self.screenWidth - 40)
+    alien.y = -alien.height
+    alien.vy = constants.alien.speed  -- Move downward
+    alien.vx = 0  -- No initial horizontal velocity (waving handled in update)
+    
     table.insert(aliens, alien)
 end
 
@@ -718,6 +854,7 @@ function PlayingState:spawnPowerup(x, y)
     local types = {"shield", "rapid", "spread"}
     if currentLevel >= 2 then
         table.insert(types, "boost")
+        table.insert(types, "coolant")  -- Add coolant powerup from level 2
     end
     if currentLevel >= 3 then
         table.insert(types, "bomb")
@@ -951,6 +1088,14 @@ function PlayingState:checkPowerupCollisions()
                     if powerup.enhanced then
                         self:createPowerupText("HYPER BOOST!", powerup.x, powerup.y, {0, 1, 0})
                     end
+                elseif result.type == "coolant" then
+                    -- Reset heat immediately and boost cooling
+                    player.heat = 0
+                    if powerup.enhanced then
+                        self:createPowerupText("SUPER COOLANT!", powerup.x, powerup.y, {0, 0.7, 1})
+                    else
+                        self:createPowerupText("HEAT RESET!", powerup.x, powerup.y, {0, 0.5, 1})
+                    end
                 end
             elseif result == true and powerup.type == "shield" then
                 -- Enhanced shield gives more shield points
@@ -1033,17 +1178,52 @@ function PlayingState:handleAsteroidDestruction(asteroid, index)
     self.comboTimer = 2.0  -- Reset combo timer
     self.comboMultiplier = 1 + (self.combo - 1) * 0.1  -- 10% bonus per combo
     
-    score = score + math.floor(constants.score.asteroid * self.comboMultiplier)
-    Persistence.addScore(math.floor(constants.score.asteroid * self.comboMultiplier))  -- Add score to persistent storage
+    -- Award more points for smaller asteroids (they're harder to hit)
+    local sizeMultiplier = asteroid.size <= 25 and 2 or 1
+    score = score + math.floor(constants.score.asteroid * self.comboMultiplier * sizeMultiplier)
+    Persistence.addScore(math.floor(constants.score.asteroid * self.comboMultiplier * sizeMultiplier))
+    
+    -- Create explosion
     self:createExplosion(asteroid.x, asteroid.y, asteroid.size)
+    
+    -- Split larger asteroids into smaller ones
+    if asteroid.size > 30 then  -- Only split medium and large asteroids
+        local fragments = asteroid.size > 40 and 3 or 2  -- Large asteroids split into 3, medium into 2
+        
+        for i = 1, fragments do
+            local angle = (2 * math.pi / fragments) * i + random() * 0.5
+            local speed = random(50, 150)
+            local newSize = asteroid.size * 0.6  -- Make fragments 60% of original size
+            
+            local fragment = {
+                x = asteroid.x + math.cos(angle) * 10,
+                y = asteroid.y + math.sin(angle) * 10,
+                size = math.max(20, newSize),  -- Minimum size of 20
+                rotation = random() * pi * 2,
+                rotationSpeed = (random() - 0.5) * 2,  -- Faster rotation for fragments
+                -- Add velocity to make fragments fly apart
+                vx = math.cos(angle) * speed,
+                vy = math.sin(angle) * speed,
+                isFragment = true  -- Mark as fragment for special handling
+            }
+            table.insert(asteroids, fragment)
+        end
+        
+        -- Extra screen shake for splitting
+        if self.camera then
+            self.camera:shake(0.15, 3)
+        end
+    else
+        -- Small asteroids get normal shake
+        if self.camera then
+            self.camera:shake(0.1, 2)
+        end
+    end
+    
+    -- Remove the destroyed asteroid
     table.remove(asteroids, index)
     enemiesDefeated = enemiesDefeated + 1
     self.sessionEnemiesDefeated = self.sessionEnemiesDefeated + 1
-    
-    -- Add light camera shake
-    if self.camera then
-        self.camera:shake(0.1, 2)  -- Light shake for destruction
-    end
     
     -- Check for new high score
     if score > self.previousHighScore and not self.newHighScore then
@@ -1051,12 +1231,13 @@ function PlayingState:handleAsteroidDestruction(asteroid, index)
         self:showNewHighScoreNotification()
     end
     
-    -- 5% chance to drop powerup from asteroids
-    if random() < 0.05 then
+    -- Higher chance for smaller asteroids to drop powerups (they're the reward for dealing with splits)
+    local powerupChance = asteroid.size <= 25 and 0.15 or 0.05
+    if random() < powerupChance then
         self:spawnPowerup(asteroid.x, asteroid.y)
     end
     
-    logger.debug("Asteroid destroyed, score: %d", score)
+    logger.debug("Asteroid destroyed (size: %d), score: %d", asteroid.size, score)
 end
 
 function PlayingState:handleAlienDestruction(alien, index)
@@ -1246,6 +1427,54 @@ function PlayingState:createExplosion(x, y, size)
         table.insert(explosions, particle)
     end
     
+    -- Add debris particles (rock fragments)
+    local debrisCount = math.floor(size / 8)
+    for i = 1, debrisCount do
+        local angle = random() * pi * 2
+        local speed = random(50, 150)
+        local particle = self.particlePool:get()
+        particle.x = x + random(-5, 5)
+        particle.y = y + random(-5, 5)
+        particle.vx = cos(angle) * speed
+        particle.vy = sin(angle) * speed
+        particle.life = random(0.8, 1.5)
+        particle.maxLife = particle.life
+        particle.size = random(3, 6)
+        particle.rotation = random() * pi * 2
+        particle.rotationSpeed = (random() - 0.5) * 5
+        particle.isDebris = true  -- Mark as debris for special rendering
+        particle.color = {
+            random(0.4, 0.7),  -- Grayish colors for rock debris
+            random(0.4, 0.7),
+            random(0.4, 0.7),
+            1
+        }
+        table.insert(explosions, particle)
+    end
+    
+    -- Add sparks for extra effect
+    local sparkCount = math.floor(size / 10)
+    for i = 1, sparkCount do
+        local angle = random() * pi * 2
+        local speed = random(200, 400)  -- Faster than debris
+        local particle = self.particlePool:get()
+        particle.x = x
+        particle.y = y
+        particle.vx = cos(angle) * speed
+        particle.vy = sin(angle) * speed
+        particle.life = random(0.2, 0.4)  -- Short lived
+        particle.maxLife = particle.life
+        particle.size = random(1, 2)  -- Small
+        particle.isSpark = true
+        particle.color = {
+            1,
+            random(0.8, 1),
+            random(0, 0.5),
+            1
+        }
+        table.insert(explosions, particle)
+    end
+    
     if explosionSound then
         explosionSound:stop()
         explosionSound:play()
@@ -1269,6 +1498,33 @@ function PlayingState:createHitEffect(x, y)
         particle.type = "spark"  -- Mark as spark for special rendering if needed
         table.insert(explosions, particle)
     end
+end
+
+function PlayingState:createHeatParticle()
+    -- Create heat steam particles from ship engines
+    local particle = self.particlePool:get()
+    -- Spawn from ship engine area
+    particle.x = player.x + random(-player.width/4, player.width/4)
+    particle.y = player.y + player.height/2
+    
+    -- Upward drift with slight horizontal variation
+    particle.vx = random(-20, 20)
+    particle.vy = random(-80, -120)  -- Upward
+    
+    -- Heat particles live longer and are larger
+    particle.life = random(0.8, 1.2)
+    particle.maxLife = particle.life
+    particle.size = random(3, 5)
+    
+    -- Color based on heat level - orange to red
+    local heatPercent = player.heat / player.maxHeat
+    local r = 1
+    local g = 1 - heatPercent * 0.7  -- Orange to red
+    local b = 0
+    particle.color = {r, g, b, 0.7}
+    particle.type = "heat"
+    
+    table.insert(explosions, particle)
 end
 
 function PlayingState:playerHit()
@@ -1422,14 +1678,34 @@ function PlayingState:draw()
         lg.rectangle("line", self.screenWidth - 100, 135, 80, 4)
     end
     
+    -- Draw heat distortion effect
+    local heatPercent = player.heat / player.maxHeat
+    if heatPercent > 0.7 then
+        -- Red vignette effect
+        local vignetteAlpha = (heatPercent - 0.7) * 0.5  -- 0 to 0.15 alpha
+        lg.setColor(1, 0, 0, vignetteAlpha)
+        -- Draw gradient vignette
+        local vignetteSize = 100
+        for i = 0, vignetteSize do
+            local alpha = vignetteAlpha * (1 - i / vignetteSize)
+            lg.setColor(1, 0, 0, alpha)
+            lg.rectangle("line", i, i, self.screenWidth - i*2, self.screenHeight - i*2)
+        end
+    end
+    
     -- Draw overheat warning
-    if player.heat / player.maxHeat > 0.8 then
+    if heatPercent > 0.8 then
         local flash = sin(love.timer.getTime() * 10) * 0.5 + 0.5
         lg.setFont(menuFont or lg.newFont(24))
         lg.setColor(1, 0, 0, flash)
         local warningText = "WARNING: OVERHEAT!"
         local warningWidth = lg.getFont():getWidth(warningText)
         lg.print(warningText, self.screenWidth/2 - warningWidth/2, 150)
+        
+        -- Additional flashing indicators
+        lg.setColor(1, 0.3, 0, flash * 0.8)
+        lg.print("▲", self.screenWidth/2 - warningWidth/2 - 30, 150)
+        lg.print("▲", self.screenWidth/2 + warningWidth/2 + 20, 150)
     end
     
     -- Draw hit flash overlay (player damage)
@@ -1448,6 +1724,94 @@ function PlayingState:draw()
     -- Draw debug overlay if enabled (press F3 to toggle)
     if self.showDebug then
         self:drawDebugOverlay()
+    end
+end
+
+-- Helper function to draw bars with labels
+function PlayingState:drawBar(x, y, w, h, percent, color, label)
+    -- Background
+    lg.setColor(0.2, 0.2, 0.2, 0.8)
+    lg.rectangle("fill", x, y, w, h, 2)  -- Rounded corners
+    
+    -- Fill with gradient effect
+    if percent > 0 then
+        lg.setColor(color[1] * 0.7, color[2] * 0.7, color[3] * 0.7, 1)
+        lg.rectangle("fill", x, y, w * percent, h, 2)
+        
+        -- Inner highlight for depth
+        lg.setColor(color[1], color[2], color[3], 1)
+        lg.rectangle("fill", x + 1, y + 1, (w - 2) * percent, h - 2, 1)
+    end
+    
+    -- Glow effect if high percent
+    if percent > 0.8 then
+        local glow = sin(love.timer.getTime() * 5) * 0.3 + 0.7
+        lg.setColor(color[1], color[2], color[3], glow * 0.3)
+        lg.setLineWidth(2)
+        lg.rectangle("line", x - 2, y - 2, w + 4, h + 4, 3)
+        lg.setLineWidth(1)
+    end
+    
+    -- Border
+    lg.setColor(1, 1, 1, 0.8)
+    lg.rectangle("line", x, y, w, h, 2)
+    
+    -- Label
+    if label then
+        lg.setFont(smallFont or lg.newFont(12))
+        lg.setColor(0.8, 0.8, 0.8, 1)
+        local labelWidth = lg.getFont():getWidth(label)
+        lg.print(label, x + w/2 - labelWidth/2, y - 14)
+    end
+end
+
+-- Helper function to draw life icons
+function PlayingState:drawLifeIcons(x, y, count, size)
+    for i = 1, count do
+        local iconX = x + (i-1) * (size + 5)
+        
+        if playerShips and playerShips[selectedShip] then
+            -- Draw ship sprite
+            lg.setColor(1, 1, 1, 1)
+            local sprite = playerShips[selectedShip]
+            local scale = size / max(sprite:getWidth(), sprite:getHeight())
+            lg.draw(sprite, iconX, y, 0, scale, scale, 
+                    sprite:getWidth()/2, sprite:getHeight()/2)
+        else
+            -- Fallback triangle
+            lg.setColor(0, 1, 1, 1)
+            lg.push()
+            lg.translate(iconX, y)
+            lg.polygon("fill", 0, -size/2, -size/3, size/2, size/3, size/2)
+            lg.pop()
+        end
+    end
+end
+
+-- Helper function to draw bomb icons
+function PlayingState:drawBombIcons(x, y, count, size)
+    for i = 1, count do
+        local iconX = x + (i-1) * (size * 2 + 5)
+        
+        -- Bomb body
+        lg.setColor(1, 0.2, 0.2, 1)
+        lg.circle("fill", iconX, y, size)
+        
+        -- Highlight
+        lg.setColor(1, 0.5, 0.5, 0.5)
+        lg.circle("fill", iconX - size/3, y - size/3, size/3)
+        
+        -- Border
+        lg.setColor(1, 1, 0, 1)
+        lg.circle("line", iconX, y, size)
+        
+        -- Fuse
+        lg.setColor(1, 0.5, 0, 1)
+        lg.setLineWidth(2)
+        lg.line(iconX, y - size, iconX, y - size - 3)
+        lg.setColor(1, 1, 0, 1)
+        lg.circle("fill", iconX, y - size - 4, 2)
+        lg.setLineWidth(1)
     end
 end
 
@@ -1484,6 +1848,18 @@ function PlayingState:drawDebugOverlay()
     
     -- Player heat
     lg.print("Heat: " .. string.format("%.1f%%", (player.heat / player.maxHeat) * 100), 10, y)
+    y = y + lineHeight
+    
+    -- Pool capacity warnings
+    if #lasers > 80 then
+        lg.setColor(1, 1, 0, 1)  -- Yellow warning
+        lg.print("! LASER POOL HIGH !", 10, y)
+        y = y + lineHeight
+    end
+    if #explosions > 150 then
+        lg.setColor(1, 0.5, 0, 1)  -- Orange warning
+        lg.print("! PARTICLE POOL HIGH !", 10, y)
+    end
 end
 
 function PlayingState:drawBackground()
@@ -1501,7 +1877,7 @@ function PlayingState:drawPlayer()
     if playerShips and playerShips[selectedShip] then
         lg.setColor(1, 1, 1)
         local sprite = playerShips[selectedShip]
-        local scale = player.width / sprite:getWidth()  -- Scale to match player width
+        local scale = (player.width / sprite:getWidth()) * 4  -- Scale to match player width * 4
         lg.draw(sprite, player.x, player.y, 0, scale, scale, 
                 sprite:getWidth()/2, sprite:getHeight()/2)
     else
@@ -1535,9 +1911,9 @@ function PlayingState:drawAliens()
         if enemyShips and enemyShips.homing then
             lg.setColor(1, 1, 1, 1)
             local sprite = enemyShips.homing
-            -- Calculate scale to fit alien dimensions
-            local scaleX = alien.width / sprite:getWidth()
-            local scaleY = alien.height / sprite:getHeight()
+            -- Calculate scale to fit alien dimensions * 4
+            local scaleX = (alien.width / sprite:getWidth()) * 4
+            local scaleY = (alien.height / sprite:getHeight()) * 4
             -- Draw centered at alien position
             lg.draw(sprite, alien.x, alien.y, 0, scaleX, scaleY, sprite:getWidth()/2, sprite:getHeight()/2)
         else
@@ -1572,15 +1948,38 @@ function PlayingState:drawExplosions()
     for _, explosion in ipairs(explosions) do
         if explosion.vx then
             -- It's a particle
-            local alpha = explosion.life / explosion.maxLife
-            lg.setColor(explosion.color[1], explosion.color[2], explosion.color[3], alpha)
-            lg.circle("fill", explosion.x, explosion.y, explosion.size * alpha)
+            local alpha = explosion.color and explosion.color[4] or (explosion.life / explosion.maxLife)
+            
+            if explosion.isDebris then
+                -- Draw debris as rotating rectangles
+                lg.push()
+                lg.translate(explosion.x, explosion.y)
+                lg.rotate(explosion.rotation or 0)
+                lg.setColor(explosion.color[1], explosion.color[2], explosion.color[3], alpha)
+                lg.rectangle("fill", -explosion.size/2, -explosion.size/2, explosion.size, explosion.size)
+                lg.pop()
+            elseif explosion.isSpark then
+                -- Draw sparks as lines showing motion
+                lg.setColor(explosion.color[1], explosion.color[2], explosion.color[3], alpha)
+                local trailLength = 10
+                local vx = explosion.vx / 10
+                local vy = explosion.vy / 10
+                lg.setLineWidth(explosion.size)
+                lg.line(explosion.x, explosion.y, explosion.x - vx, explosion.y - vy)
+                lg.setLineWidth(1)
+            else
+                -- Regular particles
+                lg.setColor(explosion.color[1], explosion.color[2], explosion.color[3], alpha)
+                lg.circle("fill", explosion.x, explosion.y, explosion.size * alpha)
+            end
         else
-            -- It's a regular explosion
+            -- It's a regular explosion ring
             lg.setColor(1, 0.5, 0, explosion.alpha)
+            lg.setLineWidth(2)
             lg.circle("line", explosion.x, explosion.y, explosion.radius)
             lg.setColor(1, 1, 0, explosion.alpha * 0.5)
             lg.circle("fill", explosion.x, explosion.y, explosion.radius * 0.7)
+            lg.setLineWidth(1)
         end
     end
 end
@@ -1618,34 +2017,68 @@ function PlayingState:drawPowerupTexts()
 end
 
 function PlayingState:drawUI()
-    -- UI Background panels
-    local panelAlpha = 0.7
+    -- Bento Grid Layout with reduced height
+    local hudHeight = 60  -- Reduced from 80
     local panelPadding = 10
     
-    -- Top HUD Panel
-    lg.setColor(0, 0, 0, panelAlpha)
-    lg.rectangle("fill", 0, 0, self.screenWidth, 80)
-    lg.setColor(0.2, 0.2, 0.3, 1)
-    lg.rectangle("line", 0, 80, self.screenWidth, 1)
+    -- Top HUD Panel with gradient
+    lg.setColor(0, 0, 0, 0.6)  -- Softer alpha
+    lg.rectangle("fill", 0, 0, self.screenWidth, hudHeight)
     
-    -- Score Display (Prominent in center-top)
-    lg.setFont(menuFont or lg.newFont(24))
+    -- Subtle gradient line
+    for i = 0, 2 do
+        lg.setColor(0.2, 0.2, 0.4, 1 - i * 0.3)
+        lg.rectangle("fill", 0, hudHeight + i, self.screenWidth, 1)
+    end
+    
+    -- === LEFT SECTION: Level/Wave/Enemies ===
+    lg.setFont(mediumFont or lg.newFont(18))
+    lg.setColor(0.8, 0.8, 1, 1)
+    lg.print("LEVEL " .. currentLevel, panelPadding, 5)
+    
+    if self.waveManager then
+        lg.setFont(smallFont or lg.newFont(12))
+        lg.setColor(0.7, 1, 0.7, 1)
+        lg.print("WAVE " .. self.waveManager.waveNumber, panelPadding, 25)
+        
+        local enemyCount = (self.waveManager.getEnemyCount and self.waveManager:getEnemyCount()) or #self.waveManager.enemies
+        lg.setColor(1, 0.7, 0.5, 1)
+        lg.print("ENEMIES: " .. enemyCount, panelPadding, 40)
+    end
+    
+    -- === CENTER SECTION: Score with animation ===
+    lg.push()
+    lg.translate(self.screenWidth/2, 15)
+    lg.scale(self.scoreAnimScale, self.scoreAnimScale)
+    
+    lg.setFont(menuFont or lg.newFont(26))
     lg.setColor(1, 1, 1, 1)
-    local scoreText = string.format("%08d", score)
+    local scoreText = tostring(score)  -- No leading zeros
     local scoreWidth = lg.getFont():getWidth(scoreText)
-    lg.print(scoreText, self.screenWidth/2 - scoreWidth/2, 10)
+    lg.print(scoreText, -scoreWidth/2, -13)
     
-    lg.setFont(smallFont or lg.newFont(14))
-    lg.setColor(0.7, 0.7, 0.7, 1)
-    local scoreLabel = "SCORE"
-    local labelWidth = lg.getFont():getWidth(scoreLabel)
-    lg.print(scoreLabel, self.screenWidth/2 - labelWidth/2, 38)
+    lg.pop()
     
-    -- High Score (Top right)
+    -- Compact bars below score
+    local barWidth = 150  -- Reduced from 200
+    local barHeight = 6   -- Slimmer
+    local barX = self.screenWidth/2 - barWidth/2
+    
+    -- Shield bar
+    if player.shield > 0 or player.maxShield > 0 then
+        local shieldPercent = player.shield / player.maxShield
+        self:drawBar(barX, 32, barWidth, barHeight, shieldPercent, {0, 1, 1}, nil)  -- No label for cleaner look
+    end
+    
+    -- Heat bar
+    local heatPercent = player.heat / player.maxHeat
+    self:drawBar(barX, 42, barWidth, barHeight, heatPercent, {1, heatPercent, 0}, nil)
+    
+    -- === RIGHT SECTION: High Score/Lives/Bombs ===
+    lg.setFont(uiFont or lg.newFont(16))
+    
+    -- High score with subtle animation
     local highScore = self.newHighScore and score or (Persistence and Persistence.getHighScore() or 0)
-    lg.setFont(uiFont or lg.newFont(18))
-    
-    -- Flash if new high score
     if self.newHighScore then
         local flash = sin(love.timer.getTime() * 5) * 0.3 + 0.7
         lg.setColor(1, flash, 0, 1)
@@ -1653,259 +2086,85 @@ function PlayingState:drawUI()
         lg.setColor(1, 0.8, 0, 1)
     end
     
-    local highScoreText = "HIGH: " .. string.format("%08d", highScore)
+    local highScoreText = "HIGH: " .. tostring(highScore)
     local highScoreWidth = lg.getFont():getWidth(highScoreText)
-    lg.print(highScoreText, self.screenWidth - highScoreWidth - panelPadding, 10)
+    lg.print(highScoreText, self.screenWidth - highScoreWidth - panelPadding, 5)
     
-    -- Level Display (Top left)
-    lg.setFont(mediumFont or lg.newFont(20))
-    lg.setColor(0.8, 0.8, 1, 1)
-    lg.print("LEVEL " .. currentLevel, panelPadding, 10)
+    -- Lives (compact icons)
+    self:drawLifeIcons(self.screenWidth - 80, 30, lives, 12)
     
-    -- Wave Display (Below level)
-    if self.waveManager then
-        lg.setFont(smallFont or lg.newFont(14))
-        lg.setColor(0.7, 1, 0.7, 1)
-        lg.print("WAVE " .. self.waveManager.waveNumber, panelPadding, 35)
-        
-        -- Show wave status
-        if self.waveManager:isActive() then
-            local enemyCount = self.waveManager:getEnemyCount()
-            lg.setColor(1, 0.5, 0.5, 1)
-            lg.print("Enemies: " .. enemyCount, panelPadding + 80, 35)
-        elseif self.waveStartTimer and self.waveStartTimer > 0 then
-            lg.setColor(1, 1, 0.5, 1)
-            lg.print("Next wave in: " .. string.format("%.1f", self.waveStartTimer), panelPadding + 80, 35)
-        end
-    end
-    
-    -- Lives Display with Ship Icons (Bottom left of top panel)
-    lg.setFont(smallFont or lg.newFont(14))
-    lg.setColor(0.7, 0.7, 0.7, 1)
-    lg.print("LIVES", panelPadding, 50)
-    
-    -- Draw ship icons for lives
-    local iconSize = 20
-    local iconSpacing = 25
-    local startX = panelPadding + 50
-    
-    for i = 1, lives do
-        if playerShips and playerShips[selectedShip] then
-            -- Draw ship sprite as life icon
-            lg.setColor(1, 1, 1, 1)
-            local sprite = playerShips[selectedShip]
-            local scale = iconSize / math.max(sprite:getWidth(), sprite:getHeight())
-            lg.draw(sprite, startX + (i-1) * iconSpacing, 55, 0, scale, scale,
-                    sprite:getWidth()/2, sprite:getHeight()/2)
-        else
-            -- Fallback to simple triangles
-            lg.setColor(0, 1, 1, 1)
-            lg.push()
-            lg.translate(startX + (i-1) * iconSpacing, 55)
-            lg.polygon("fill", 0, -8, -6, 8, 6, 8)
-            lg.pop()
-        end
-    end
-    
-    -- Bomb Count Display (Bottom right of top panel)
+    -- Bombs (smaller icons)
     if player.bombs and player.bombs > 0 then
-        lg.setFont(smallFont or lg.newFont(14))
-        lg.setColor(0.7, 0.7, 0.7, 1)
-        local bombLabel = "BOMBS"
-        local bombLabelWidth = lg.getFont():getWidth(bombLabel)
-        lg.print(bombLabel, self.screenWidth - bombLabelWidth - panelPadding - 50, 50)
-        
-        -- Draw bomb icons
-        local bombStartX = self.screenWidth - panelPadding - 40
-        for i = 1, player.bombs do
-            lg.setColor(1, 0.2, 0.2, 1)
-            lg.push()
-            lg.translate(bombStartX + (i-1) * 15, 55)
-            lg.circle("fill", 0, 0, 6)
-            lg.setColor(1, 1, 0, 1)
-            lg.circle("line", 0, 0, 6)
-            -- Simple fuse
-            lg.setColor(1, 0.5, 0, 1)
-            lg.rectangle("fill", 0, -8, 2, 4)
-            lg.pop()
-        end
+        self:drawBombIcons(self.screenWidth - 80, 48, player.bombs, 5)
     end
     
-    -- Shield/Health Bar (Center bottom of HUD)
-    if player.shield > 0 or player.maxShield > 0 then
-        local barWidth = 200
-        local barHeight = 8
-        local barX = self.screenWidth/2 - barWidth/2
-        local barY = 60
-        
-        -- Background
-        lg.setColor(0.2, 0.2, 0.2, 1)
-        lg.rectangle("fill", barX - 2, barY - 2, barWidth + 4, barHeight + 4)
-        
-        -- Shield fill
-        local shieldPercent = player.shield / player.maxShield
-        local fillWidth = barWidth * shieldPercent
-        
-        -- Gradient effect for shield
-        if shieldPercent > 0.5 then
-            lg.setColor(0, 1, 1, 1)
-        elseif shieldPercent > 0.25 then
-            lg.setColor(1, 1, 0, 1)
-        else
-            lg.setColor(1, 0.2, 0.2, 1)
-        end
-        
-        lg.rectangle("fill", barX, barY, fillWidth, barHeight)
-        
-        -- Border
-        lg.setColor(1, 1, 1, 1)
-        lg.rectangle("line", barX - 1, barY - 1, barWidth + 2, barHeight + 2)
-        
-        -- Shield text
-        lg.setFont(smallFont or lg.newFont(14))
-        lg.setColor(0.7, 0.7, 0.7, 1)
-        local shieldText = "SHIELD"
-        local shieldTextWidth = lg.getFont():getWidth(shieldText)
-        lg.print(shieldText, self.screenWidth/2 - shieldTextWidth/2, barY - 18)
-    end
-    
-    -- Heat Bar (Below shield bar)
-    local heatBarWidth = 200
-    local heatBarHeight = 8
-    local heatBarX = self.screenWidth/2 - heatBarWidth/2
-    local heatBarY = 85  -- Below shield
-    
-    -- Background
-    lg.setColor(0.2, 0.2, 0.2, 1)
-    lg.rectangle("fill", heatBarX - 2, heatBarY - 2, heatBarWidth + 4, heatBarHeight + 4)
-    
-    -- Heat fill (color changes based on heat level)
-    local heatPercent = player.heat / player.maxHeat
-    if heatPercent > 0 then
-        -- Color gradient from yellow to red
-        if heatPercent > 0.8 then
-            lg.setColor(1, 0, 0, 1)  -- Red when very hot
-        elseif heatPercent > 0.6 then
-            lg.setColor(1, 0.5, 0, 1)  -- Orange
-        elseif heatPercent > 0.4 then
-            lg.setColor(1, 1, 0, 1)  -- Yellow
-        else
-            lg.setColor(0.5, 0.5, 0, 1)  -- Dark yellow when cool
-        end
-        lg.rectangle("fill", heatBarX, heatBarY, heatBarWidth * heatPercent, heatBarHeight)
-    end
-    
-    -- Overheat warning flash
-    if player.overheatTimer > 0 then
-        local flash = sin(love.timer.getTime() * 10) * 0.5 + 0.5
-        lg.setColor(1, 0, 0, flash)
-        lg.rectangle("line", heatBarX - 2, heatBarY - 2, heatBarWidth + 4, heatBarHeight + 4)
-        lg.rectangle("line", heatBarX - 3, heatBarY - 3, heatBarWidth + 6, heatBarHeight + 6)
-    else
-        -- Normal border
-        lg.setColor(1, 1, 1, 1)
-        lg.rectangle("line", heatBarX - 1, heatBarY - 1, heatBarWidth + 2, heatBarHeight + 2)
-    end
-    
-    -- Heat text
-    lg.setFont(smallFont or lg.newFont(14))
-    if player.overheatTimer > 0 then
-        lg.setColor(1, 0, 0, 1)
-        local overheatText = "OVERHEAT!"
-        local overheatTextWidth = lg.getFont():getWidth(overheatText)
-        lg.print(overheatText, self.screenWidth/2 - overheatTextWidth/2, heatBarY - 18)
-    else
-        lg.setColor(0.7, 0.7, 0.7, 1)
-        local heatText = "HEAT"
-        local heatTextWidth = lg.getFont():getWidth(heatText)
-        lg.print(heatText, self.screenWidth/2 - heatTextWidth/2, heatBarY - 18)
-    end
-    
-    -- Active Powerups Panel (Left side)
+    -- === ACTIVE POWERUPS PANEL (Left side, fade when empty) ===
     local activePowerupCount = 0
     for _ in pairs(activePowerups) do
         activePowerupCount = activePowerupCount + 1
     end
     
     if activePowerupCount > 0 then
-        local powerupPanelY = 100
-        local powerupPanelHeight = activePowerupCount * 25 + 30
+        local powerupPanelY = 70
+        local powerupPanelHeight = min(activePowerupCount * 20 + 15, 120)  -- Cap height
         
-        -- Panel background
-        lg.setColor(0, 0, 0, 0.6)
-        lg.rectangle("fill", 0, powerupPanelY, 200, powerupPanelHeight)
-        lg.setColor(0.2, 0.2, 0.3, 1)
-        lg.rectangle("line", 0, powerupPanelY, 200, powerupPanelHeight)
+        -- Semi-transparent background
+        lg.setColor(0, 0, 0, 0.5)
+        lg.rectangle("fill", 0, powerupPanelY, 180, powerupPanelHeight, 4)
         
-        -- Title
-        lg.setFont(smallFont or lg.newFont(14))
-        lg.setColor(0.7, 0.7, 0.7, 1)
-        lg.print("ACTIVE POWERUPS", panelPadding, powerupPanelY + 5)
+        -- Powerup list with mini bars
+        local powerupY = powerupPanelY + 5
+        lg.setFont(smallFont or lg.newFont(12))
         
-        -- Powerup list
-        local powerupY = powerupPanelY + 25
         for powerup, timer in pairs(activePowerups) do
             local colors = {
                 shield = {0, 1, 1},
                 rapid = {1, 1, 0},
-                rapidFire = {1, 1, 0},
                 spread = {1, 0.5, 0},
                 multiShot = {1, 0.5, 0},
                 boost = {0, 1, 0},
-                health = {1, 0.2, 0.2},
-                timeWarp = {0.5, 0, 1},
-                magnetField = {0, 1, 0}
-            }
-            
-            local displayNames = {
-                rapid = "Rapid Fire",
-                spread = "Spread Shot",
-                boost = "Speed Boost",
-                multiShot = "Multi Shot",
-                rapidFire = "Rapid Fire",
-                timeWarp = "Time Warp",
-                magnetField = "Magnet Field"
+                coolant = {0, 0.5, 1}
             }
             
             local color = colors[powerup] or {1, 1, 1}
-            local displayName = displayNames[powerup] or powerup
             
-            -- Powerup bar
-            local barWidth = 180
-            local barHeight = 16
-            local barX = panelPadding
+            -- Mini progress bar
+            lg.setColor(color[1] * 0.3, color[2] * 0.3, color[3] * 0.3, 0.5)
+            lg.rectangle("fill", 5, powerupY, 170, 16, 2)
             
-            -- Background bar
-            lg.setColor(0.2, 0.2, 0.2, 1)
-            lg.rectangle("fill", barX, powerupY, barWidth, barHeight)
-            
-            -- Timer bar
-            local maxTime = 10 -- Assume 10 seconds max for visual consistency
-            local timerPercent = math.min(timer / maxTime, 1)
-            lg.setColor(color[1] * 0.7, color[2] * 0.7, color[3] * 0.7, 1)
-            lg.rectangle("fill", barX, powerupY, barWidth * timerPercent, barHeight)
-            
-            -- Border
-            lg.setColor(color)
-            lg.rectangle("line", barX, powerupY, barWidth, barHeight)
+            lg.setColor(color[1], color[2], color[3], 0.8)
+            local duration = constants.powerup and constants.powerup.duration and constants.powerup.duration[powerup] or 10
+            lg.rectangle("fill", 5, powerupY, 170 * (timer / duration), 16, 2)
             
             -- Text
-            lg.setFont(smallFont or lg.newFont(14))
             lg.setColor(1, 1, 1, 1)
-            lg.print(displayName .. " " .. string.format("%.1fs", timer), barX + 5, powerupY + 1)
+            local displayName = powerup:upper() .. " " .. string.format("%.1fs", timer)
+            lg.print(displayName, 8, powerupY + 1)
             
-            powerupY = powerupY + 20
+            powerupY = powerupY + 18
+            if powerupY > powerupPanelY + powerupPanelHeight - 5 then break end  -- Prevent overflow
         end
     end
     
-    -- Controls hint (Bottom right)
-    lg.setFont(smallFont or lg.newFont(14))
-    lg.setColor(0.5, 0.5, 0.5, 0.8)
-    local controlsY = self.screenHeight - 80
-    lg.print("MOVE: Arrow Keys/" .. self.keyBindings.up:upper() .. self.keyBindings.left:upper() .. self.keyBindings.down:upper() .. self.keyBindings.right:upper(), self.screenWidth - 200, controlsY)
-    lg.print("SHOOT: " .. self.keyBindings.shoot:upper(), self.screenWidth - 200, controlsY + 15)
-    lg.print("BOMB: " .. self.keyBindings.bomb:upper(), self.screenWidth - 200, controlsY + 30)
-    lg.print("BOOST: " .. self.keyBindings.boost:upper(), self.screenWidth - 200, controlsY + 45)
+    -- === CONTROLS HINT (Bottom, fades out) ===
+    if self.showControlsHint then
+        lg.setFont(smallFont or lg.newFont(12))
+        lg.setColor(0.4, 0.4, 0.4, self.controlsHintAlpha * 0.6)
+        
+        local controlsY = self.screenHeight - 60
+        local controlsX = self.screenWidth - 180
+        
+        -- Semi-transparent background
+        lg.setColor(0, 0, 0, self.controlsHintAlpha * 0.3)
+        lg.rectangle("fill", controlsX - 5, controlsY - 5, 175, 55, 3)
+        
+        -- Control hints
+        lg.setColor(0.6, 0.6, 0.6, self.controlsHintAlpha)
+        lg.print("MOVE: Arrows/" .. (self.keyBindings.up or "W"):upper() .. (self.keyBindings.left or "A"):upper() .. (self.keyBindings.down or "S"):upper() .. (self.keyBindings.right or "D"):upper(), controlsX, controlsY)
+        lg.print("SHOOT: " .. (self.keyBindings.shoot or "Space"):upper(), controlsX, controlsY + 12)
+        lg.print("BOMB: " .. (self.keyBindings.bomb or "B"):upper() .. " | BOOST: " .. (self.keyBindings.boost or "Shift"):upper(), controlsX, controlsY + 24)
+        lg.print("PAUSE: ESC", controlsX, controlsY + 36)
+    end
 end
 
 function PlayingState:keypressed(key, scancode, isrepeat)
@@ -2030,6 +2289,8 @@ function PlayingState:spawnBoss()
         boss.currentAttack = nil
         boss.phase = boss.currentPhase or 1
         boss.alpha = 1
+        -- Initialize beam shot timer to prevent nil errors
+        boss.lastBeamShot = love.timer.getTime()
         boss.shield = 0
         boss.maxShield = 0
         boss.movePattern = "sine"
@@ -2083,7 +2344,9 @@ function PlayingState:spawnBoss()
             targetX = self.screenWidth / 2,
             -- Attack patterns
             attacks = self:getBossAttacks(bossType),
-            lastAttack = nil
+            lastAttack = nil,
+            -- Initialize beam shot timer to prevent nil errors
+            lastBeamShot = love.timer.getTime()
         }
     end
     
@@ -2203,6 +2466,15 @@ end
 function PlayingState:updateBossMovement(dt)
     boss.moveTimer = boss.moveTimer + dt
     
+    -- Add rotation animation based on boss type
+    if boss.type == "annihilator" then
+        boss.rotation = boss.rotation + dt * 0.3  -- Slow menacing rotation
+    elseif boss.type == "frostTitan" then
+        boss.rotation = boss.rotation + sin(boss.moveTimer * 2) * dt  -- Oscillating rotation
+    else
+        boss.rotation = boss.rotation + dt * 0.5  -- Default rotation
+    end
+    
     if boss.movePattern == "sine" then
         -- Sinusoidal movement
         boss.x = self.screenWidth/2 + sin(boss.moveTimer * 0.5) * 200
@@ -2258,6 +2530,12 @@ function PlayingState:selectBossAttack()
 end
 
 function PlayingState:executeBossAttack(attackType, dt)
+    -- Safety check for lastBeamShot initialization
+    if boss.lastBeamShot == nil then
+        boss.lastBeamShot = love.timer.getTime()
+        logger.warning("lastBeamShot was nil; initialized to current time")
+    end
+    
     if attackType == "spreadShot" then
         if boss.attackTimer == dt then -- First frame
             local numShots = 8 + boss.phase * 2
@@ -2423,31 +2701,75 @@ function PlayingState:drawBoss()
     local flashIntensity = self.bossHitFlash or 0
     
     -- Draw based on boss type
-    if boss.type == "annihilator" then
-        -- Red menacing boss
-        lg.setColor(1, flashIntensity, flashIntensity, boss.alpha)
-        lg.circle("fill", 0, 0, boss.size/2)
-        lg.setColor(1, 0.5 + flashIntensity * 0.5, flashIntensity, boss.alpha * 0.8)
-        lg.circle("fill", 0, 0, boss.size/3)
+    if boss.type == "annihilator" then  -- Borg-like cube
+        local cubeSize = boss.size / 2
+        -- Base cube structure
+        lg.setColor(0.2 + flashIntensity, 0.2 + flashIntensity, 0.2 + flashIntensity, boss.alpha)  -- Dark metallic
+        lg.rectangle("fill", -cubeSize, -cubeSize, boss.size, boss.size)
         
-        -- Armor plates
-        lg.setColor(0.3 + flashIntensity * 0.7, 0.3 + flashIntensity * 0.7, 0.3 + flashIntensity * 0.7, boss.alpha)
-        for i = 0, 5 do
-            local angle = (i / 6) * pi * 2 + boss.rotation
-            local x = cos(angle) * boss.size/3
-            local y = sin(angle) * boss.size/3
-            lg.circle("fill", x, y, boss.size/8)
+        -- Intricate armor plates (inspired by Borg cube: grid-like modules)
+        lg.setColor(0.4 + flashIntensity * 0.5, 0.4 + flashIntensity * 0.5, 0.4 + flashIntensity * 0.5, boss.alpha)
+        local plateSize = boss.size / 5
+        for row = 0, 4 do
+            for col = 0, 4 do
+                local px = -cubeSize + col * plateSize + random(-2, 2)  -- Slight offset for irregularity
+                local py = -cubeSize + row * plateSize + random(-2, 2)
+                lg.rectangle("fill", px, py, plateSize - 2, plateSize - 2)  -- Gaps for detail
+            end
         end
-    elseif boss.type == "frostTitan" then
-        -- Ice blue boss
-        lg.setColor(0.5 + flashIntensity * 0.5, 0.8 + flashIntensity * 0.2, 1, boss.alpha)
-        lg.rectangle("fill", -boss.size/2, -boss.size/2, boss.size, boss.size)
-        lg.setColor(1, 1, 1, boss.alpha * 0.5)
-        lg.rectangle("line", -boss.size/2, -boss.size/2, boss.size, boss.size)
+        
+        -- Glowing edges/tron lines (Borg energy conduits)
+        lg.setColor(0, 1, 0.5 + flashIntensity, boss.alpha * 0.8)  -- Green glow
+        lg.setLineWidth(2)
+        for i = 0, 5 do
+            -- Horizontal lines
+            lg.line(-cubeSize, -cubeSize + i * (boss.size / 5), cubeSize, -cubeSize + i * (boss.size / 5))
+            -- Vertical lines
+            lg.line(-cubeSize + i * (boss.size / 5), -cubeSize, -cubeSize + i * (boss.size / 5), cubeSize)
+        end
+        lg.setLineWidth(1)
+        
+        -- Asymmetrical protrusions (e.g., weapons or sensors)
+        lg.setColor(0.3 + flashIntensity, 0.3 + flashIntensity, 0.3 + flashIntensity, boss.alpha)
+        lg.polygon("fill", cubeSize, 0, cubeSize + 20, -10, cubeSize + 20, 10)  -- Right spike
+        lg.polygon("fill", -cubeSize, cubeSize / 2, -cubeSize - 15, cubeSize / 2 - 10, -cubeSize - 15, cubeSize / 2 + 10)  -- Left antenna
+        
+    elseif boss.type == "frostTitan" then  -- Ice crystalline alien ship
+        -- Organic, asymmetrical body
+        lg.setColor(0.5 + flashIntensity * 0.5, 0.8 + flashIntensity * 0.2, 1, boss.alpha)  -- Ice blue
+        lg.polygon("fill", -boss.size/2, boss.size/2, 0, -boss.size/2, boss.size/2, boss.size/2)  -- Triangular base
+        
+        -- Ice spikes/protrusions
+        for i = 1, 6 do
+            local angle = i * (pi * 2 / 6) + random() * 0.2  -- Random offset
+            local len = boss.size * (0.3 + random() * 0.2)  -- Varying length
+            local spikeX = cos(angle) * len
+            local spikeY = sin(angle) * len
+            lg.setColor(0.8, 0.9, 1, boss.alpha * 0.7)  -- Lighter ice tips
+            lg.setLineWidth(3)
+            lg.line(0, 0, spikeX, spikeY)
+            lg.setLineWidth(1)
+            lg.circle("fill", spikeX, spikeY, 5)  -- Pointy ends
+        end
+        
+        -- Glowing core
+        lg.setColor(0, 0.8, 1, boss.alpha * (0.5 + sin(lt.getTime() * 2) * 0.3))  -- Pulsing
+        lg.circle("fill", 0, 0, boss.size / 4)
+        
     else
-        -- Default boss appearance
+        -- Default: Generic alien ship (curved, with wings/engines)
         lg.setColor(0.8 + flashIntensity * 0.2, 0.2 + flashIntensity * 0.8, 0.8 + flashIntensity * 0.2, boss.alpha)
-        lg.rectangle("fill", -boss.size/2, -boss.size/2, boss.size, boss.size)
+        -- Hull
+        lg.ellipse("fill", 0, 0, boss.size / 2, boss.size / 3)  -- Oval body
+        
+        -- Wings
+        lg.polygon("fill", -boss.size/2, 0, -boss.size/2 - 30, -40, -boss.size/2 - 30, 40)  -- Left wing
+        lg.polygon("fill", boss.size/2, 0, boss.size/2 + 30, -40, boss.size/2 + 30, 40)  -- Right wing
+        
+        -- Engines/glow
+        lg.setColor(1, 0.5, 0, boss.alpha * 0.8)
+        lg.circle("fill", -boss.size/2 + 10, 0, 15)  -- Rear thruster
+        lg.circle("fill", boss.size/2 - 10, 0, 15)  -- Rear thruster
     end
     
     lg.pop()
