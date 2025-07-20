@@ -475,7 +475,9 @@ function PlayingState:spawnAsteroid()
 end
 
 function PlayingState:spawnAlien()
-    EnemyAI.spawnAlien(self)
+    local choices = {nil, "homing", "zigzag"}
+    local behavior = choices[love.math.random(#choices)]
+    EnemyAI.spawnAlien(self, behavior)
 end
 
 function PlayingState:spawnPowerup(x, y)
