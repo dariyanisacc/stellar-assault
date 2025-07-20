@@ -442,7 +442,14 @@ function PlayingState:updateExplosions(dt)
             end
             
             if explosion.life <= 0 then
-                local pool = explosion.pool or self.particlePool
+                local pool = explosion.pool
+                if not pool then
+                    if explosion.vx then
+                        pool = self.particlePool
+                    else
+                        pool = self.explosionPool
+                    end
+                end
                 pool:release(explosion)
                 table.remove(explosions, i)
             end
