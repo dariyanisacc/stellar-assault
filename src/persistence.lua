@@ -22,7 +22,9 @@ local defaultSaveData = {
         sfxVolume = 1.0,
         musicVolume = 0.2,
         selectedShip = "alpha",
-        displayMode = "windowed"
+        displayMode = "windowed",
+        highContrast = false,
+        fontScale = 1
     },
     controls = {
         -- Default keyboard bindings
@@ -243,6 +245,24 @@ function Persistence.updateSettings(settings)
     for k, v in pairs(settings) do
         saveData.settings[k] = v
     end
+    Persistence.save()
+end
+
+function Persistence.getHighContrast()
+    return saveData.settings.highContrast or false
+end
+
+function Persistence.setHighContrast(value)
+    saveData.settings.highContrast = value
+    Persistence.save()
+end
+
+function Persistence.getFontScale()
+    return saveData.settings.fontScale or 1
+end
+
+function Persistence.setFontScale(scale)
+    saveData.settings.fontScale = scale
     Persistence.save()
 end
 
