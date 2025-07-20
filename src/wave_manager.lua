@@ -449,18 +449,15 @@ function WaveManager:getFromPool()
     return nil
 end
 
-function WaveManager:checkCollisionsWithLasers(lasers)
+function WaveManager:checkCollisionsWithLasers(lasers, grid)
     for i = #self.enemies, 1, -1 do
         local enemy = self.enemies[i]
-        for j = #lasers, 1, -1 do
-            local laser = lasers[j]
-            if self:checkCollision(enemy, laser) then
+        for _, laser in ipairs(grid:getNearby(enemy)) do
+            if not laser._remove and self:checkCollision(enemy, laser) then
                 enemy.health = enemy.health - 1
-                table.remove(lasers, j)
-                
+                laser._remove = true
                 if enemy.health <= 0 then
                     enemy.active = false
-                    -- Return destroyed enemy info for scoring/effects
                     return enemy, i
                 end
                 break

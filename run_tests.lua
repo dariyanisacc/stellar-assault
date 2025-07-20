@@ -4,7 +4,7 @@
 -- This script runs all unit tests using the busted testing framework
 
 -- Add test directories to package path
-package.path = package.path .. ";./tests/?.lua;./tests/unit/?.lua;./tests/integration/?.lua;./tests/mocks/?.lua"
+package.path = package.path .. ";./src/?.lua;./tests/?.lua;./tests/unit/?.lua;./tests/integration/?.lua;./tests/mocks/?.lua"
 
 -- Check if busted is installed
 local ok, busted = pcall(require, "busted")
