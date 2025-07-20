@@ -11,6 +11,9 @@ The game has been refactored from a monolithic 7,500+ line `main.lua` file into 
 ├── src/
 │   ├── constants.lua     # All game constants and magic numbers
 │   ├── statemanager.lua  # State machine for game states
+│   ├── player_control.lua  # Player input and movement
+│   ├── enemy_ai.lua        # Basic enemy behaviors
+│   ├── powerup_handler.lua # Powerup logic
 │   └── objectpool.lua    # Object pooling for performance
 └── states/
     ├── menu.lua          # Main menu state
@@ -21,6 +24,7 @@ The game has been refactored from a monolithic 7,500+ line `main.lua` file into 
     └── options.lua       # Options/settings state
 ```
 
+The playing state is now split into `src/player_control.lua`, `src/enemy_ai.lua` and `src/powerup_handler.lua`.
 ### 2. Key Improvements Implemented
 
 #### ✅ Modular Architecture
