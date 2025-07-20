@@ -57,6 +57,32 @@ A fast-paced endless runner space game built with Love2D where players dodge ast
 - Survive waves of enemies to trigger boss battles
 - Complete levels to unlock new environments and challenges
 
+## Debugging
+
+Press `~` during gameplay to toggle the debug console.  When the console is
+open you can execute commands to aid testing.  Pressing `~` again hides the
+console.  Use **F3** to show in‑game debug information and **F9** to toggle the
+overlay with performance graphs.
+
+### Console Commands
+
+- `state [name]` &ndash; switch to a different game state
+- `timescale <factor>` &ndash; speed up or slow down time
+- `stats` &ndash; print current performance statistics
+- `save [slot]` &ndash; save the game to a slot
+- `screenshot [file]` &ndash; take a screenshot
+- `reload [audio|settings|config|all]` &ndash; reload assets
+- `loglevel <level>` &ndash; change log verbosity
+- `showlog` &ndash; toggle the log overlay
+- `info` &ndash; display player details
+- `god` &ndash; toggle god mode
+- `give <score|lives|bombs|shield> [amount]` &ndash; grant resources
+- `spawn <asteroid|alien|powerup|boss> [count]` &ndash; spawn entities
+- `level <num>` &ndash; jump to a specific level
+- `clear` &ndash; remove all enemies
+- `sandbox [entity]` &ndash; show sandbox information
+- `profile` &ndash; start/stop profiling
+
 ## Development
 
 ### Running Tests
