@@ -84,7 +84,7 @@ function GameOverState:draw()
     end
     
     -- Menu options
-    local options = {"Restart Level", "Main Menu"}
+    local options = {"Restart Level", "Main Menu", "Leaderboard"}
     
     y = self.isNewHighScore and 420 or 400
     for i, option in ipairs(options) do
@@ -110,11 +110,11 @@ end
 function GameOverState:keypressed(key)
     if key == "up" then
         self.selection = self.selection - 1
-        if self.selection < 1 then self.selection = 2 end
+        if self.selection < 1 then self.selection = 3 end
         if menuSelectSound then menuSelectSound:play() end
     elseif key == "down" then
         self.selection = self.selection + 1
-        if self.selection > 2 then self.selection = 1 end
+        if self.selection > 3 then self.selection = 1 end
         if menuSelectSound then menuSelectSound:play() end
     elseif key == "return" or key == "space" then
         if menuConfirmSound then menuConfirmSound:play() end
@@ -124,10 +124,12 @@ function GameOverState:keypressed(key)
             currentLevel = self.levelReached
             gameState = "playing"
             stateManager:switch("playing")
-        else
+        elseif self.selection == 2 then
             -- Main Menu
             gameState = "menu"
             stateManager:switch("menu")
+        else
+            stateManager:switch("leaderboard", "menu")
         end
     end
 end

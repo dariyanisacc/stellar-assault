@@ -42,12 +42,18 @@ backgroundMusic = nil
 bossMusic = nil
 victorySound = nil
 
+-- Positional audio settings
+local soundReferenceDistance = 50
+local soundMaxDistance = 800
+
 -- Settings (persist across states)
 masterVolume = constants.audio.defaultMasterVolume
 sfxVolume = constants.audio.defaultSFXVolume
 musicVolume = constants.audio.defaultMusicVolume
 displayMode = "borderless"
 currentResolution = 1
+highContrast = false
+fontScale = 1
 
 -- Input tracking
 lastInputType = "keyboard"  -- Default to keyboard/mouse
@@ -165,6 +171,10 @@ function love.load()
     
     -- Initialize persistence system
     Persistence.init()
+    local psettings = Persistence.getSettings()
+    highContrast = psettings.highContrast or false
+    fontScale = psettings.fontScale or 1
+    applyFontScale()
     
     -- Initialize state manager
     stateManager = StateManager:new()
@@ -177,6 +187,7 @@ function love.load()
     stateManager:register("gameover", require("states.gameover"))
     stateManager:register("options", require("states.options"))
     stateManager:register("levelselect", require("states.levelselect"))
+    stateManager:register("leaderboard", require("states.leaderboard"))
     
     -- Initialize debug systems
     debugConsole = DebugConsole:new()
@@ -194,31 +205,44 @@ function love.load()
 end
 
 function loadAudio()
+    la.setDistanceModel("inverseclamped")
     -- Sound effects
     if lf.getInfo("laser.wav") then
         laserSound = la.newSource("laser.wav", "static")
         laserSound:setVolume(0.5)
+        laserSound:setRelative(true)
+        laserSound:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
     end
     
     if lf.getInfo("explosion.wav") then
         explosionSound = la.newSource("explosion.wav", "static")
         explosionSound:setVolume(0.7)
+        explosionSound:setRelative(true)
+        explosionSound:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
     end
     
     if lf.getInfo("powerup.wav") then
         powerupSound = la.newSource("powerup.wav", "static")
         powerupSound:setVolume(0.6)
+        powerupSound:setRelative(true)
+        powerupSound:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
     end
     
     if lf.getInfo("gameover.ogg") then
         gameOverSound = la.newSource("gameover.ogg", "static")
         gameOverSound:setVolume(0.8)
+        gameOverSound:setRelative(true)
+        gameOverSound:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
     end
     
     if lf.getInfo("menu.flac") then
         menuSelectSound = la.newSource("menu.flac", "static")
         menuSelectSound:setVolume(0.4)
         menuConfirmSound = menuSelectSound:clone()
+        menuSelectSound:setRelative(true)
+        menuConfirmSound:setRelative(true)
+        menuSelectSound:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
+        menuConfirmSound:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
     end
     
     -- Background music
@@ -227,6 +251,14 @@ function loadAudio()
         backgroundMusic:setLooping(true)
         backgroundMusic:setVolume(musicVolume * masterVolume)
     end
+end
+
+function applyFontScale()
+    titleFont = lg.newFont(48 * fontScale)
+    menuFont = lg.newFont(24 * fontScale)
+    uiFont = lg.newFont(18 * fontScale)
+    smallFont = lg.newFont(14 * fontScale)
+    mediumFont = lg.newFont(20 * fontScale)
 end
 
 function loadSettings()
@@ -260,8 +292,16 @@ function loadSettings()
                 end
             end
             
+            if #lines >= 7 then
+                highContrast = lines[7] == "true"
+            end
+            if #lines >= 8 then
+                fontScale = tonumber(lines[8]) or 1
+            end
+
             -- Apply audio settings
             updateAudioVolumes()
+            applyFontScale()
         end
     end
 end
@@ -272,9 +312,21 @@ function saveSettings()
                 masterVolume .. "\n" ..
                 sfxVolume .. "\n" ..
                 musicVolume .. "\n" ..
-                selectedShip
-    
+                selectedShip .. "\n" ..
+                tostring(highContrast) .. "\n" ..
+                fontScale
+
     lf.write("settings.dat", data)
+
+    Persistence.updateSettings({
+        masterVolume = masterVolume,
+        sfxVolume = sfxVolume,
+        musicVolume = musicVolume,
+        selectedShip = selectedShip,
+        displayMode = displayMode,
+        highContrast = highContrast,
+        fontScale = fontScale
+    })
 end
 
 function applyWindowMode()
@@ -348,6 +400,17 @@ function updateAudioVolumes()
     if backgroundMusic then
         backgroundMusic:setVolume(musicVolume * masterVolume)
     end
+end
+
+-- Play a sound at a given world position with distance-based attenuation
+function playPositionalSound(source, x, y)
+    if not source or not player then return end
+    local clone = source:clone()
+    local dx, dy = x - player.x, y - player.y
+    clone:setRelative(true)
+    clone:setPosition(dx, dy, 0)
+    clone:setVolume(source:getVolume())
+    clone:play()
 end
 
 -- Starfield background (shared across states)
