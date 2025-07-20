@@ -133,6 +133,9 @@ function PlayerControl.shoot(state)
         laser.speed = constants.laser.speed
         laser.isAlien = false
         table.insert(lasers, laser)
+        if state.laserGrid then
+            state.laserGrid:insert(laser)
+        end
 
         if spread > 0 then
             local leftLaser = state.laserPool:get()
@@ -143,6 +146,9 @@ function PlayerControl.shoot(state)
             leftLaser.vx = -math.sin(spread) * constants.laser.speed
             leftLaser.vy = -math.cos(spread) * constants.laser.speed
             table.insert(lasers, leftLaser)
+            if state.laserGrid then
+                state.laserGrid:insert(leftLaser)
+            end
 
             local rightLaser = state.laserPool:get()
             rightLaser.x = player.x
@@ -152,6 +158,9 @@ function PlayerControl.shoot(state)
             rightLaser.vx = math.sin(spread) * constants.laser.speed
             rightLaser.vy = -math.cos(spread) * constants.laser.speed
             table.insert(lasers, rightLaser)
+            if state.laserGrid then
+                state.laserGrid:insert(rightLaser)
+            end
         end
 
         local isWeaponPowerupActive = activePowerups.rapid or activePowerups.multiShot or activePowerups.spread
@@ -186,6 +195,9 @@ function PlayerControl.shoot(state)
             leftLaser.speed = constants.laser.speed
             leftLaser.isAlien = false
             table.insert(lasers, leftLaser)
+            if state.laserGrid then
+                state.laserGrid:insert(leftLaser)
+            end
 
             local rightLaser = state.laserPool:get()
             rightLaser.x = player.x + 15
@@ -193,6 +205,9 @@ function PlayerControl.shoot(state)
             rightLaser.speed = constants.laser.speed
             rightLaser.isAlien = false
             table.insert(lasers, rightLaser)
+            if state.laserGrid then
+                state.laserGrid:insert(rightLaser)
+            end
         end
     end
 end

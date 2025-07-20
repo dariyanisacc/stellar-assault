@@ -107,6 +107,9 @@ function PlayingState:leave()
     self.laserPool:releaseAll()
     self.explosionPool:releaseAll()
     self.particlePool:releaseAll()
+    if self.laserGrid then
+        self.laserGrid:clear()
+    end
 end
 
 function PlayingState:initializeGame()
@@ -178,6 +181,9 @@ function PlayingState:initializeGame()
     powerups = {}
     powerupTexts = {}
     activePowerups = {}
+
+    -- Spatial grid for lasers
+    self.laserGrid = SpatialHash:new(100)
     
     -- Boss
     boss = nil
@@ -364,8 +370,15 @@ function PlayingState:updateLasers(dt)
             laser.x = -laser.width
         end
         
+        if self.laserGrid then
+            self.laserGrid:update(laser)
+        end
+
         -- Remove if off screen (vertical only)
         if laser.y < -laser.height or laser.y > self.screenHeight + laser.height then
+            if self.laserGrid then
+                self.laserGrid:remove(laser)
+            end
             self.laserPool:release(laser)
             table.remove(lasers, i)
         end
@@ -589,12 +602,7 @@ function PlayingState:checkPlayerCollisions()
 end
 
 function PlayingState:checkLaserCollisions()
-    -- Build spatial grid of lasers for efficient queries
-    local grid = SpatialHash:new(100)
-    for _, laser in ipairs(lasers) do
-        laser._remove = false
-        grid:insert(laser)
-    end
+    local grid = self.laserGrid
 
     -- Check asteroids against nearby lasers
     for i = #asteroids, 1, -1 do
@@ -654,6 +662,9 @@ function PlayingState:checkLaserCollisions()
     for i = #lasers, 1, -1 do
         local l = lasers[i]
         if l._remove then
+            if self.laserGrid then
+                self.laserGrid:remove(l)
+            end
             self.laserPool:release(l)
             table.remove(lasers, i)
         end
