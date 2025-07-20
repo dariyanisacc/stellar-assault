@@ -245,6 +245,8 @@ function WaveManager:new(player)
     self.waveActive = false
     self.remainingToSpawn = 0
     self.enemiesSpawned = 0
+    self.playerPerformance = {killRate = 0, combo = 0}
+    self.difficultyMultiplier = 1
     self.waveCompleteCallback = nil
     self.enemyLasers = {}  -- Store enemy lasers
     self.shootCallback = nil  -- Callback for when enemy shoots
@@ -263,10 +265,10 @@ function WaveManager:startWave(waveNumber)
     local config = waveConfigs[configIndex]
     
     -- Scale difficulty for higher waves
-    local difficultyMultiplier = 1 + (self.waveNumber - 1) * 0.1
+    local waveScale = 1 + (self.waveNumber - 1) * 0.1
     
     self.waveActive = true
-    self.remainingToSpawn = math.floor(config.enemyCount * difficultyMultiplier)
+    self.remainingToSpawn = math.floor(config.enemyCount * waveScale)
     self.enemiesSpawned = 0
     self.currentWaveConfig = config
     self.spawnTimer = 0
@@ -312,7 +314,7 @@ function WaveManager:spawnEnemy()
     enemy.speed = enemyType.speed * (1 + self.waveNumber * 0.05)
     enemy.behavior = behaviors[enemyType.behavior] or behaviors.move_left
     enemy.behaviorName = enemyType.behavior
-    enemy.health = enemyType.health + math.floor(self.waveNumber / 5)
+    enemy.health = math.ceil((enemyType.health + math.floor(self.waveNumber / 5)) * self.difficultyMultiplier)
     enemy.maxHealth = enemy.health
     enemy.active = true
     enemy.behaviorState = {}
@@ -348,7 +350,8 @@ function WaveManager:update(dt)
         if self.spawnTimer <= 0 then
             self:spawnEnemy()
             self.remainingToSpawn = self.remainingToSpawn - 1
-            self.spawnTimer = self.spawnInterval / (1 + self.waveNumber * 0.1)
+            local interval = self.spawnInterval / ((1 + self.waveNumber * 0.1) * self.difficultyMultiplier)
+            self.spawnTimer = math.max(interval, 0.1)
         end
     end
     
@@ -540,6 +543,18 @@ end
 
 function WaveManager:setShootCallback(callback)
     self.shootCallback = callback
+end
+
+function WaveManager:setPlayerPerformance(perf)
+    self.playerPerformance = perf or self.playerPerformance
+    self:updateDifficulty()
+end
+
+function WaveManager:updateDifficulty()
+    local comboFactor = math.min((self.playerPerformance.combo or 0) / 10, 1)
+    local killFactor = math.min((self.playerPerformance.killRate or 0) / 2, 1)
+    local diff = 1 + (comboFactor + killFactor) * 0.5
+    self.difficultyMultiplier = math.min(diff, 2)
 end
 
 function WaveManager:updateLasers(dt)
