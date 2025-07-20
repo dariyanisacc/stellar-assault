@@ -117,9 +117,8 @@ function PlayerControl.shoot(state)
     if (not state.shootCooldown or state.shootCooldown <= 0) and player.overheatTimer <= 0 then
         if player.heat >= player.maxHeat then
             player.overheatTimer = player.overheatPenalty
-            if explosionSound then
-                explosionSound:stop()
-                explosionSound:play()
+            if explosionSound and playPositionalSound then
+                playPositionalSound(explosionSound, player.x, player.y)
             end
             return
         end
@@ -159,9 +158,8 @@ function PlayerControl.shoot(state)
             player.heat = math.min(player.maxHeat, player.heat + player.heatRate)
         end
 
-        if laserSound then
-            laserSound:stop()
-            laserSound:play()
+        if laserSound and playPositionalSound then
+            playPositionalSound(laserSound, player.x, player.y)
         end
 
         local baseCooldown

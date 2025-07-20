@@ -569,8 +569,10 @@ function PlayingState:checkPlayerCollisions()
                     enemy.active = false
                     table.remove(self.waveManager.enemies, i)
                     activePowerups.shield = nil
-                    if shieldBreakSound then
-                        shieldBreakSound:play()
+                    if shieldBreakSound and playPositionalSound then
+                        playPositionalSound(shieldBreakSound,
+                            enemy.x + enemy.width/2,
+                            enemy.y + enemy.height/2)
                     end
                 else
                     -- Player takes damage
@@ -627,8 +629,10 @@ function PlayingState:checkLaserCollisions()
             local enemySize = math.max(destroyedEnemy.width, destroyedEnemy.height)
             self:createExplosion(destroyedEnemy.x + destroyedEnemy.width/2,
                                destroyedEnemy.y + destroyedEnemy.height/2, enemySize)
-            if explosionSound then
-                explosionSound:clone():play()
+            if explosionSound and playPositionalSound then
+                playPositionalSound(explosionSound,
+                    destroyedEnemy.x + destroyedEnemy.width/2,
+                    destroyedEnemy.y + destroyedEnemy.height/2)
             end
             local enemyScore = 50 * currentLevel
             score = score + enemyScore
@@ -728,9 +732,8 @@ function PlayingState:checkPowerupCollisions()
                 self:showNewHighScoreNotification()
             end
             
-            if powerupSound then
-                powerupSound:stop()
-                powerupSound:play()
+            if powerupSound and playPositionalSound then
+                playPositionalSound(powerupSound, powerup.x, powerup.y)
             end
             
             -- Create floating text
@@ -1105,9 +1108,8 @@ function PlayingState:createExplosion(x, y, size)
         table.insert(explosions, particle)
     end
     
-    if explosionSound then
-        explosionSound:stop()
-        explosionSound:play()
+    if explosionSound and playPositionalSound then
+        playPositionalSound(explosionSound, x, y)
     end
 end
 
@@ -1153,7 +1155,9 @@ function PlayingState:playerHit()
         
         gameState = "gameOver"
         levelAtDeath = currentLevel
-        if gameOverSound then gameOverSound:play() end
+        if gameOverSound and playPositionalSound then
+            playPositionalSound(gameOverSound, player.x, player.y)
+        end
         if backgroundMusic then backgroundMusic:stop() end
         
         -- Switch to game over state with new high score flag
@@ -1211,8 +1215,8 @@ function PlayingState:screenBomb()
     -- Big camera shake for bomb
     self.camera:shake(0.5, 10)
     
-    if explosionSound then
-        explosionSound:play()
+    if explosionSound and playPositionalSound then
+        playPositionalSound(explosionSound, player.x, player.y)
     end
 end
 
@@ -1930,7 +1934,9 @@ function PlayingState:executeBossAttack(attackType, dt)
                 local angle = i * angleStep
                 self:createBossLaser(boss.x, boss.y + boss.size/2, angle)
             end
-            if laserSound then laserSound:play() end
+            if laserSound and playPositionalSound then
+                playPositionalSound(laserSound, boss.x, boss.y + boss.size/2)
+            end
         end
         if boss.attackTimer > 0.5 then
             self:endBossAttack(2)
@@ -2073,7 +2079,9 @@ function PlayingState:checkGameConditions()
         self:saveGameStats()
         
         gameState = "gameOver"
-        if victorySound then victorySound:play() end
+        if victorySound and playPositionalSound then
+            playPositionalSound(victorySound, player.x, player.y)
+        end
         if backgroundMusic then backgroundMusic:stop() end
         
         -- Switch to game over state with new high score flag
@@ -2119,9 +2127,8 @@ function PlayingState:showNewHighScoreNotification()
     })
     
     -- Play a special sound if available
-    if powerupSound then
-        powerupSound:stop()
-        powerupSound:play()
+    if powerupSound and playPositionalSound then
+        playPositionalSound(powerupSound, self.screenWidth / 2, 200)
     end
 end
 
