@@ -128,7 +128,7 @@ end
 
 function MenuState:drawMainMenu()
     lg.setFont(menuFont or lg.newFont(24))
-    local options = {"Start Game", "Level Select", "Select Ship", "Options", "Quit"}
+    local options = {"Start Game", "Level Select", "Select Ship", "Leaderboard", "Options", "Quit"}
     
     for i, option in ipairs(options) do
         if i == self.selection then
@@ -308,11 +308,11 @@ end
 function MenuState:handleMainMenuInput(key)
     if key == "up" then
         self.selection = self.selection - 1
-        if self.selection < 1 then self.selection = 5 end
+        if self.selection < 1 then self.selection = 6 end
         if menuSelectSound then menuSelectSound:play() end
     elseif key == "down" then
         self.selection = self.selection + 1
-        if self.selection > 5 then self.selection = 1 end
+        if self.selection > 6 then self.selection = 1 end
         if menuSelectSound then menuSelectSound:play() end
     elseif key == "return" or key == "space" then
         if menuConfirmSound then menuConfirmSound:play() end
@@ -335,8 +335,10 @@ function MenuState:handleMainMenuInput(key)
                 end
             end
         elseif self.selection == 4 then
-            stateManager:switch("options")
+            stateManager:switch("leaderboard", "menu")
         elseif self.selection == 5 then
+            stateManager:switch("options")
+        elseif self.selection == 6 then
             love.event.quit()
         end
     end

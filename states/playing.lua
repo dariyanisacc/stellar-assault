@@ -2115,7 +2115,7 @@ end
 function PlayingState:saveGameStats()
     -- Update high score
     if Persistence then
-        local isNewHighScore = Persistence.setHighScore(score)
+        local isNewHighScore = Persistence.setHighScore(score, "Player")
         
         -- Update statistics
         local sessionTime = love.timer.getTime() - self.sessionStartTime

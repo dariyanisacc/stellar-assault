@@ -187,6 +187,7 @@ function love.load()
     stateManager:register("gameover", require("states.gameover"))
     stateManager:register("options", require("states.options"))
     stateManager:register("levelselect", require("states.levelselect"))
+    stateManager:register("leaderboard", require("states.leaderboard"))
     
     -- Initialize debug systems
     debugConsole = DebugConsole:new()
