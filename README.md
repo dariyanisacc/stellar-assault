@@ -123,6 +123,7 @@ busted --coverage
 - `main.lua` - Main game logic and Love2D callbacks
 - `CLAUDE.md` - Development guidelines and architecture notes
 - `tests/` - Unit and integration tests
+- `src/objectpool.lua` - Defines object pools including new trail and debris pools
 - Audio files (`.mp3`, `.wav`, `.ogg`, `.flac`) - Sound effects and music
 
 ## License
