@@ -16,6 +16,7 @@ A fast-paced endless runner space game built with Love2D where players dodge ast
   - Boss battles at level milestones (levels 5, 10, 15, etc.)
   - Power-up system (triple shot, rapid fire, shields, time slow)
   - Combo system for chaining enemy defeats
+  - Object pools recycle lasers, particles, debris and trails for smoother performance
   - Local high score tracking
 
 - **Variety of Enemies**:
