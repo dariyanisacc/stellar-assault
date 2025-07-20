@@ -62,6 +62,9 @@ behaviors.move_to_player = function(enemy, dt, player)
     return behaviors.move_to_player
 end
 
+-- Alias for clarity
+behaviors.homing = behaviors.move_to_player
+
 behaviors.dive_attack = function(enemy, dt, player)
     enemy.behaviorState.time = (enemy.behaviorState.time or 0) + dt
     
@@ -198,7 +201,7 @@ local waveConfigs = {
         enemyCount = 8,
         enemyTypes = {
             {behavior = "move_left", speed = 120, health = 1, weight = 0.7, canShoot = true, shootInterval = 3.0},
-            {behavior = "move_to_player", speed = 80, health = 2, weight = 0.3, canShoot = false}
+            {behavior = "homing", speed = 80, health = 2, weight = 0.3, canShoot = false}
         }
     },
     {
@@ -207,7 +210,7 @@ local waveConfigs = {
         enemyTypes = {
             {behavior = "move_left", speed = 130, health = 1, weight = 0.5, canShoot = true, shootInterval = 2.5},
             {behavior = "dive_attack", speed = 100, health = 2, weight = 0.3, canShoot = false},
-            {behavior = "move_to_player", speed = 90, health = 2, weight = 0.2, canShoot = true, shootInterval = 2.0}
+            {behavior = "homing", speed = 90, health = 2, weight = 0.2, canShoot = true, shootInterval = 2.0}
         }
     },
     {
@@ -216,7 +219,7 @@ local waveConfigs = {
         enemyTypes = {
             {behavior = "formation", speed = 100, health = 2, weight = 0.5, canShoot = true, shootInterval = 2.0},
             {behavior = "zigzag", speed = 120, health = 1, weight = 0.3, canShoot = false},
-            {behavior = "move_to_player", speed = 100, health = 3, weight = 0.2, canShoot = true, shootInterval = 1.5}
+            {behavior = "homing", speed = 100, health = 3, weight = 0.2, canShoot = true, shootInterval = 1.5}
         }
     },
     {
@@ -226,7 +229,7 @@ local waveConfigs = {
             {behavior = "spiral", speed = 110, health = 2, weight = 0.3, canShoot = true, shootInterval = 1.8},
             {behavior = "strafe", speed = 100, health = 2, weight = 0.3, canShoot = true, shootInterval = 1.0},
             {behavior = "kamikaze", speed = 80, health = 3, weight = 0.2, canShoot = false, maxHealth = 3},
-            {behavior = "move_to_player", speed = 100, health = 2, weight = 0.2, canShoot = true, shootInterval = 1.5}
+            {behavior = "homing", speed = 100, health = 2, weight = 0.2, canShoot = true, shootInterval = 1.5}
         }
     }
 }
@@ -390,7 +393,7 @@ function WaveManager:draw()
         -- Get appropriate sprite based on behavior
         local sprite = nil
         if enemyShips then
-            if enemy.behaviorName == "move_to_player" then
+            if enemy.behaviorName == "homing" or enemy.behaviorName == "move_to_player" then
                 sprite = enemyShips.homing
             elseif enemy.behaviorName == "dive_attack" then
                 sprite = enemyShips.dive
@@ -414,7 +417,7 @@ function WaveManager:draw()
                               0, scaleX, scaleY, sprite:getWidth()/2, sprite:getHeight()/2)
         else
             -- Fallback to colored rectangles if sprites not loaded
-            if enemy.behaviorName == "move_to_player" then
+            if enemy.behaviorName == "homing" or enemy.behaviorName == "move_to_player" then
                 love.graphics.setColor(1, 0.5, 0.5) -- Reddish for homing enemies
             elseif enemy.behaviorName == "dive_attack" then
                 love.graphics.setColor(1, 1, 0.5) -- Yellowish for dive attackers
@@ -511,7 +514,7 @@ function WaveManager:enemyShoot(enemy)
     }
     
     -- Set laser velocity based on enemy type
-    if enemy.behaviorName == "move_to_player" then
+    if enemy.behaviorName == "homing" or enemy.behaviorName == "move_to_player" then
         -- Homing enemies shoot directly at player
         if dist > 0 then
             laser.vx = (dx / dist) * laser.speed
