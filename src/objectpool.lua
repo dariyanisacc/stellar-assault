@@ -150,4 +150,74 @@ function ObjectPool.createParticlePool()
     return ObjectPool:new(createParticle, resetParticle, 500)
 end
 
+-- Trail Particle Pool
+function ObjectPool.createTrailPool()
+    local function createTrail()
+        return {
+            x = 0,
+            y = 0,
+            vx = 0,
+            vy = 0,
+            life = 0,
+            maxLife = 0,
+            size = 1,
+            color = {1, 1, 1},
+            type = "trail",
+            pool = nil
+        }
+    end
+
+    local function resetTrail(trail)
+        trail.x = 0
+        trail.y = 0
+        trail.vx = 0
+        trail.vy = 0
+        trail.life = 0
+        trail.maxLife = 0
+        trail.size = 1
+        trail.color = {1, 1, 1}
+        trail.type = "trail"
+        trail.pool = nil
+    end
+
+    return ObjectPool:new(createTrail, resetTrail, 300)
+end
+
+-- Debris Particle Pool
+function ObjectPool.createDebrisPool()
+    local function createDebris()
+        return {
+            x = 0,
+            y = 0,
+            vx = 0,
+            vy = 0,
+            life = 0,
+            maxLife = 0,
+            size = 1,
+            rotation = 0,
+            rotationSpeed = 0,
+            color = {1, 1, 1},
+            type = "debris",
+            pool = nil
+        }
+    end
+
+    local function resetDebris(debris)
+        debris.x = 0
+        debris.y = 0
+        debris.vx = 0
+        debris.vy = 0
+        debris.life = 0
+        debris.maxLife = 0
+        debris.size = 1
+        debris.rotation = 0
+        debris.rotationSpeed = 0
+        debris.color = {1, 1, 1}
+        debris.type = "debris"
+        debris.pool = nil
+    end
+
+    return ObjectPool:new(createDebris, resetDebris, 300)
+end
+
 return ObjectPool

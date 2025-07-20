@@ -50,6 +50,8 @@ function PlayingState:enter(params)
     self.laserPool = ObjectPool.createLaserPool()
     self.explosionPool = ObjectPool.createExplosionPool()
     self.particlePool = ObjectPool.createParticlePool()
+    self.trailPool = ObjectPool.createTrailPool()
+    self.debrisPool = ObjectPool.createDebrisPool()
 
     -- Boss manager handles boss lifecycle
     self.bossManager = BossManager:new()
@@ -107,6 +109,8 @@ function PlayingState:leave()
     self.laserPool:releaseAll()
     self.explosionPool:releaseAll()
     self.particlePool:releaseAll()
+    self.trailPool:releaseAll()
+    self.debrisPool:releaseAll()
 end
 
 function PlayingState:initializeGame()
@@ -401,10 +405,12 @@ function PlayingState:updateExplosions(dt)
     if #explosions > maxExplosions then
         -- Remove oldest explosions/particles
         for i = 1, #explosions - maxExplosions do
-            if explosions[1].vx then
-                self.particlePool:release(explosions[1])
+            local obj = explosions[1]
+            if obj.vx then
+                local pool = obj.pool or self.particlePool
+                pool:release(obj)
             else
-                self.explosionPool:release(explosions[1])
+                self.explosionPool:release(obj)
             end
             table.remove(explosions, 1)
         end
@@ -436,7 +442,8 @@ function PlayingState:updateExplosions(dt)
             end
             
             if explosion.life <= 0 then
-                self.particlePool:release(explosion)
+                local pool = explosion.pool or self.particlePool
+                pool:release(explosion)
                 table.remove(explosions, i)
             end
         else
@@ -1054,6 +1061,7 @@ function PlayingState:createExplosion(x, y, size)
             random(0, 0.3),
             1
         }
+        particle.pool = self.particlePool
         table.insert(explosions, particle)
     end
     
@@ -1062,7 +1070,7 @@ function PlayingState:createExplosion(x, y, size)
     for i = 1, debrisCount do
         local angle = random() * pi * 2
         local speed = random(50, 150)
-        local particle = self.particlePool:get()
+        local particle = self.debrisPool:get()
         particle.x = x + random(-5, 5)
         particle.y = y + random(-5, 5)
         particle.vx = cos(angle) * speed
@@ -1073,6 +1081,7 @@ function PlayingState:createExplosion(x, y, size)
         particle.rotation = random() * pi * 2
         particle.rotationSpeed = (random() - 0.5) * 5
         particle.isDebris = true  -- Mark as debris for special rendering
+        particle.pool = self.debrisPool
         particle.color = {
             random(0.4, 0.7),  -- Grayish colors for rock debris
             random(0.4, 0.7),
@@ -1102,6 +1111,7 @@ function PlayingState:createExplosion(x, y, size)
             random(0, 0.5),
             1
         }
+        particle.pool = self.particlePool
         table.insert(explosions, particle)
     end
     
@@ -1126,6 +1136,7 @@ function PlayingState:createHitEffect(x, y)
         particle.size = 2
         particle.color = {1, 1, 0, 1}  -- Yellow sparks
         particle.type = "spark"  -- Mark as spark for special rendering if needed
+        particle.pool = self.particlePool
         table.insert(explosions, particle)
     end
 end
@@ -1536,12 +1547,36 @@ function PlayingState:drawLasers()
         end
         lg.rectangle("fill", laser.x - laser.width/2, laser.y - laser.height/2,
                      laser.width, laser.height)
+        -- Emit trail particle
+        local t = self.trailPool:get()
+        t.x = laser.x
+        t.y = laser.y + laser.height / 2
+        t.vx = 0
+        t.vy = 30
+        t.life = 0.3
+        t.maxLife = 0.3
+        t.size = 2
+        t.color = {1, 1, 1, 1}
+        t.pool = self.trailPool
+        table.insert(explosions, t)
     end
     
     for _, laser in ipairs(alienLasers) do
         lg.setColor(constants.laser.alienColor)
         lg.rectangle("fill", laser.x - laser.width/2, laser.y - laser.height/2,
                      laser.width, laser.height)
+        -- Emit trail particle for alien lasers
+        local t = self.trailPool:get()
+        t.x = laser.x
+        t.y = laser.y - laser.height / 2
+        t.vx = 0
+        t.vy = -30
+        t.life = 0.3
+        t.maxLife = 0.3
+        t.size = 2
+        t.color = {1, 0, 0, 1}
+        t.pool = self.trailPool
+        table.insert(explosions, t)
     end
 end
 
@@ -1581,6 +1616,25 @@ function PlayingState:drawExplosions()
             lg.setColor(1, 1, 0, explosion.alpha * 0.5)
             lg.circle("fill", explosion.x, explosion.y, explosion.radius * 0.7)
             lg.setLineWidth(1)
+
+            if explosion.alpha > 0.5 then
+                local d = self.debrisPool:get()
+                local ang = random() * pi * 2
+                local speed = random(30, 60)
+                d.x = explosion.x
+                d.y = explosion.y
+                d.vx = cos(ang) * speed
+                d.vy = sin(ang) * speed
+                d.life = 0.5
+                d.maxLife = 0.5
+                d.size = 2
+                d.rotation = random() * pi * 2
+                d.rotationSpeed = (random() - 0.5) * 5
+                d.isDebris = true
+                d.color = {1, random(0.5, 1), 0}
+                d.pool = self.debrisPool
+                table.insert(explosions, d)
+            end
         end
     end
 end
