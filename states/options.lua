@@ -2,6 +2,7 @@
 local constants = require("src.constants")
 local lg = love.graphics
 local lw = love.window
+local Persistence = require("src.persistence")
 
 local OptionsState = {}
 
@@ -33,6 +34,11 @@ function OptionsState:enter()
     
     -- New: Display mode options as list
     self.displayModes = {"windowed", "fullscreen", "borderless"}
+    self.fontSizeOptions = {
+        {label = "Small", scale = 0.8},
+        {label = "Normal", scale = 1.0},
+        {label = "Large", scale = 1.3}
+    }
     
     -- Find current index (default to 3 for borderless if not set)
     local dmValue = 3  -- Default to borderless
@@ -43,13 +49,24 @@ function OptionsState:enter()
         end
     end
     
+    local settings = Persistence.getSettings()
+    local fontIndex = 2
+    for i, opt in ipairs(self.fontSizeOptions) do
+        if math.abs(opt.scale - (settings.fontScale or 1)) < 0.01 then
+            fontIndex = i
+            break
+        end
+    end
+
     -- Menu items (change Display Mode to list type)
     self.menuItems = {
         {name = "Resolution", type = "list", value = currentResolution or 1},
-        {name = "Display Mode", type = "list", value = dmValue},  -- Changed from toggle
+        {name = "Display Mode", type = "list", value = dmValue},
         {name = "Master Volume", type = "slider", value = masterVolume or 1.0},
         {name = "SFX Volume", type = "slider", value = sfxVolume or 1.0},
         {name = "Music Volume", type = "slider", value = musicVolume or 0.2},
+        {name = "High Contrast", type = "toggle", value = settings.highContrast or false},
+        {name = "Font Size", type = "list", value = fontIndex},
         {name = "Controls", type = "button"},
         {name = "Apply", type = "button"},
         {name = "Back", type = "button"}
@@ -135,7 +152,11 @@ function OptionsState:draw()
     
     -- Title
     lg.setFont(titleFont or lg.newFont(48))
-    lg.setColor(0, 1, 1)
+    if highContrast then
+        lg.setColor(1, 1, 1)
+    else
+        lg.setColor(0, 1, 1)
+    end
     local title = "OPTIONS"
     local titleWidth = lg.getFont():getWidth(title)
     lg.print(title, self.screenWidth/2 - titleWidth/2, 80)
@@ -148,9 +169,17 @@ function OptionsState:draw()
         local isSelected = i == self.selection
         
         if isSelected then
-            lg.setColor(1, 1, 0)
+            if highContrast then
+                lg.setColor(1, 0, 0)
+            else
+                lg.setColor(1, 1, 0)
+            end
         else
-            lg.setColor(0.7, 0.7, 0.7)
+            if highContrast then
+                lg.setColor(1, 1, 1)
+            else
+                lg.setColor(0.7, 0.7, 0.7)
+            end
         end
         
         local text = item.name
@@ -159,10 +188,14 @@ function OptionsState:draw()
             if item.name == "Resolution" then
                 text = text .. ": " .. self.resolutions[item.value].name
             elseif item.name == "Display Mode" then
-                text = text .. ": " .. self.displayModes[item.value]:gsub("^%l", string.upper)  -- e.g., "Borderless"
+                text = text .. ": " .. self.displayModes[item.value]:gsub("^%l", string.upper)
+            elseif item.name == "Font Size" then
+                text = text .. ": " .. self.fontSizeOptions[item.value].label
             end
         elseif item.type == "slider" then
             text = text .. ": " .. math.floor(item.value * 100) .. "%"
+        elseif item.type == "toggle" then
+            text = text .. ": " .. (item.value and "On" or "Off")
         end
         
         local textWidth = lg.getFont():getWidth(text)
@@ -195,7 +228,11 @@ function OptionsState:draw()
     
     -- Instructions
     lg.setFont(smallFont or lg.newFont(14))
-    lg.setColor(0.5, 0.5, 0.5)
+    if highContrast then
+        lg.setColor(1, 1, 1)
+    else
+        lg.setColor(0.5, 0.5, 0.5)
+    end
     local nav = inputHints[lastInputType].navigate or "Arrow Keys"
     local select = inputHints[lastInputType].select or "Enter"
     local adjust = lastInputType == "gamepad" and "Left/Right Stick" or "Left/Right"
@@ -223,14 +260,12 @@ function OptionsState:keypressed(key)
         if menuSelectSound then menuSelectSound:play() end
     elseif key == "left" then
         self.keys.left = true
-        -- Instant adjustment for list types
-        if item.type == "list" then
+        if item.type == "list" or item.type == "toggle" then
             self:adjustValue(-1)
         end
     elseif key == "right" then
         self.keys.right = true
-        -- Instant adjustment for list types
-        if item.type == "list" then
+        if item.type == "list" or item.type == "toggle" then
             self:adjustValue(1)
         end
     elseif key == "return" or key == "space" then
@@ -247,6 +282,8 @@ function OptionsState:keypressed(key)
                 self.controlsSelection = 1
                 self:setupControlsMenu()
             end
+        elseif item.type == "toggle" or item.type == "list" then
+            self:adjustValue(1)
         end
     elseif key == "escape" then
         stateManager:switch("menu")
@@ -266,10 +303,26 @@ function OptionsState:adjustValue(direction)
     
     if item.type == "list" then
         item.value = item.value + direction
-        local maxValue = (item.name == "Resolution") and #self.resolutions or #self.displayModes
+        local maxValue
+        if item.name == "Resolution" then
+            maxValue = #self.resolutions
+        elseif item.name == "Display Mode" then
+            maxValue = #self.displayModes
+        elseif item.name == "Font Size" then
+            maxValue = #self.fontSizeOptions
+        end
         if item.value < 1 then item.value = maxValue end
         if item.value > maxValue then item.value = 1 end
+        if item.name == "Font Size" then
+            fontScale = self.fontSizeOptions[item.value].scale
+            applyFontScale()
+        end
         if menuSelectSound then menuSelectSound:play() end
+    elseif item.type == "toggle" then
+        item.value = not item.value
+        if item.name == "High Contrast" then
+            highContrast = item.value
+        end
     elseif item.type == "slider" then
         -- For continuous adjustment, direction is already scaled by dt
         if math.abs(direction) < 1 then
@@ -347,9 +400,19 @@ function OptionsState:applySettings()
     if initStarfield then
         initStarfield()
     end
-    
+
+    local hcItem = self.menuItems[6]
+    local fsItem = self.menuItems[7]
+    highContrast = hcItem.value
+    fontScale = self.fontSizeOptions[fsItem.value].scale
+    applyFontScale()
+
     -- Save settings
     saveSettings()
+    Persistence.updateSettings({
+        highContrast = highContrast,
+        fontScale = fontScale
+    })
 end
 
 -- Controls menu functions
@@ -366,11 +429,13 @@ function OptionsState:setupControlsMenu()
         {name = "Shoot", type = "key", action = "shoot", value = controls.keyboard.shoot},
         {name = "Boost", type = "key", action = "boost", value = controls.keyboard.boost},
         {name = "Bomb", type = "key", action = "bomb", value = controls.keyboard.bomb},
+        {name = "Pause", type = "key", action = "pause", value = controls.keyboard.pause},
         {name = "", type = "spacer"},
         {name = "Gamepad Controls", type = "header"},
         {name = "Shoot", type = "gamepad", action = "shoot", value = controls.gamepad.shoot},
         {name = "Bomb", type = "gamepad", action = "bomb", value = controls.gamepad.bomb},
         {name = "Boost", type = "gamepad", action = "boost", value = controls.gamepad.boost},
+        {name = "Pause", type = "gamepad", action = "pause", value = controls.gamepad.pause},
         {name = "", type = "spacer"},
         {name = "Reset to Defaults", type = "button"},
         {name = "Back", type = "button"}
@@ -380,7 +445,11 @@ end
 function OptionsState:drawControlsMenu()
     -- Title
     lg.setFont(titleFont or lg.newFont(48))
-    lg.setColor(0, 1, 1)
+    if highContrast then
+        lg.setColor(1, 1, 1)
+    else
+        lg.setColor(0, 1, 1)
+    end
     local title = "CONTROLS"
     local titleWidth = lg.getFont():getWidth(title)
     lg.print(title, self.screenWidth/2 - titleWidth/2, 50)
@@ -422,9 +491,17 @@ function OptionsState:drawControlsMenu()
             lg.setFont(uiFont or lg.newFont(18))
             
             if isSelected then
-                lg.setColor(1, 1, 0)
+                if highContrast then
+                    lg.setColor(1, 0, 0)
+                else
+                    lg.setColor(1, 1, 0)
+                end
             else
-                lg.setColor(0.7, 0.7, 0.7)
+                if highContrast then
+                    lg.setColor(1, 1, 1)
+                else
+                    lg.setColor(0.7, 0.7, 0.7)
+                end
             end
             
             local text = item.name
@@ -441,7 +518,11 @@ function OptionsState:drawControlsMenu()
     
     -- Instructions
     lg.setFont(smallFont or lg.newFont(14))
-    lg.setColor(0.5, 0.5, 0.5)
+    if highContrast then
+        lg.setColor(1, 1, 1)
+    else
+        lg.setColor(0.5, 0.5, 0.5)
+    end
     local nav = inputHints[lastInputType].navigate or "Arrow Keys"
     local remap = inputHints[lastInputType].action or "Enter"
     local back = inputHints[lastInputType].back or "ESC"

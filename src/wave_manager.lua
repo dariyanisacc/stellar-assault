@@ -62,6 +62,9 @@ behaviors.move_to_player = function(enemy, dt, player)
     return behaviors.move_to_player
 end
 
+-- Alias for clarity
+behaviors.homing = behaviors.move_to_player
+
 behaviors.dive_attack = function(enemy, dt, player)
     enemy.behaviorState.time = (enemy.behaviorState.time or 0) + dt
     
@@ -198,7 +201,7 @@ local waveConfigs = {
         enemyCount = 8,
         enemyTypes = {
             {behavior = "move_left", speed = 120, health = 1, weight = 0.7, canShoot = true, shootInterval = 3.0},
-            {behavior = "move_to_player", speed = 80, health = 2, weight = 0.3, canShoot = false}
+            {behavior = "homing", speed = 80, health = 2, weight = 0.3, canShoot = false}
         }
     },
     {
@@ -207,7 +210,7 @@ local waveConfigs = {
         enemyTypes = {
             {behavior = "move_left", speed = 130, health = 1, weight = 0.5, canShoot = true, shootInterval = 2.5},
             {behavior = "dive_attack", speed = 100, health = 2, weight = 0.3, canShoot = false},
-            {behavior = "move_to_player", speed = 90, health = 2, weight = 0.2, canShoot = true, shootInterval = 2.0}
+            {behavior = "homing", speed = 90, health = 2, weight = 0.2, canShoot = true, shootInterval = 2.0}
         }
     },
     {
@@ -216,7 +219,7 @@ local waveConfigs = {
         enemyTypes = {
             {behavior = "formation", speed = 100, health = 2, weight = 0.5, canShoot = true, shootInterval = 2.0},
             {behavior = "zigzag", speed = 120, health = 1, weight = 0.3, canShoot = false},
-            {behavior = "move_to_player", speed = 100, health = 3, weight = 0.2, canShoot = true, shootInterval = 1.5}
+            {behavior = "homing", speed = 100, health = 3, weight = 0.2, canShoot = true, shootInterval = 1.5}
         }
     },
     {
@@ -226,7 +229,7 @@ local waveConfigs = {
             {behavior = "spiral", speed = 110, health = 2, weight = 0.3, canShoot = true, shootInterval = 1.8},
             {behavior = "strafe", speed = 100, health = 2, weight = 0.3, canShoot = true, shootInterval = 1.0},
             {behavior = "kamikaze", speed = 80, health = 3, weight = 0.2, canShoot = false, maxHealth = 3},
-            {behavior = "move_to_player", speed = 100, health = 2, weight = 0.2, canShoot = true, shootInterval = 1.5}
+            {behavior = "homing", speed = 100, health = 2, weight = 0.2, canShoot = true, shootInterval = 1.5}
         }
     }
 }
@@ -242,6 +245,8 @@ function WaveManager:new(player)
     self.waveActive = false
     self.remainingToSpawn = 0
     self.enemiesSpawned = 0
+    self.playerPerformance = {killRate = 0, combo = 0}
+    self.difficultyMultiplier = 1
     self.waveCompleteCallback = nil
     self.enemyLasers = {}  -- Store enemy lasers
     self.shootCallback = nil  -- Callback for when enemy shoots
@@ -260,10 +265,10 @@ function WaveManager:startWave(waveNumber)
     local config = waveConfigs[configIndex]
     
     -- Scale difficulty for higher waves
-    local difficultyMultiplier = 1 + (self.waveNumber - 1) * 0.1
+    local waveScale = 1 + (self.waveNumber - 1) * 0.1
     
     self.waveActive = true
-    self.remainingToSpawn = math.floor(config.enemyCount * difficultyMultiplier)
+    self.remainingToSpawn = math.floor(config.enemyCount * waveScale)
     self.enemiesSpawned = 0
     self.currentWaveConfig = config
     self.spawnTimer = 0
@@ -309,7 +314,7 @@ function WaveManager:spawnEnemy()
     enemy.speed = enemyType.speed * (1 + self.waveNumber * 0.05)
     enemy.behavior = behaviors[enemyType.behavior] or behaviors.move_left
     enemy.behaviorName = enemyType.behavior
-    enemy.health = enemyType.health + math.floor(self.waveNumber / 5)
+    enemy.health = math.ceil((enemyType.health + math.floor(self.waveNumber / 5)) * self.difficultyMultiplier)
     enemy.maxHealth = enemy.health
     enemy.active = true
     enemy.behaviorState = {}
@@ -345,7 +350,8 @@ function WaveManager:update(dt)
         if self.spawnTimer <= 0 then
             self:spawnEnemy()
             self.remainingToSpawn = self.remainingToSpawn - 1
-            self.spawnTimer = self.spawnInterval / (1 + self.waveNumber * 0.1)
+            local interval = self.spawnInterval / ((1 + self.waveNumber * 0.1) * self.difficultyMultiplier)
+            self.spawnTimer = math.max(interval, 0.1)
         end
     end
     
@@ -390,7 +396,7 @@ function WaveManager:draw()
         -- Get appropriate sprite based on behavior
         local sprite = nil
         if enemyShips then
-            if enemy.behaviorName == "move_to_player" then
+            if enemy.behaviorName == "homing" or enemy.behaviorName == "move_to_player" then
                 sprite = enemyShips.homing
             elseif enemy.behaviorName == "dive_attack" then
                 sprite = enemyShips.dive
@@ -414,7 +420,7 @@ function WaveManager:draw()
                               0, scaleX, scaleY, sprite:getWidth()/2, sprite:getHeight()/2)
         else
             -- Fallback to colored rectangles if sprites not loaded
-            if enemy.behaviorName == "move_to_player" then
+            if enemy.behaviorName == "homing" or enemy.behaviorName == "move_to_player" then
                 love.graphics.setColor(1, 0.5, 0.5) -- Reddish for homing enemies
             elseif enemy.behaviorName == "dive_attack" then
                 love.graphics.setColor(1, 1, 0.5) -- Yellowish for dive attackers
@@ -511,7 +517,7 @@ function WaveManager:enemyShoot(enemy)
     }
     
     -- Set laser velocity based on enemy type
-    if enemy.behaviorName == "move_to_player" then
+    if enemy.behaviorName == "homing" or enemy.behaviorName == "move_to_player" then
         -- Homing enemies shoot directly at player
         if dist > 0 then
             laser.vx = (dx / dist) * laser.speed
@@ -537,6 +543,18 @@ end
 
 function WaveManager:setShootCallback(callback)
     self.shootCallback = callback
+end
+
+function WaveManager:setPlayerPerformance(perf)
+    self.playerPerformance = perf or self.playerPerformance
+    self:updateDifficulty()
+end
+
+function WaveManager:updateDifficulty()
+    local comboFactor = math.min((self.playerPerformance.combo or 0) / 10, 1)
+    local killFactor = math.min((self.playerPerformance.killRate or 0) / 2, 1)
+    local diff = 1 + (comboFactor + killFactor) * 0.5
+    self.difficultyMultiplier = math.min(diff, 2)
 end
 
 function WaveManager:updateLasers(dt)

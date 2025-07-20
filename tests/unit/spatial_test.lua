@@ -27,4 +27,27 @@ describe("SpatialHash", function()
         local near = grid:getNearby(a)
         assert.is_false(contains(near, c))
     end)
+
+    it("removes entities correctly", function()
+        local grid = SpatialHash:new(50)
+        local a = {x=10, y=10, size=10}
+        local b = {x=20, y=20, size=10}
+        grid:insert(a)
+        grid:insert(b)
+        grid:remove(b)
+        local near = grid:getNearby(a)
+        assert.is_false(contains(near, b))
+    end)
+
+    it("updates moved entities", function()
+        local grid = SpatialHash:new(50)
+        local a = {x=10, y=10, size=10}
+        grid:insert(a)
+        a.x, a.y = 120, 120
+        grid:update(a)
+        local nearOld = grid:getNearby({x=10, y=10, size=10})
+        local nearNew = grid:getNearby({x=120, y=120, size=10})
+        assert.is_false(contains(nearOld, a))
+        assert.is_true(contains(nearNew, a))
+    end)
 end)

@@ -86,6 +86,7 @@ function PlayingState:enter(params)
     -- Track statistics
     self.sessionStartTime = love.timer.getTime()
     self.sessionEnemiesDefeated = 0
+    self.performanceMetrics = {killRate = 0, combo = 0, maxCombo = 0}
     
     -- New high score tracking
     self.newHighScore = false
@@ -111,6 +112,9 @@ function PlayingState:leave()
     self.particlePool:releaseAll()
     self.trailPool:releaseAll()
     self.debrisPool:releaseAll()
+    if self.laserGrid then
+        self.laserGrid:clear()
+    end
 end
 
 function PlayingState:initializeGame()
@@ -182,6 +186,9 @@ function PlayingState:initializeGame()
     powerups = {}
     powerupTexts = {}
     activePowerups = {}
+
+    -- Spatial grid for lasers
+    self.laserGrid = SpatialHash:new(100)
     
     -- Boss
     boss = nil
@@ -315,7 +322,13 @@ function PlayingState:update(dt)
     
     -- Check collisions
     self:checkCollisions()
-    
+
+    -- Update performance metrics for dynamic difficulty
+    self:updatePerformanceMetrics()
+    if self.waveManager then
+        self.waveManager:setPlayerPerformance(self.performanceMetrics)
+    end
+
     -- Check win/lose conditions
     self:checkGameConditions()
 end
@@ -368,8 +381,15 @@ function PlayingState:updateLasers(dt)
             laser.x = -laser.width
         end
         
+        if self.laserGrid then
+            self.laserGrid:update(laser)
+        end
+
         -- Remove if off screen (vertical only)
         if laser.y < -laser.height or laser.y > self.screenHeight + laser.height then
+            if self.laserGrid then
+                self.laserGrid:remove(laser)
+            end
             self.laserPool:release(laser)
             table.remove(lasers, i)
         end
@@ -489,7 +509,9 @@ function PlayingState:spawnAsteroid()
 end
 
 function PlayingState:spawnAlien()
-    EnemyAI.spawnAlien(self)
+    local choices = {nil, "homing", "zigzag"}
+    local behavior = choices[love.math.random(#choices)]
+    EnemyAI.spawnAlien(self, behavior)
 end
 
 function PlayingState:spawnPowerup(x, y)
@@ -583,8 +605,10 @@ function PlayingState:checkPlayerCollisions()
                     enemy.active = false
                     table.remove(self.waveManager.enemies, i)
                     activePowerups.shield = nil
-                    if shieldBreakSound then
-                        shieldBreakSound:play()
+                    if shieldBreakSound and playPositionalSound then
+                        playPositionalSound(shieldBreakSound,
+                            enemy.x + enemy.width/2,
+                            enemy.y + enemy.height/2)
                     end
                 else
                     -- Player takes damage
@@ -601,12 +625,7 @@ function PlayingState:checkPlayerCollisions()
 end
 
 function PlayingState:checkLaserCollisions()
-    -- Build spatial grid of lasers for efficient queries
-    local grid = SpatialHash:new(100)
-    for _, laser in ipairs(lasers) do
-        laser._remove = false
-        grid:insert(laser)
-    end
+    local grid = self.laserGrid
 
     -- Check asteroids against nearby lasers
     for i = #asteroids, 1, -1 do
@@ -641,8 +660,10 @@ function PlayingState:checkLaserCollisions()
             local enemySize = math.max(destroyedEnemy.width, destroyedEnemy.height)
             self:createExplosion(destroyedEnemy.x + destroyedEnemy.width/2,
                                destroyedEnemy.y + destroyedEnemy.height/2, enemySize)
-            if explosionSound then
-                explosionSound:clone():play()
+            if explosionSound and playPositionalSound then
+                playPositionalSound(explosionSound,
+                    destroyedEnemy.x + destroyedEnemy.width/2,
+                    destroyedEnemy.y + destroyedEnemy.height/2)
             end
             local enemyScore = 50 * currentLevel
             score = score + enemyScore
@@ -666,6 +687,9 @@ function PlayingState:checkLaserCollisions()
     for i = #lasers, 1, -1 do
         local l = lasers[i]
         if l._remove then
+            if self.laserGrid then
+                self.laserGrid:remove(l)
+            end
             self.laserPool:release(l)
             table.remove(lasers, i)
         end
@@ -742,9 +766,8 @@ function PlayingState:checkPowerupCollisions()
                 self:showNewHighScoreNotification()
             end
             
-            if powerupSound then
-                powerupSound:stop()
-                powerupSound:play()
+            if powerupSound and playPositionalSound then
+                playPositionalSound(powerupSound, powerup.x, powerup.y)
             end
             
             -- Create floating text
@@ -1122,9 +1145,8 @@ function PlayingState:createExplosion(x, y, size)
         table.insert(explosions, particle)
     end
     
-    if explosionSound then
-        explosionSound:stop()
-        explosionSound:play()
+    if explosionSound and playPositionalSound then
+        playPositionalSound(explosionSound, x, y)
     end
 end
 
@@ -1171,7 +1193,9 @@ function PlayingState:playerHit()
         
         gameState = "gameOver"
         levelAtDeath = currentLevel
-        if gameOverSound then gameOverSound:play() end
+        if gameOverSound and playPositionalSound then
+            playPositionalSound(gameOverSound, player.x, player.y)
+        end
         if backgroundMusic then backgroundMusic:stop() end
         
         -- Switch to game over state with new high score flag
@@ -1229,8 +1253,8 @@ function PlayingState:screenBomb()
     -- Big camera shake for bomb
     self.camera:shake(0.5, 10)
     
-    if explosionSound then
-        explosionSound:play()
+    if explosionSound and playPositionalSound then
+        playPositionalSound(explosionSound, player.x, player.y)
     end
 end
 
@@ -1991,7 +2015,9 @@ function PlayingState:executeBossAttack(attackType, dt)
                 local angle = i * angleStep
                 self:createBossLaser(boss.x, boss.y + boss.size/2, angle)
             end
-            if laserSound then laserSound:play() end
+            if laserSound and playPositionalSound then
+                playPositionalSound(laserSound, boss.x, boss.y + boss.size/2)
+            end
         end
         if boss.attackTimer > 0.5 then
             self:endBossAttack(2)
@@ -2134,7 +2160,9 @@ function PlayingState:checkGameConditions()
         self:saveGameStats()
         
         gameState = "gameOver"
-        if victorySound then victorySound:play() end
+        if victorySound and playPositionalSound then
+            playPositionalSound(victorySound, player.x, player.y)
+        end
         if backgroundMusic then backgroundMusic:stop() end
         
         -- Switch to game over state with new high score flag
@@ -2148,7 +2176,7 @@ end
 function PlayingState:saveGameStats()
     -- Update high score
     if Persistence then
-        local isNewHighScore = Persistence.setHighScore(score)
+        local isNewHighScore = Persistence.setHighScore(score, "Player")
         
         -- Update statistics
         local sessionTime = love.timer.getTime() - self.sessionStartTime
@@ -2180,9 +2208,8 @@ function PlayingState:showNewHighScoreNotification()
     })
     
     -- Play a special sound if available
-    if powerupSound then
-        powerupSound:stop()
-        powerupSound:play()
+    if powerupSound and playPositionalSound then
+        playPositionalSound(powerupSound, self.screenWidth / 2, 200)
     end
 end
 
@@ -2197,6 +2224,20 @@ function PlayingState:createHitEffect(x, y)
     explosion.alpha = 0.8
     
     table.insert(explosions, explosion)
+end
+
+function PlayingState:updatePerformanceMetrics()
+    local elapsed = love.timer.getTime() - self.sessionStartTime
+    if elapsed > 0 then
+        self.performanceMetrics.killRate = self.sessionEnemiesDefeated / elapsed
+    else
+        self.performanceMetrics.killRate = 0
+    end
+
+    self.performanceMetrics.combo = self.combo
+    if self.combo > (self.performanceMetrics.maxCombo or 0) then
+        self.performanceMetrics.maxCombo = self.combo
+    end
 end
 
 return PlayingState
