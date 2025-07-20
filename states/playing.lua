@@ -457,7 +457,6 @@ function PlayingState:updatePowerups(dt)
 end
 
     -- handled by PowerupHandler.update
-end
 
 function PlayingState:shootLaser()
     PlayerControl.shoot(self)
@@ -2034,11 +2033,7 @@ function PlayingState:drawBoss()
         self.bossManager:draw()
     end
 end
-    
-        local nameWidth = lg.getFont():getWidth(bossName)
-        lg.print(bossName, self.screenWidth/2 - nameWidth/2, barY - 25)
-    end
-end
+
 
 function PlayingState:checkGameConditions()
     -- Check for level completion
