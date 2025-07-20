@@ -366,11 +366,13 @@ function OptionsState:setupControlsMenu()
         {name = "Shoot", type = "key", action = "shoot", value = controls.keyboard.shoot},
         {name = "Boost", type = "key", action = "boost", value = controls.keyboard.boost},
         {name = "Bomb", type = "key", action = "bomb", value = controls.keyboard.bomb},
+        {name = "Pause", type = "key", action = "pause", value = controls.keyboard.pause},
         {name = "", type = "spacer"},
         {name = "Gamepad Controls", type = "header"},
         {name = "Shoot", type = "gamepad", action = "shoot", value = controls.gamepad.shoot},
         {name = "Bomb", type = "gamepad", action = "bomb", value = controls.gamepad.bomb},
         {name = "Boost", type = "gamepad", action = "boost", value = controls.gamepad.boost},
+        {name = "Pause", type = "gamepad", action = "pause", value = controls.gamepad.pause},
         {name = "", type = "spacer"},
         {name = "Reset to Defaults", type = "button"},
         {name = "Back", type = "button"}
