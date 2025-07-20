@@ -88,13 +88,13 @@ end)
 - ✅ Collision Detection (`collision_test.lua`)
 - ✅ Game State Management (`gamestate_test.lua`)
 - ✅ Player Mechanics (`player_test.lua`)
-- 🔲 Enemy Spawning and Behavior
-- 🔲 Powerup System
-- 🔲 Scoring System
+- ✅ Enemy Spawning and Behavior (`wavemanager_test.lua`)
+- ✅ Powerup System (`powerup_test.lua`)
+- ✅ Scoring System (`score_test.lua`)
 
 ### Integration Tests
-- 🔲 Full game flow
-- 🔲 Level progression
+- ✅ Full game flow (`game_loop_test.lua`)
+- ✅ Level progression (`level_progression_test.lua`)
 - 🔲 Boss battles
 
 ## Mock Framework

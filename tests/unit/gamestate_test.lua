@@ -185,7 +185,7 @@ describe("Game State Management", function()
                 end
             end
             return false
-        end)
+        end
         
         it("recognizes all valid game states", function()
             assert.is_true(isValidState("menu"))
