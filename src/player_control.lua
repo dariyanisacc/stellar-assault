@@ -225,6 +225,7 @@ function PlayerControl.createHeatParticle(state)
     local g = 1 - heatPercent * 0.7
     particle.color = {r, g, 0, 0.7}
     particle.type = "heat"
+    particle.pool = state.particlePool
     table.insert(explosions, particle)
 end
 
