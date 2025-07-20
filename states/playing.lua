@@ -111,6 +111,9 @@ function PlayingState:leave()
     self.particlePool:releaseAll()
     self.trailPool:releaseAll()
     self.debrisPool:releaseAll()
+    if self.laserGrid then
+        self.laserGrid:clear()
+    end
 end
 
 function PlayingState:initializeGame()
@@ -440,7 +443,10 @@ function PlayingState:updateExplosions(dt)
             end
             
             if explosion.life <= 0 then
-                local pool = explosion.pool or self.particlePool
+                local pool = explosion.pool
+                if not pool then
+                    pool = explosion.vx and self.particlePool or self.explosionPool
+                end
                 pool:release(explosion)
                 table.remove(explosions, i)
             end
@@ -450,7 +456,10 @@ function PlayingState:updateExplosions(dt)
             explosion.alpha = explosion.alpha - dt
 
             if explosion.alpha <= 0 then
-                local pool = explosion.pool or self.explosionPool
+                local pool = explosion.pool
+                if not pool then
+                    pool = explosion.vx and self.particlePool or self.explosionPool
+                end
                 pool:release(explosion)
                 table.remove(explosions, i)
             end
@@ -1038,6 +1047,7 @@ function PlayingState:createExplosion(x, y, size)
     explosion.maxRadius = size
     explosion.speed = size * 2
     explosion.alpha = 1
+    explosion.pool = self.explosionPool
     
     table.insert(explosions, explosion)
     
@@ -1069,7 +1079,7 @@ function PlayingState:createExplosion(x, y, size)
     for i = 1, debrisCount do
         local angle = random() * pi * 2
         local speed = random(50, 150)
-        local particle = self.particlePool:get()
+        local particle = self.debrisPool:get()
         particle.x = x + random(-5, 5)
         particle.y = y + random(-5, 5)
         particle.vx = cos(angle) * speed
@@ -1086,7 +1096,7 @@ function PlayingState:createExplosion(x, y, size)
             random(0.4, 0.7),
             1
         }
-        particle.pool = self.particlePool
+        particle.pool = self.debrisPool
         table.insert(explosions, particle)
     end
     
