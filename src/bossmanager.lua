@@ -5,6 +5,14 @@ local logger = require("src.logger")
 local BossManager = {}
 BossManager.__index = BossManager
 
+-- Utility to check if a table contains a value
+local function hasValue(t, value)
+    for _, v in ipairs(t) do
+        if v == value then return true end
+    end
+    return false
+end
+
 -- Boss types and their configurations
 local BOSS_TYPES = {
     annihilator = {
@@ -76,8 +84,19 @@ function BossManager:initializeAttackPatterns()
         cooldown = 4,
         execute = function(boss, dt) self:executeSpreadShot(boss, dt) end
     }
-    
-    -- Add more attack patterns...
+
+    -- Additional attacks introduced in later phases
+    self.attackPatterns.laserRing = {
+        duration = 1,
+        cooldown = 5,
+        execute = function(boss, dt) self:executeLaserRing(boss, dt) end
+    }
+
+    self.attackPatterns.megaBeam = {
+        duration = 2,
+        cooldown = 8,
+        execute = function(boss, dt) self:executeMegaBeam(boss, dt) end
+    }
 end
 
 function BossManager:spawnBoss(type, x, y)
@@ -104,7 +123,9 @@ function BossManager:spawnBoss(type, x, y)
         stateTimer = 0,
         rotation = 0,
         shield = 0,
-        maxShield = 0
+        maxShield = 0,
+        scale = 1,
+        flashTimer = 0
     }
     
     logger.info("Boss spawned: %s at phase %d", config.name, 1)
@@ -220,6 +241,8 @@ function BossManager:selectAttack(boss)
 end
 
 function BossManager:updatePhase(boss)
+    if boss.state == "phaseTransition" or boss.state == "dying" then return end
+
     local healthPercent = boss.health / boss.maxHealth
     local newPhase = 1
     
@@ -236,6 +259,7 @@ function BossManager:updatePhase(boss)
         boss.state = "phaseTransition"
         boss.stateTimer = 0
         boss.currentAttack = nil
+        boss.flashTimer = 0
         logger.info("Boss entered phase %d", newPhase)
         
         -- Phase-specific changes
@@ -245,15 +269,30 @@ end
 
 function BossManager:onPhaseChange(boss, phase)
     -- Add new attacks or modify behavior based on phase
-    if boss.type == "annihilator" and phase >= 3 then
-        table.insert(boss.attacks, "megaBeam")
+    if boss.type == "annihilator" then
+        if phase >= 2 and not hasValue(boss.attacks, "laserRing") then
+            table.insert(boss.attacks, "laserRing")
+        end
+        if phase >= 3 and not hasValue(boss.attacks, "megaBeam") then
+            table.insert(boss.attacks, "megaBeam")
+        end
     end
-    
+
     -- Increase speed in later phases
     boss.speed = boss.speed * (1 + (phase - 1) * 0.2)
 end
 
 function BossManager:updateEffects(boss, dt)
+    -- Visual flash during phase transitions
+    if boss.state == "phaseTransition" then
+        boss.flashTimer = (boss.flashTimer or 0) + dt
+        boss.flashAlpha = 0.5 + math.sin(boss.flashTimer * 8) * 0.5
+        boss.scale = 1 + math.sin(boss.flashTimer * 8) * 0.1
+    else
+        boss.flashAlpha = nil
+        boss.scale = 1
+    end
+
     -- Rotation effect
     if boss.currentAttack == "teleport" then
         boss.rotation = boss.rotation + dt * 10
@@ -291,10 +330,33 @@ end
 
 function BossManager:executeSpreadShot(boss, dt)
     if boss.attackTimer == dt then -- First frame of attack
-        local angleStep = math.pi / 8
-        for i = -4, 4 do
+        local baseCount = 4 + boss.phase * 2
+        local angleStep = math.pi / baseCount
+        for i = -baseCount/2, baseCount/2 do
             local angle = i * angleStep - math.pi / 2
-            self:createBossProjectile(boss.x, boss.y, angle, 300)
+            self:createBossProjectile(boss.x, boss.y, angle, 300 + boss.phase * 40)
+        end
+    end
+end
+
+function BossManager:executeLaserRing(boss, dt)
+    if boss.attackTimer == dt then -- spawn once at start
+        local count = 12 + boss.phase * 2
+        for i = 0, count - 1 do
+            local angle = (i / count) * math.pi * 2
+            self:createBossProjectile(boss.x, boss.y, angle, 250 + boss.phase * 30)
+        end
+    end
+end
+
+function BossManager:executeMegaBeam(boss, dt)
+    if boss.attackTimer < 1 then
+        boss.chargingBeam = true
+    elseif boss.attackTimer >= 1 and boss.attackTimer < 1 + dt then
+        boss.chargingBeam = false
+        for i = -1, 1 do
+            local angle = -math.pi / 2 + i * 0.05
+            self:createBossProjectile(boss.x + i * 15, boss.y, angle, 400 + boss.phase * 50)
         end
     end
 end
@@ -347,10 +409,13 @@ function BossManager:draw()
     lg.push()
     lg.translate(boss.x, boss.y)
     lg.rotate(boss.rotation)
+    lg.scale(boss.scale or 1, boss.scale or 1)
     
     -- Draw based on state
     local alpha = boss.alpha or 1
-    if boss.state == "phaseTransition" then
+    if boss.state == "phaseTransition" and boss.flashAlpha then
+        alpha = boss.flashAlpha
+    elseif boss.state == "phaseTransition" then
         alpha = 0.5 + math.sin(boss.stateTimer * 10) * 0.5
     elseif boss.state == "dying" then
         alpha = 1 - (boss.stateTimer / 3)
