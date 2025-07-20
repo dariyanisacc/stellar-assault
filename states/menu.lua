@@ -457,7 +457,8 @@ function MenuState:drawShipSelect()
         -- Draw ship sprite if available
         if playerShips and playerShips[shipName] then
             local sprite = playerShips[shipName]
-            local scale = 2  -- Make sprites bigger for selection
+            -- Scale sprites relative to their size so they fit comfortably in the menu
+            local scale = 80 / math.max(sprite:getWidth(), sprite:getHeight())
             
             -- Highlight selected ship
             if i == self.selectedShipIndex then
