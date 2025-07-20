@@ -21,17 +21,18 @@ end
 
 function SpatialHash:getEntityKeys(entity)
     local keys = {}
-    local size = entity.radius or entity.size / 2 or math.max(entity.width or 0, entity.height or 0) / 2
+    local w = entity.width or entity.size or (entity.radius and entity.radius * 2) or 0
+    local h = entity.height or entity.size or (entity.radius and entity.radius * 2) or 0
 
-    local minX = entity.x - size
-    local maxX = entity.x + size
-    local minY = entity.y - size
-    local maxY = entity.y + size
+    local left = entity.x - w / 2
+    local right = entity.x + w / 2
+    local top = entity.y - h / 2
+    local bottom = entity.y + h / 2
 
-    local startX = math.floor(minX / self.cellSize)
-    local endX = math.floor(maxX / self.cellSize)
-    local startY = math.floor(minY / self.cellSize)
-    local endY = math.floor(maxY / self.cellSize)
+    local startX = math.floor(left / self.cellSize)
+    local endX = math.floor(right / self.cellSize)
+    local startY = math.floor(top / self.cellSize)
+    local endY = math.floor(bottom / self.cellSize)
 
     for x = startX, endX do
         for y = startY, endY do
