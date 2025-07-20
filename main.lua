@@ -48,6 +48,8 @@ sfxVolume = constants.audio.defaultSFXVolume
 musicVolume = constants.audio.defaultMusicVolume
 displayMode = "borderless"
 currentResolution = 1
+highContrast = false
+fontScale = 1
 
 -- Input tracking
 lastInputType = "keyboard"  -- Default to keyboard/mouse
@@ -165,6 +167,10 @@ function love.load()
     
     -- Initialize persistence system
     Persistence.init()
+    local psettings = Persistence.getSettings()
+    highContrast = psettings.highContrast or false
+    fontScale = psettings.fontScale or 1
+    applyFontScale()
     
     -- Initialize state manager
     stateManager = StateManager:new()
@@ -229,6 +235,14 @@ function loadAudio()
     end
 end
 
+function applyFontScale()
+    titleFont = lg.newFont(48 * fontScale)
+    menuFont = lg.newFont(24 * fontScale)
+    uiFont = lg.newFont(18 * fontScale)
+    smallFont = lg.newFont(14 * fontScale)
+    mediumFont = lg.newFont(20 * fontScale)
+end
+
 function loadSettings()
     if lf.getInfo("settings.dat") then
         local data = lf.read("settings.dat")
@@ -260,8 +274,16 @@ function loadSettings()
                 end
             end
             
+            if #lines >= 7 then
+                highContrast = lines[7] == "true"
+            end
+            if #lines >= 8 then
+                fontScale = tonumber(lines[8]) or 1
+            end
+
             -- Apply audio settings
             updateAudioVolumes()
+            applyFontScale()
         end
     end
 end
@@ -272,9 +294,21 @@ function saveSettings()
                 masterVolume .. "\n" ..
                 sfxVolume .. "\n" ..
                 musicVolume .. "\n" ..
-                selectedShip
-    
+                selectedShip .. "\n" ..
+                tostring(highContrast) .. "\n" ..
+                fontScale
+
     lf.write("settings.dat", data)
+
+    Persistence.updateSettings({
+        masterVolume = masterVolume,
+        sfxVolume = sfxVolume,
+        musicVolume = musicVolume,
+        selectedShip = selectedShip,
+        displayMode = displayMode,
+        highContrast = highContrast,
+        fontScale = fontScale
+    })
 end
 
 function applyWindowMode()

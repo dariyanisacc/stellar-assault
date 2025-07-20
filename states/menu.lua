@@ -106,7 +106,11 @@ function MenuState:draw()
     
     -- Draw title
     lg.setFont(titleFont or lg.newFont(48))
-    lg.setColor(0, 1, 1)
+    if highContrast then
+        lg.setColor(1, 1, 1)
+    else
+        lg.setColor(0, 1, 1)
+    end
     local title = "STELLAR ASSAULT"
     local titleWidth = lg.getFont():getWidth(title)
     lg.print(title, self.screenWidth/2 - titleWidth/2, 100)
@@ -128,9 +132,17 @@ function MenuState:drawMainMenu()
     
     for i, option in ipairs(options) do
         if i == self.selection then
-            lg.setColor(1, 1, 0)
+            if highContrast then
+                lg.setColor(1, 0, 0)
+            else
+                lg.setColor(1, 1, 0)
+            end
         else
-            lg.setColor(1, 1, 1)
+            if highContrast then
+                lg.setColor(1, 1, 1)
+            else
+                lg.setColor(1, 1, 1)
+            end
         end
         
         local optionWidth = lg.getFont():getWidth(option)
@@ -139,7 +151,11 @@ function MenuState:drawMainMenu()
     
     -- Draw instructions
     lg.setFont(smallFont or lg.newFont(14))
-    lg.setColor(0.7, 0.7, 0.7)
+    if highContrast then
+        lg.setColor(1, 1, 1)
+    else
+        lg.setColor(0.7, 0.7, 0.7)
+    end
     local nav = inputHints[lastInputType].navigate or "Arrow Keys/D-Pad"
     local select = inputHints[lastInputType].select or "Enter/A"
     local back = inputHints[lastInputType].back or "Escape/B"
