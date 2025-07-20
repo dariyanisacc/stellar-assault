@@ -462,6 +462,7 @@ function PlayingState:updateExplosions(dt)
             end
             
             if explosion.life <= 0 then
+                -- Return particle to its origin pool if known
                 local pool = explosion.pool
                 if not pool then
                     if explosion.vx then
