@@ -42,6 +42,10 @@ backgroundMusic = nil
 bossMusic = nil
 victorySound = nil
 
+-- Positional audio settings
+local soundReferenceDistance = 50
+local soundMaxDistance = 800
+
 -- Settings (persist across states)
 masterVolume = constants.audio.defaultMasterVolume
 sfxVolume = constants.audio.defaultSFXVolume
@@ -200,31 +204,44 @@ function love.load()
 end
 
 function loadAudio()
+    la.setDistanceModel("inverseclamped")
     -- Sound effects
     if lf.getInfo("laser.wav") then
         laserSound = la.newSource("laser.wav", "static")
         laserSound:setVolume(0.5)
+        laserSound:setRelative(true)
+        laserSound:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
     end
     
     if lf.getInfo("explosion.wav") then
         explosionSound = la.newSource("explosion.wav", "static")
         explosionSound:setVolume(0.7)
+        explosionSound:setRelative(true)
+        explosionSound:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
     end
     
     if lf.getInfo("powerup.wav") then
         powerupSound = la.newSource("powerup.wav", "static")
         powerupSound:setVolume(0.6)
+        powerupSound:setRelative(true)
+        powerupSound:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
     end
     
     if lf.getInfo("gameover.ogg") then
         gameOverSound = la.newSource("gameover.ogg", "static")
         gameOverSound:setVolume(0.8)
+        gameOverSound:setRelative(true)
+        gameOverSound:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
     end
     
     if lf.getInfo("menu.flac") then
         menuSelectSound = la.newSource("menu.flac", "static")
         menuSelectSound:setVolume(0.4)
         menuConfirmSound = menuSelectSound:clone()
+        menuSelectSound:setRelative(true)
+        menuConfirmSound:setRelative(true)
+        menuSelectSound:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
+        menuConfirmSound:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
     end
     
     -- Background music
@@ -382,6 +399,17 @@ function updateAudioVolumes()
     if backgroundMusic then
         backgroundMusic:setVolume(musicVolume * masterVolume)
     end
+end
+
+-- Play a sound at a given world position with distance-based attenuation
+function playPositionalSound(source, x, y)
+    if not source or not player then return end
+    local clone = source:clone()
+    local dx, dy = x - player.x, y - player.y
+    clone:setRelative(true)
+    clone:setPosition(dx, dy, 0)
+    clone:setVolume(source:getVolume())
+    clone:play()
 end
 
 -- Starfield background (shared across states)
