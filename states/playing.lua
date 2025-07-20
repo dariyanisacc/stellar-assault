@@ -84,6 +84,7 @@ function PlayingState:enter(params)
     -- Track statistics
     self.sessionStartTime = love.timer.getTime()
     self.sessionEnemiesDefeated = 0
+    self.performanceMetrics = {killRate = 0, combo = 0, maxCombo = 0}
     
     -- New high score tracking
     self.newHighScore = false
@@ -311,7 +312,13 @@ function PlayingState:update(dt)
     
     -- Check collisions
     self:checkCollisions()
-    
+
+    -- Update performance metrics for dynamic difficulty
+    self:updatePerformanceMetrics()
+    if self.waveManager then
+        self.waveManager:setPlayerPerformance(self.performanceMetrics)
+    end
+
     -- Check win/lose conditions
     self:checkGameConditions()
 end
@@ -2136,6 +2143,20 @@ function PlayingState:createHitEffect(x, y)
     explosion.alpha = 0.8
     
     table.insert(explosions, explosion)
+end
+
+function PlayingState:updatePerformanceMetrics()
+    local elapsed = love.timer.getTime() - self.sessionStartTime
+    if elapsed > 0 then
+        self.performanceMetrics.killRate = self.sessionEnemiesDefeated / elapsed
+    else
+        self.performanceMetrics.killRate = 0
+    end
+
+    self.performanceMetrics.combo = self.combo
+    if self.combo > (self.performanceMetrics.maxCombo or 0) then
+        self.performanceMetrics.maxCombo = self.combo
+    end
 end
 
 return PlayingState
