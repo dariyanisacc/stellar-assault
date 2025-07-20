@@ -10,6 +10,7 @@ local WaveManager = require("src.wave_manager")
 local PlayerControl = require("src.player_control")
 local EnemyAI = require("src.enemy_ai")
 local PowerupHandler = require("src.powerup_handler")
+local BossManager = require("src.bossmanager")
 local lg = love.graphics
 local la = love.audio
 local lm = love.math or math
@@ -49,6 +50,10 @@ function PlayingState:enter(params)
     self.laserPool = ObjectPool.createLaserPool()
     self.explosionPool = ObjectPool.createExplosionPool()
     self.particlePool = ObjectPool.createParticlePool()
+
+    -- Boss manager handles boss lifecycle
+    self.bossManager = BossManager:new()
+    self.bossDefeatNotified = false
     
     -- Initialize WaveManager
     self.waveManager = WaveManager:new(player)
@@ -297,7 +302,7 @@ function PlayingState:update(dt)
     end
     
     -- Update boss if exists
-    if boss then
+    if self.bossManager.activeBoss then
         self:updateBoss(dt)
     end
     
@@ -509,7 +514,7 @@ function PlayingState:checkCollisions()
     self:checkPowerupCollisions()
     self:checkAlienCollisions()
     
-    if boss then
+    if self.bossManager.activeBoss then
         self:checkBossCollisions()
     end
 end
@@ -743,17 +748,20 @@ function PlayingState:checkAlienCollisions()
 end
 
 function PlayingState:checkBossCollisions()
+    local bossEntity = self.bossManager.activeBoss
+    if not bossEntity then return end
+
     -- Boss vs Player
-    if Collision.checkAABB(player, boss) and invulnerableTime <= 0 then
+    if Collision.checkAABB(player, bossEntity) and invulnerableTime <= 0 then
         if not activePowerups.shield then
             self:playerHit()
         end
     end
-    
+
     -- Boss vs Player Lasers
     for i = #lasers, 1, -1 do
         local laser = lasers[i]
-        if Collision.checkAABB(laser, boss) then
+        if Collision.checkAABB(laser, bossEntity) then
             self:createHitEffect(laser.x, laser.y)  -- Add hit spark effect
             self:handleBossHit(laser)
             self.laserPool:release(laser)
@@ -905,26 +913,7 @@ function PlayingState:handleAlienDestruction(alien, index)
 end
 
 function PlayingState:handleBossHit(laser)
-    -- Handle Boss02 entities differently
-    if boss.isBoss02 then
-        boss.hp = boss.hp - 1
-        boss.health = boss.hp  -- Keep synced
-        
-        if boss.hp <= 0 then
-            self:handleBossDefeat()
-        end
-    else
-        -- Original boss hit logic
-        if boss.shield and boss.shield > 0 then
-            boss.shield = boss.shield - 1
-            -- Shield hit effect
-        else
-            boss.health = boss.health - 1
-            if boss.health <= 0 then
-                self:handleBossDefeat()
-            end
-        end
-    end
+    self.bossManager:takeDamage(laser.damage or 1)
     
     -- Add stronger camera shake for boss hits
     if self.camera then
@@ -994,6 +983,44 @@ function PlayingState:handleBossDefeat()
             local offsetY = random(-50, 50)
             self:createExplosion(self.screenWidth/2 + offsetX, 150 + offsetY, 60)
         end
+    end
+end
+
+function PlayingState:onBossDefeated()
+    score = score + constants.score.boss
+    Persistence.addScore(constants.score.boss)
+    logger.info("Boss defeated! Level %d complete", currentLevel)
+
+    if score > self.previousHighScore and not self.newHighScore then
+        self.newHighScore = true
+        self:showNewHighScoreNotification()
+    end
+
+    if Persistence then
+        Persistence.incrementBossesDefeated()
+        if currentLevel < 20 then
+            Persistence.unlockLevel(currentLevel + 1)
+            logger.info("Unlocked level %d", currentLevel + 1)
+            table.insert(powerupTexts, {
+                text = "LEVEL " .. (currentLevel + 1) .. " UNLOCKED!",
+                x = self.screenWidth / 2,
+                y = 300,
+                color = {0, 1, 1},
+                life = 3.0,
+                scale = 1.2,
+                pulse = true
+            })
+        end
+    end
+end
+
+function PlayingState:onBossRemoved()
+    bossSpawned = false
+    levelComplete = true
+    for i = 1, 5 do
+        local offsetX = random(-50, 50)
+        local offsetY = random(-50, 50)
+        self:createExplosion(self.screenWidth/2 + offsetX, 150 + offsetY, 60)
     end
 end
 
@@ -1216,7 +1243,7 @@ function PlayingState:draw()
     self:drawPowerups()
     self:drawPowerupTexts()
     
-    if boss then
+    if self.bossManager.activeBoss then
         self:drawBoss()
     end
     
@@ -1760,103 +1787,31 @@ end
 
 -- Boss-related methods
 function PlayingState:spawnBoss()
-    if bossSpawned or boss then return end
-    
+    if bossSpawned or self.bossManager.activeBoss then return end
+
     -- Clear remaining enemies
     asteroids = {}
     aliens = {}
     alienLasers = {}
-    
-    -- Determine if we should use Boss02 for certain levels
-    local useBoss02 = false
-    if currentLevel == 3 or currentLevel == 7 or currentLevel == 12 or currentLevel == 17 then
-        useBoss02 = true
-    end
-    
-    if useBoss02 then
-        -- Use the new Boss02 entity
-        local Boss02 = require("src.entities.boss02")
-        boss = Boss02.new(currentLevel)
-        
-        -- Add compatibility properties for the existing boss system
-        boss.type = "boss02"
-        boss.width = 100
-        boss.height = 100
-        boss.size = 100
-        boss.health = boss.hp
-        boss.maxHealth = boss.maxHP
-        boss.speed = 80
-        boss.state = "entering"
-        boss.stateTimer = 0
-        boss.attackTimer = 0
-        boss.attackCooldown = 0
-        boss.currentAttack = nil
-        boss.phase = boss.currentPhase or 1
-        boss.alpha = 1
-        -- Initialize beam shot timer to prevent nil errors
-        boss.lastBeamShot = love.timer.getTime()
-        boss.shield = 0
-        boss.maxShield = 0
-        boss.movePattern = "sine"
-        boss.moveTimer = 0
-        boss.targetX = self.screenWidth / 2
-        boss.attacks = {"spiral", "ringBurst", "lastStand"}
-        boss.lastAttack = nil
-        
-        -- Flag to indicate this is a Boss02 entity
-        boss.isBoss02 = true
+
+    -- Determine boss type based on level
+    local bossType
+    if currentLevel % 15 == 0 then
+        bossType = "quantumPhantom"
+    elseif currentLevel % 10 == 0 then
+        bossType = "voidReaper"
+    elseif currentLevel % 5 == 0 then
+        bossType = "annihilator"
     else
-        -- Use the original boss system
-        -- Determine boss type based on level
-        local bossType
-        if currentLevel % 15 == 0 then
-            bossType = "quantumPhantom"
-        elseif currentLevel % 10 == 0 then
-            bossType = "voidReaper"
-        elseif currentLevel % 5 == 0 then
-            bossType = "annihilator"
-        else
-            -- Random boss for other levels
-            local bossTypes = {"annihilator", "frostTitan", "stormBringer"}
-            bossType = bossTypes[random(#bossTypes)]
-        end
-        
-        -- Create boss
-        boss = {
-            type = bossType,
-            x = self.screenWidth / 2,
-            y = -100,
-            width = 100,
-            height = 100,
-            size = 100,
-            health = constants.boss[bossType].hp,
-            maxHealth = constants.boss[bossType].hp,
-            speed = constants.boss[bossType].speed,
-            state = "entering",
-            stateTimer = 0,
-            attackTimer = 0,
-            attackCooldown = 0,
-            currentAttack = nil,
-            phase = 1,
-            rotation = 0,
-            alpha = 1,
-            shield = 0,
-            maxShield = 0,
-            -- Movement pattern
-            movePattern = "sine",
-            moveTimer = 0,
-            targetX = self.screenWidth / 2,
-            -- Attack patterns
-            attacks = self:getBossAttacks(bossType),
-            lastAttack = nil,
-            -- Initialize beam shot timer to prevent nil errors
-            lastBeamShot = love.timer.getTime()
-        }
+        local bossTypes = {"annihilator", "frostTitan", "stormBringer"}
+        bossType = bossTypes[random(#bossTypes)]
     end
-    
+
+    boss = self.bossManager:spawnBoss(bossType, self.screenWidth / 2, -100)
     bossSpawned = true
-    logger.info("Boss spawned: %s at level %d", boss.type or "boss02", currentLevel)
-    
+    self.bossDefeatNotified = false
+    logger.info("Boss spawned: %s at level %d", bossType, currentLevel)
+
     -- Play boss music if available
     if bossMusic then
         if backgroundMusic then backgroundMusic:stop() end
@@ -1878,92 +1833,20 @@ function PlayingState:getBossAttacks(bossType)
 end
 
 function PlayingState:updateBoss(dt)
-    if not boss then return end
-    
-    -- If this is a Boss02 entity, use its own update method
-    if boss.isBoss02 and boss.update then
-        -- Create a bullets object that Boss02 expects
-        local bullets = {
-            spawn = function(bullets_self, x, y, angle, speed)
-                -- Convert Boss02 bullet spawn to the game's alien laser system
-                local laser = self.laserPool:get()
-                laser.x = x
-                laser.y = y
-                laser.vx = cos(angle) * speed
-                laser.vy = sin(angle) * speed
-                laser.width = 6
-                laser.height = 12
-                laser.isAlien = true
-                laser.isBoss = true
-                laser.damage = 1
-                
-                table.insert(alienLasers, laser)
-            end
-        }
-        
-        boss:update(dt, bullets)
-        
-        -- Sync health values
-        boss.health = boss.hp
-        
-        -- Handle death state
-        if boss.hp <= 0 and boss.state ~= "dying" then
-            boss.state = "dying"
-            boss.stateTimer = 0
-        end
-        
-        -- Check if Boss02 is ready to enter active state
-        if boss.y >= 120 and boss.state == "entering" then
-            boss.state = "active"
-        end
-        
-        return
+    if not self.bossManager.activeBoss then return end
+
+    local prev = self.bossManager.activeBoss
+    self.bossManager:update(dt)
+    boss = self.bossManager.activeBoss
+
+    -- Check for defeat
+    if boss and boss.state == "dying" and not self.bossDefeatNotified then
+        self:onBossDefeated()
+        self.bossDefeatNotified = true
     end
-    
-    -- Original boss update code
-    -- Update state timer
-    boss.stateTimer = boss.stateTimer + dt
-    
-    -- State machine
-    if boss.state == "entering" then
-        -- Boss entrance
-        boss.y = boss.y + 100 * dt
-        if boss.y >= 150 then
-            boss.state = "active"
-            boss.stateTimer = 0
-        end
-    elseif boss.state == "active" then
-        -- Update movement
-        self:updateBossMovement(dt)
-        
-        -- Update attacks
-        self:updateBossAttacks(dt)
-        
-        -- Update phase based on health
-        self:updateBossPhase()
-    elseif boss.state == "phaseTransition" then
-        -- Phase transition effects
-        boss.alpha = 0.5 + sin(boss.stateTimer * 10) * 0.5
-        if boss.stateTimer > 2 then
-            boss.state = "active"
-            boss.stateTimer = 0
-            boss.alpha = 1
-        end
-    elseif boss.state == "dying" then
-        -- Death animation
-        boss.rotation = boss.rotation + dt * 5
-        boss.alpha = boss.alpha - dt * 0.3
-        
-        -- Create explosion effects
-        if random() < 0.3 then
-            local offsetX = random(-boss.size/2, boss.size/2)
-            local offsetY = random(-boss.size/2, boss.size/2)
-            self:createExplosion(boss.x + offsetX, boss.y + offsetY, 40)
-        end
-        
-        if boss.stateTimer > 3 then
-            self:handleBossDefeat()
-        end
+
+    if prev and not self.bossManager.activeBoss then
+        self:onBossRemoved()
     end
 end
 
@@ -2147,168 +2030,11 @@ function PlayingState:updateBossPhase()
 end
 
 function PlayingState:drawBoss()
-    if not boss then return end
-    
-    -- If this is a Boss02 entity, use its own draw method
-    if boss.isBoss02 and boss.draw then
-        -- Apply flash effect
-        if self.bossHitFlash > 0 then
-            lg.push()
-            lg.setColor(1, 1, 1, self.bossHitFlash)
-        end
-        
-        boss:draw()
-        
-        if self.bossHitFlash > 0 then
-            lg.pop()
-        end
-        
-        -- Still draw the health bar for consistency
-        if boss.state == "active" or boss.state == "phaseTransition" then
-            local barWidth = 200
-            local barHeight = 10
-            local barX = self.screenWidth/2 - barWidth/2
-            local barY = 30
-            
-            -- Background
-            lg.setColor(0.3, 0.3, 0.3, boss.alpha or 1)
-            lg.rectangle("fill", barX, barY, barWidth, barHeight)
-            
-            -- Health fill
-            local healthPercent = boss.hp / boss.maxHP
-            lg.setColor(1 - healthPercent, healthPercent, 0, boss.alpha or 1)
-            lg.rectangle("fill", barX, barY, barWidth * healthPercent, barHeight)
-            
-            -- Border
-            lg.setColor(1, 1, 1, boss.alpha or 1)
-            lg.rectangle("line", barX, barY, barWidth, barHeight)
-            
-            -- Boss name
-            lg.setFont(mediumFont or lg.newFont(18))
-            local bossName = "BOSS02 - PHASE " .. (boss.currentPhase or 1)
-            local nameWidth = lg.getFont():getWidth(bossName)
-            lg.print(bossName, self.screenWidth/2 - nameWidth/2, barY - 25)
-        end
-        
-        return
+    if self.bossManager.activeBoss then
+        self.bossManager:draw()
     end
+end
     
-    -- Original boss drawing code
-    lg.push()
-    lg.translate(boss.x, boss.y)
-    lg.rotate(boss.rotation)
-    
-    -- Set alpha
-    lg.setColor(1, 1, 1, boss.alpha)
-    
-    -- Apply hit flash to boss
-    local flashIntensity = self.bossHitFlash or 0
-    
-    -- Draw based on boss type
-    if boss.type == "annihilator" then  -- Borg-like cube
-        local cubeSize = boss.size / 2
-        -- Base cube structure
-        lg.setColor(0.2 + flashIntensity, 0.2 + flashIntensity, 0.2 + flashIntensity, boss.alpha)  -- Dark metallic
-        lg.rectangle("fill", -cubeSize, -cubeSize, boss.size, boss.size)
-        
-        -- Intricate armor plates (inspired by Borg cube: grid-like modules)
-        lg.setColor(0.4 + flashIntensity * 0.5, 0.4 + flashIntensity * 0.5, 0.4 + flashIntensity * 0.5, boss.alpha)
-        local plateSize = boss.size / 5
-        for row = 0, 4 do
-            for col = 0, 4 do
-                local px = -cubeSize + col * plateSize + random(-2, 2)  -- Slight offset for irregularity
-                local py = -cubeSize + row * plateSize + random(-2, 2)
-                lg.rectangle("fill", px, py, plateSize - 2, plateSize - 2)  -- Gaps for detail
-            end
-        end
-        
-        -- Glowing edges/tron lines (Borg energy conduits)
-        lg.setColor(0, 1, 0.5 + flashIntensity, boss.alpha * 0.8)  -- Green glow
-        lg.setLineWidth(2)
-        for i = 0, 5 do
-            -- Horizontal lines
-            lg.line(-cubeSize, -cubeSize + i * (boss.size / 5), cubeSize, -cubeSize + i * (boss.size / 5))
-            -- Vertical lines
-            lg.line(-cubeSize + i * (boss.size / 5), -cubeSize, -cubeSize + i * (boss.size / 5), cubeSize)
-        end
-        lg.setLineWidth(1)
-        
-        -- Asymmetrical protrusions (e.g., weapons or sensors)
-        lg.setColor(0.3 + flashIntensity, 0.3 + flashIntensity, 0.3 + flashIntensity, boss.alpha)
-        lg.polygon("fill", cubeSize, 0, cubeSize + 20, -10, cubeSize + 20, 10)  -- Right spike
-        lg.polygon("fill", -cubeSize, cubeSize / 2, -cubeSize - 15, cubeSize / 2 - 10, -cubeSize - 15, cubeSize / 2 + 10)  -- Left antenna
-        
-    elseif boss.type == "frostTitan" then  -- Ice crystalline alien ship
-        -- Organic, asymmetrical body
-        lg.setColor(0.5 + flashIntensity * 0.5, 0.8 + flashIntensity * 0.2, 1, boss.alpha)  -- Ice blue
-        lg.polygon("fill", -boss.size/2, boss.size/2, 0, -boss.size/2, boss.size/2, boss.size/2)  -- Triangular base
-        
-        -- Ice spikes/protrusions
-        for i = 1, 6 do
-            local angle = i * (pi * 2 / 6) + random() * 0.2  -- Random offset
-            local len = boss.size * (0.3 + random() * 0.2)  -- Varying length
-            local spikeX = cos(angle) * len
-            local spikeY = sin(angle) * len
-            lg.setColor(0.8, 0.9, 1, boss.alpha * 0.7)  -- Lighter ice tips
-            lg.setLineWidth(3)
-            lg.line(0, 0, spikeX, spikeY)
-            lg.setLineWidth(1)
-            lg.circle("fill", spikeX, spikeY, 5)  -- Pointy ends
-        end
-        
-        -- Glowing core
-        lg.setColor(0, 0.8, 1, boss.alpha * (0.5 + sin(lt.getTime() * 2) * 0.3))  -- Pulsing
-        lg.circle("fill", 0, 0, boss.size / 4)
-        
-    else
-        -- Default: Generic alien ship (curved, with wings/engines)
-        lg.setColor(0.8 + flashIntensity * 0.2, 0.2 + flashIntensity * 0.8, 0.8 + flashIntensity * 0.2, boss.alpha)
-        -- Hull
-        lg.ellipse("fill", 0, 0, boss.size / 2, boss.size / 3)  -- Oval body
-        
-        -- Wings
-        lg.polygon("fill", -boss.size/2, 0, -boss.size/2 - 30, -40, -boss.size/2 - 30, 40)  -- Left wing
-        lg.polygon("fill", boss.size/2, 0, boss.size/2 + 30, -40, boss.size/2 + 30, 40)  -- Right wing
-        
-        -- Engines/glow
-        lg.setColor(1, 0.5, 0, boss.alpha * 0.8)
-        lg.circle("fill", -boss.size/2 + 10, 0, 15)  -- Rear thruster
-        lg.circle("fill", boss.size/2 - 10, 0, 15)  -- Rear thruster
-    end
-    
-    lg.pop()
-    
-    -- Draw attack effects
-    if boss.chargingBeam then
-        local pulse = sin(boss.stateTimer * 20) * 0.3 + 0.7
-        lg.setColor(1, 0, 0, pulse * boss.alpha)
-        lg.circle("line", boss.x, boss.y, boss.size * 0.6)
-        lg.circle("line", boss.x, boss.y, boss.size * 0.7)
-    end
-    
-    -- Draw health bar
-    if boss.state == "active" or boss.state == "phaseTransition" then
-        local barWidth = 200
-        local barHeight = 10
-        local barX = self.screenWidth/2 - barWidth/2
-        local barY = 30
-        
-        -- Background
-        lg.setColor(0.3, 0.3, 0.3, boss.alpha)
-        lg.rectangle("fill", barX, barY, barWidth, barHeight)
-        
-        -- Health fill
-        local healthPercent = boss.health / boss.maxHealth
-        lg.setColor(1 - healthPercent, healthPercent, 0, boss.alpha)
-        lg.rectangle("fill", barX, barY, barWidth * healthPercent, barHeight)
-        
-        -- Border
-        lg.setColor(1, 1, 1, boss.alpha)
-        lg.rectangle("line", barX, barY, barWidth, barHeight)
-        
-        -- Boss name
-        lg.setFont(mediumFont or lg.newFont(18))
-        local bossName = boss.type:upper()
         local nameWidth = lg.getFont():getWidth(bossName)
         lg.print(bossName, self.screenWidth/2 - nameWidth/2, barY - 25)
     end
