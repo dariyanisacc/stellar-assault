@@ -7,6 +7,9 @@ local logger = require("src.logger")
 local Powerup = require("src.entities.powerup")
 local Persistence = require("src.persistence")
 local WaveManager = require("src.wave_manager")
+local PlayerControl = require("src.player_control")
+local EnemyAI = require("src.enemy_ai")
+local PowerupHandler = require("src.powerup_handler")
 local lg = love.graphics
 local la = love.audio
 local lm = love.math or math
@@ -271,7 +274,6 @@ function PlayingState:update(dt)
     self:updateLasers(dt)
     self:updateExplosions(dt)
     self:updatePowerups(dt)
-    self:updatePowerupTexts(dt)
     
     -- Update WaveManager
     if self.waveManager then
@@ -310,217 +312,15 @@ function PlayingState:update(dt)
 end
 
 function PlayingState:updatePlayer(dt)
-    -- Thrust direction based on input
-    local dx, dy = 0, 0
-    if self.keys.left then dx = dx - 1 end
-    if self.keys.right then dx = dx + 1 end
-    if self.keys.up then dy = dy - 1 end
-    if self.keys.down then dy = dy + 1 end
-    
-    -- Add analog stick input
-    local joysticks = love.joystick.getJoysticks()
-    if #joysticks > 0 then
-        local joystick = joysticks[1]
-        if joystick:isGamepad() then
-            local jx, jy = joystick:getGamepadAxis("leftx"), joystick:getGamepadAxis("lefty")
-            -- Dead zone of 0.2
-            if abs(jx) > 0.2 then dx = dx + jx end
-            if abs(jy) > 0.2 then dy = dy + jy end
-            
-            -- Right trigger for shooting (single shot on press)
-            local triggerValue = joystick:getGamepadAxis("triggerright")
-            if triggerValue > 0.5 then
-                if not self.triggerPressed then
-                    self:shootLaser()
-                    self.triggerPressed = true
-                end
-            else
-                self.triggerPressed = false
-            end
-        end
-    end
-    
-    -- Normalize direction vector
-    local len = math.sqrt(dx*dx + dy*dy)
-    if len > 0 then
-        dx, dy = dx/len, dy/len
-        
-        -- Apply thrust (with boost modifier)
-        local thrustMult = 1
-        if activePowerups.boost then
-            thrustMult = 1.75
-        elseif self.keys.boost and not activePowerups.timeWarp then
-            thrustMult = 1.5
-        end
-        
-        player.vx = player.vx + dx * player.thrust * thrustMult * dt
-        player.vy = player.vy + dy * player.thrust * thrustMult * dt
-    end
-    
-    -- Cap speed
-    local speed = math.sqrt(player.vx^2 + player.vy^2)
-    if speed > player.maxSpeed then
-        player.vx = (player.vx / speed) * player.maxSpeed
-        player.vy = (player.vy / speed) * player.maxSpeed
-    end
-    
-    -- Apply drag
-    player.vx = player.vx * player.drag
-    player.vy = player.vy * player.drag
-    
-    -- Update position
-    player.x = player.x + player.vx * dt
-    player.y = player.y + player.vy * dt
-    
-    -- Screen wrapping
-    if player.x < -player.width/2 then
-        player.x = self.screenWidth + player.width/2
-    elseif player.x > self.screenWidth + player.width/2 then
-        player.x = -player.width/2
-    end
-    
-    if player.y < -player.height/2 then
-        player.y = self.screenHeight + player.height/2
-    elseif player.y > self.screenHeight + player.height/2 then
-        player.y = -player.height/2
-    end
-    
-    -- Update teleport cooldown
-    if player.teleportCooldown > 0 then
-        player.teleportCooldown = player.teleportCooldown - dt
-        if player.teleportCooldown <= 0 then
-            player.canTeleport = true
-        end
-    end
-    
-    -- Update shoot cooldown
-    if self.shootCooldown and self.shootCooldown > 0 then
-        self.shootCooldown = self.shootCooldown - dt
-    end
-    
-    -- Cool down heat when not shooting
-    if not self.keys.shoot and player.heat > 0 then
-        -- Apply coolant boost if active
-        local coolMultiplier = activePowerups.coolant and 1.5 or 1
-        player.heat = math.max(0, player.heat - player.coolRate * dt * coolMultiplier)
-    end
-    
-    -- Handle overheat timer
-    if player.overheatTimer > 0 then
-        player.overheatTimer = player.overheatTimer - dt
-        if player.overheatTimer <= 0 then
-            player.heat = 0  -- Reset heat after penalty
-        end
-    end
-    
-    -- Create heat particles when heat is high
-    local heatPercent = player.heat / player.maxHeat
-    if heatPercent > 0.6 then
-        -- More particles at higher heat
-        local particleChance = (heatPercent - 0.6) * 2.5  -- 0 to 1 chance
-        if random() < particleChance * dt then
-            self:createHeatParticle()
-        end
-    end
-    
-    -- Handle shooting
-    if self.keys.shoot then
-        self:shootLaser()
-    end
-    
-    -- Update powerup effects
-    for powerup, timer in pairs(activePowerups) do
-        activePowerups[powerup] = timer - dt
-        if activePowerups[powerup] <= 0 then
-            activePowerups[powerup] = nil
-            -- Shield powerup is instant, no timer to track
-        end
-    end
+    PlayerControl.update(self, dt)
 end
 
 function PlayingState:updateAsteroids(dt)
-    local baseSpeed = constants.asteroid.baseSpeed
-    local speedIncrease = constants.asteroid.speedIncrease
-    local levelMultiplier = constants.levels.asteroidSpeedMultiplier[min(currentLevel, 5)]
-    
-    for i = #asteroids, 1, -1 do
-        local asteroid = asteroids[i]
-        
-        -- Handle fragment movement (from splitting)
-        if asteroid.vx then
-            asteroid.x = asteroid.x + asteroid.vx * dt
-            asteroid.vx = asteroid.vx * 0.98  -- Slight friction
-            
-            -- Wrap horizontally
-            if asteroid.x < -asteroid.size then
-                asteroid.x = self.screenWidth + asteroid.size
-            elseif asteroid.x > self.screenWidth + asteroid.size then
-                asteroid.x = -asteroid.size
-            end
-        end
-        
-        if asteroid.vy then
-            asteroid.y = asteroid.y + asteroid.vy * dt
-            -- Fragments still fall but with their initial velocity
-            asteroid.vy = asteroid.vy + (baseSpeed * 0.5) * dt  -- Add gravity effect
-        else
-            -- Normal asteroid falling
-            asteroid.y = asteroid.y + (baseSpeed + speedIncrease * currentLevel) * levelMultiplier * dt
-        end
-        
-        asteroid.rotation = asteroid.rotation + asteroid.rotationSpeed * dt
-        
-        -- Remove if off screen (bottom only)
-        if asteroid.y > self.screenHeight + asteroid.size then
-            table.remove(asteroids, i)
-        end
-    end
+    EnemyAI.updateAsteroids(self, dt)
 end
 
 function PlayingState:updateAliens(dt)
-    -- Update original aliens (for backward compatibility)
-    for i = #aliens, 1, -1 do
-        local alien = aliens[i]
-        
-        -- Movement based on velocity
-        if alien.vx then
-            alien.x = alien.x + alien.vx * dt
-        else
-            -- Legacy movement for old aliens
-            alien.y = alien.y + constants.alien.speed * dt
-        end
-        
-        if alien.vy then
-            -- Force downward movement
-            alien.vy = math.abs(alien.vy)
-            alien.y = alien.y + alien.vy * dt
-        end
-        
-        -- Simple side-to-side or up-down wave movement
-        alien.waveTimer = alien.waveTimer + dt
-        if alien.vx and alien.vx ~= 0 then
-            -- Moving horizontally, wave vertically
-            alien.y = alien.y + sin(alien.waveTimer * 2) * 30 * dt
-        else
-            -- Moving vertically, wave horizontally
-            alien.x = alien.x + sin(alien.waveTimer * 2) * 50 * dt
-        end
-        
-        -- Shooting
-        alien.shootTimer = alien.shootTimer - dt
-        if alien.shootTimer <= 0 then
-            self:alienShoot(alien)
-            alien.shootTimer = constants.alien.shootInterval
-        end
-        
-        -- Remove if off screen in any direction
-        if alien.y > self.screenHeight + alien.height or 
-           alien.y < -alien.height or
-           alien.x > self.screenWidth + alien.width or 
-           alien.x < -alien.width then
-            table.remove(aliens, i)
-        end
-    end
+    EnemyAI.updateAliens(self, dt)
 end
 
 function PlayingState:updateLasers(dt)
@@ -648,236 +448,34 @@ function PlayingState:updateExplosions(dt)
 end
 
 function PlayingState:updatePowerups(dt)
-    for i = #powerups, 1, -1 do
-        local powerup = powerups[i]
-        powerup:update(dt)
-        
-        if powerup.y > self.screenHeight + powerup.height then
-            table.remove(powerups, i)
-        end
-    end
+    PowerupHandler.update(self, dt)
 end
 
-function PlayingState:updatePowerupTexts(dt)
-    for i = #powerupTexts, 1, -1 do
-        local text = powerupTexts[i]
-        text.y = text.y - 50 * dt
-        text.life = text.life - dt
-        
-        if text.life <= 0 then
-            table.remove(powerupTexts, i)
-        end
-    end
+    -- handled by PowerupHandler.update
 end
 
 function PlayingState:shootLaser()
-    if (not self.shootCooldown or self.shootCooldown <= 0) and player.overheatTimer <= 0 then
-        -- Check if overheated
-        if player.heat >= player.maxHeat then
-            player.overheatTimer = player.overheatPenalty
-            -- Play overheat sound effect
-            if explosionSound then 
-                explosionSound:stop()
-                explosionSound:play() 
-            end
-            return
-        end
-        
-        -- Get ship configuration
-        local shipConfig = constants.ships[selectedShip] or constants.ships.alpha
-        local spread = shipConfig.spread
-        
-        -- Create center laser
-        local laser = self.laserPool:get()
-        laser.x = player.x
-        laser.y = player.y - player.height/2
-        laser.speed = constants.laser.speed
-        laser.isAlien = false
-        
-        table.insert(lasers, laser)
-        
-        -- Add spread shots based on ship type
-        if spread > 0 then
-            -- Left spread shot
-            local leftLaser = self.laserPool:get()
-            leftLaser.x = player.x
-            leftLaser.y = player.y - player.height/2
-            leftLaser.speed = constants.laser.speed
-            leftLaser.isAlien = false
-            -- Apply spread angle for velocity
-            leftLaser.vx = -sin(spread) * constants.laser.speed
-            leftLaser.vy = -cos(spread) * constants.laser.speed
-            table.insert(lasers, leftLaser)
-            
-            -- Right spread shot
-            local rightLaser = self.laserPool:get()
-            rightLaser.x = player.x
-            rightLaser.y = player.y - player.height/2
-            rightLaser.speed = constants.laser.speed
-            rightLaser.isAlien = false
-            -- Apply spread angle for velocity
-            rightLaser.vx = sin(spread) * constants.laser.speed
-            rightLaser.vy = -cos(spread) * constants.laser.speed
-            table.insert(lasers, rightLaser)
-        end
-        
-        -- NEW: Skip heat addition during weapon powerups
-        local isWeaponPowerupActive = activePowerups.rapid or activePowerups.multiShot or activePowerups.spread
-        if not isWeaponPowerupActive then
-            -- Add heat (reduced rate for balance)
-            player.heat = math.min(player.maxHeat, player.heat + player.heatRate)
-        end
-        
-        if laserSound then
-            laserSound:stop()
-            laserSound:play()
-        end
-        
-        -- Set cooldown based on ship fireRate and powerups
-        local baseCooldown
-        if activePowerups.rapid then
-            baseCooldown = 0.1 * (player.fireRateMultiplier or 1)
-        else
-            baseCooldown = shipConfig.fireRate * (player.fireRateMultiplier or 1)
-        end
-        
-        -- Apply graduated heat penalty to fire rate
-        local heatPercent = player.heat / player.maxHeat
-        if heatPercent > 0.75 then
-            -- Gradually slow fire rate as heat increases above 75%
-            -- At 75% heat: no penalty, at 100% heat: 50% slower fire rate
-            local penalty = 1 + (heatPercent - 0.75) * 2
-            self.shootCooldown = baseCooldown * penalty
-        else
-            self.shootCooldown = baseCooldown
-        end
-        
-        -- Multi-shot powerup (adds additional shots to the sides)
-        -- Check both for backward compatibility
-        if activePowerups.multiShot or activePowerups.spread then
-            local leftLaser = self.laserPool:get()
-            leftLaser.x = player.x - 15
-            leftLaser.y = player.y - player.height/2
-            leftLaser.speed = constants.laser.speed
-            leftLaser.isAlien = false
-            table.insert(lasers, leftLaser)
-            
-            local rightLaser = self.laserPool:get()
-            rightLaser.x = player.x + 15
-            rightLaser.y = player.y - player.height/2
-            rightLaser.speed = constants.laser.speed
-            rightLaser.isAlien = false
-            table.insert(lasers, rightLaser)
-        end
-    end
+    PlayerControl.shoot(self)
 end
 
 function PlayingState:alienShoot(alien)
-    local laser = self.laserPool:get()
-    laser.x = alien.x
-    laser.y = alien.y + alien.height/2
-    laser.speed = constants.laser.speed * 0.7
-    laser.isAlien = true
-    
-    table.insert(alienLasers, laser)
+    EnemyAI.alienShoot(self, alien)
 end
 
 function PlayingState:spawnEntities(dt)
-    -- Update spawn timers
-    self.asteroidTimer = self.asteroidTimer + dt
-    self.alienTimer = self.alienTimer + dt
-    self.powerupTimer = self.powerupTimer + dt
-    
-    -- Spawn asteroids
-    local asteroidInterval = constants.asteroid.spawnInterval / min(currentLevel, 5)
-    if self.asteroidTimer >= asteroidInterval then
-        self:spawnAsteroid()
-        self.asteroidTimer = 0
-    end
-    
-    -- Note: Alien spawning is now handled by WaveManager
-    -- The old alien spawning logic has been replaced
-    
-    -- Spawn powerups
-    if self.powerupTimer >= 10 then
-        if random() < 0.3 then
-            self:spawnPowerup()
-        end
-        self.powerupTimer = 0
-    end
-    
-    -- Check for boss spawn
-    if not bossSpawned and not boss then
-        local enemiesNeeded = constants.levels.enemiesForBoss[min(currentLevel, 5)]
-        if enemiesDefeated >= enemiesNeeded then
-            self:spawnBoss()
-        end
-    end
+    EnemyAI.spawnEntities(self, dt)
 end
 
 function PlayingState:spawnAsteroid()
-    local size = random(constants.asteroid.minSize, constants.asteroid.maxSize)
-    local asteroid = {
-        x = random(size, self.screenWidth - size),
-        y = -size,
-        size = size,
-        rotation = random() * pi * 2,
-        rotationSpeed = random() - 0.5
-    }
-    table.insert(asteroids, asteroid)
+    EnemyAI.spawnAsteroid(self)
 end
 
 function PlayingState:spawnAlien()
-    local direction = "top"  -- Force top-only spawning (Galaga-style)
-
-    local alien = {
-        width = constants.alien.width,
-        height = constants.alien.height,
-        shootTimer = constants.alien.shootInterval,
-        waveTimer = random() * pi * 2
-    }
-    
-    -- Only top spawning: start above screen, move downward with horizontal waving
-    alien.x = random(40, self.screenWidth - 40)
-    alien.y = -alien.height
-    alien.vy = constants.alien.speed  -- Move downward
-    alien.vx = 0  -- No initial horizontal velocity (waving handled in update)
-    
-    table.insert(aliens, alien)
+    EnemyAI.spawnAlien(self)
 end
 
 function PlayingState:spawnPowerup(x, y)
-    -- Use provided coordinates or random position
-    x = x or random(30, self.screenWidth - 30)
-    y = y or -30
-    
-    -- Use the new powerup entity with new types
-    local types = {"shield", "rapid", "spread"}
-    if currentLevel >= 2 then
-        table.insert(types, "boost")
-        table.insert(types, "coolant")  -- Add coolant powerup from level 2
-    end
-    if currentLevel >= 3 then
-        table.insert(types, "bomb")
-    end
-    if currentLevel >= 4 then
-        table.insert(types, "health")
-    end
-    
-    -- Roguelike variation: rare chance for enhanced powerups
-    local isEnhanced = random() < 0.1  -- 10% chance for enhanced version
-    
-    local powerupType = types[random(#types)]
-    local powerup = Powerup.new(x, y, powerupType)
-    
-    -- Apply roguelike enhancements
-    if isEnhanced then
-        powerup.enhanced = true
-        powerup.color = {powerup.color[1], powerup.color[2], powerup.color[3], 1}  -- Brighter color
-        -- Enhanced effects will be handled in collision
-    end
-    
-    table.insert(powerups, powerup)
+    PowerupHandler.spawn(self, x, y)
 end
 
 -- Make spawn functions globally accessible for debug console
@@ -1507,30 +1105,7 @@ function PlayingState:createHitEffect(x, y)
 end
 
 function PlayingState:createHeatParticle()
-    -- Create heat steam particles from ship engines
-    local particle = self.particlePool:get()
-    -- Spawn from ship engine area
-    particle.x = player.x + random(-player.width/4, player.width/4)
-    particle.y = player.y + player.height/2
-    
-    -- Upward drift with slight horizontal variation
-    particle.vx = random(-20, 20)
-    particle.vy = random(-80, -120)  -- Upward
-    
-    -- Heat particles live longer and are larger
-    particle.life = random(0.8, 1.2)
-    particle.maxLife = particle.life
-    particle.size = random(3, 5)
-    
-    -- Color based on heat level - orange to red
-    local heatPercent = player.heat / player.maxHeat
-    local r = 1
-    local g = 1 - heatPercent * 0.7  -- Orange to red
-    local b = 0
-    particle.color = {r, g, b, 0.7}
-    particle.type = "heat"
-    
-    table.insert(explosions, particle)
+    PlayerControl.createHeatParticle(self)
 end
 
 function PlayingState:playerHit()
@@ -1616,13 +1191,7 @@ function PlayingState:screenBomb()
 end
 
 function PlayingState:createPowerupText(text, x, y, color)
-    table.insert(powerupTexts, {
-        text = text,
-        x = x,
-        y = y,
-        color = color,
-        life = 1.5
-    })
+    PowerupHandler.createText(self, text, x, y, color)
 end
 
 function PlayingState:draw()
@@ -2174,90 +1743,19 @@ function PlayingState:drawUI()
 end
 
 function PlayingState:keypressed(key, scancode, isrepeat)
-    if key == self.keyBindings.pause or key == "escape" then
-        gameState = "paused"
-        stateManager:switch("pause")
-    elseif key == "f3" then
-        -- Toggle debug overlay
-        self.showDebug = not self.showDebug
-    elseif key == self.keyBindings.shoot then
-        self.keys.shoot = true
-    elseif key == self.keyBindings.boost or key == "lshift" or key == "rshift" then
-        self.keys.boost = true
-    elseif key == self.keyBindings.left or key == "left" then
-        self.keys.left = true
-    elseif key == self.keyBindings.right or key == "right" then
-        self.keys.right = true
-    elseif key == self.keyBindings.up or key == "up" then
-        self.keys.up = true
-    elseif key == self.keyBindings.down or key == "down" then
-        self.keys.down = true
-    elseif key == self.keyBindings.bomb or key == "lctrl" or key == "rctrl" then
-        -- Use bomb if available
-        if player.bombs and player.bombs > 0 then
-            player.bombs = player.bombs - 1
-            self:screenBomb()
-        end
-    end
+    PlayerControl.keypressed(self, key)
 end
 
 function PlayingState:keyreleased(key, scancode)
-    if key == self.keyBindings.shoot then
-        self.keys.shoot = false
-        self.shootCooldown = 0
-    elseif key == self.keyBindings.boost or key == "lshift" or key == "rshift" then
-        self.keys.boost = false
-    elseif key == self.keyBindings.left or key == "left" then
-        self.keys.left = false
-    elseif key == self.keyBindings.right or key == "right" then
-        self.keys.right = false
-    elseif key == self.keyBindings.up or key == "up" then
-        self.keys.up = false
-    elseif key == self.keyBindings.down or key == "down" then
-        self.keys.down = false
-    end
+    PlayerControl.keyreleased(self, key)
 end
 
 function PlayingState:gamepadpressed(joystick, button)
-    if button == "dpup" then
-        self.keys.up = true
-    elseif button == "dpdown" then
-        self.keys.down = true
-    elseif button == "dpleft" then
-        self.keys.left = true
-    elseif button == "dpright" then
-        self.keys.right = true
-    elseif button == self.gamepadBindings.shoot then
-        self.keys.shoot = true
-    elseif button == self.gamepadBindings.bomb then
-        -- Use bomb if available
-        if player.bombs and player.bombs > 0 then
-            player.bombs = player.bombs - 1
-            self:screenBomb()
-        end
-    elseif button == self.gamepadBindings.boost then
-        self.keys.boost = true
-    elseif button == self.gamepadBindings.pause then
-        gameState = "paused"
-        stateManager:switch("pause")
-    end
+    PlayerControl.gamepadpressed(self, button)
 end
 
 function PlayingState:gamepadreleased(joystick, button)
-    if button == "dpup" then
-        self.keys.up = false
-    elseif button == "dpdown" then
-        self.keys.down = false
-    elseif button == "dpleft" then
-        self.keys.left = false
-    elseif button == "dpright" then
-        self.keys.right = false
-    elseif button == self.gamepadBindings.shoot then
-        self.keys.shoot = false
-        self.shootCooldown = 0
-    elseif button == self.gamepadBindings.boost then
-        self.keys.boost = false
-    end
+    PlayerControl.gamepadreleased(self, button)
 end
 
 -- Boss-related methods
