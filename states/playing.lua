@@ -472,7 +472,18 @@ function PlayingState:updateExplosions(dt)
             explosion.alpha = explosion.alpha - dt
 
             if explosion.alpha <= 0 then
-                local pool = explosion.pool or self.explosionPool
+                local pool = explosion.pool
+                if not pool then
+                    if explosion.isDebris then
+                        pool = self.debrisPool
+                    elseif explosion.isTrail then
+                        pool = self.trailPool
+                    elseif explosion.vx then
+                        pool = self.particlePool
+                    else
+                        pool = self.explosionPool
+                    end
+                end
                 pool:release(explosion)
                 table.remove(explosions, i)
             end
