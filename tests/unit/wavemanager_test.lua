@@ -33,12 +33,4 @@ describe("WaveManager Spawning", function()
         manager:update(0.1)
         assert.is_false(manager:isActive())
     end)
-
-    it("adjusts difficulty based on performance", function()
-        manager:setPlayerPerformance({killRate = 1.5, combo = 6})
-        assert.is_true(manager.difficultyMultiplier > 1)
-        local current = manager.difficultyMultiplier
-        manager:setPlayerPerformance({killRate = 0, combo = 0})
-        assert.is_true(manager.difficultyMultiplier < current)
-    end)
 end)

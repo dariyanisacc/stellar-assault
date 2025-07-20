@@ -1,26 +1,6 @@
 local constants = require("src.constants")
 local EnemyAI = {}
 
--- Additional movement patterns for classic aliens
-function EnemyAI.homingMovement(alien, dt, state)
-    if not player then return end
-    local dx = (player.x + player.width/2) - (alien.x + alien.width/2)
-    local dy = (player.y + player.height/2) - (alien.y + alien.height/2)
-    local dist = math.sqrt(dx * dx + dy * dy)
-    if dist > 0 then
-        alien.x = alien.x + (dx / dist) * constants.alien.speed * dt
-        alien.y = alien.y + (dy / dist) * constants.alien.speed * dt
-    else
-        alien.y = alien.y + constants.alien.speed * dt
-    end
-end
-
-function EnemyAI.zigzagMovement(alien, dt, state)
-    alien.y = alien.y + constants.alien.speed * dt
-    alien.waveTimer = alien.waveTimer + dt
-    alien.x = alien.x + math.sin(alien.waveTimer * 5) * 80 * dt
-end
-
 function EnemyAI.updateAsteroids(state, dt)
     local baseSpeed = constants.asteroid.baseSpeed
     local speedIncrease = constants.asteroid.speedIncrease
@@ -53,27 +33,20 @@ end
 function EnemyAI.updateAliens(state, dt)
     for i = #aliens, 1, -1 do
         local alien = aliens[i]
-        -- Choose movement based on behavior
-        if alien.behavior == "homing" then
-            EnemyAI.homingMovement(alien, dt, state)
-        elseif alien.behavior == "zigzag" then
-            EnemyAI.zigzagMovement(alien, dt, state)
+        if alien.vx then
+            alien.x = alien.x + alien.vx * dt
         else
-            if alien.vx then
-                alien.x = alien.x + alien.vx * dt
-            else
-                alien.y = alien.y + constants.alien.speed * dt
-            end
-            if alien.vy then
-                alien.vy = math.abs(alien.vy)
-                alien.y = alien.y + alien.vy * dt
-            end
-            alien.waveTimer = alien.waveTimer + dt
-            if alien.vx and alien.vx ~= 0 then
-                alien.y = alien.y + math.sin(alien.waveTimer * 2) * 30 * dt
-            else
-                alien.x = alien.x + math.sin(alien.waveTimer * 2) * 50 * dt
-            end
+            alien.y = alien.y + constants.alien.speed * dt
+        end
+        if alien.vy then
+            alien.vy = math.abs(alien.vy)
+            alien.y = alien.y + alien.vy * dt
+        end
+        alien.waveTimer = alien.waveTimer + dt
+        if alien.vx and alien.vx ~= 0 then
+            alien.y = alien.y + math.sin(alien.waveTimer * 2) * 30 * dt
+        else
+            alien.x = alien.x + math.sin(alien.waveTimer * 2) * 50 * dt
         end
         alien.shootTimer = alien.shootTimer - dt
         if alien.shootTimer <= 0 then
@@ -137,7 +110,7 @@ function EnemyAI.spawnAsteroid(state)
     table.insert(asteroids, asteroid)
 end
 
-function EnemyAI.spawnAlien(state, behavior)
+function EnemyAI.spawnAlien(state)
     local alien = {
         width = constants.alien.width,
         height = constants.alien.height,
@@ -148,7 +121,6 @@ function EnemyAI.spawnAlien(state, behavior)
     alien.y = -alien.height
     alien.vy = constants.alien.speed
     alien.vx = 0
-    alien.behavior = behavior
     table.insert(aliens, alien)
 end
 

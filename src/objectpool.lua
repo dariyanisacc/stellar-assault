@@ -150,7 +150,7 @@ function ObjectPool.createParticlePool()
     return ObjectPool:new(createParticle, resetParticle, 500)
 end
 
--- Trail Particle Pool
+-- Trail particles follow lasers briefly
 function ObjectPool.createTrailPool()
     local function createTrail()
         return {
@@ -160,30 +160,27 @@ function ObjectPool.createTrailPool()
             vy = 0,
             life = 0,
             maxLife = 0,
-            size = 1,
-            color = {1, 1, 1},
-            type = "trail",
-            pool = nil
+            size = 2,
+            color = {1, 1, 1, 1}
         }
     end
 
-    local function resetTrail(trail)
-        trail.x = 0
-        trail.y = 0
-        trail.vx = 0
-        trail.vy = 0
-        trail.life = 0
-        trail.maxLife = 0
-        trail.size = 1
-        trail.color = {1, 1, 1}
-        trail.type = "trail"
-        trail.pool = nil
+    local function resetTrail(p)
+        p.x, p.y, p.vx, p.vy = 0, 0, 0, 0
+        p.life, p.maxLife = 0, 0
+        p.size = 2
+        p.color[1], p.color[2], p.color[3], p.color[4] = 1, 1, 1, 1
+        p.rotation = nil
+        p.rotationSpeed = nil
+        p.isDebris = nil
+        p.isSpark = nil
+        p.pool = nil
     end
 
     return ObjectPool:new(createTrail, resetTrail, 300)
 end
 
--- Debris Particle Pool
+-- Debris particles spawned from explosions
 function ObjectPool.createDebrisPool()
     local function createDebris()
         return {
@@ -193,28 +190,23 @@ function ObjectPool.createDebrisPool()
             vy = 0,
             life = 0,
             maxLife = 0,
-            size = 1,
+            size = 2,
             rotation = 0,
             rotationSpeed = 0,
-            color = {1, 1, 1},
-            type = "debris",
-            pool = nil
+            isDebris = true,
+            color = {1, 1, 1, 1}
         }
     end
 
-    local function resetDebris(debris)
-        debris.x = 0
-        debris.y = 0
-        debris.vx = 0
-        debris.vy = 0
-        debris.life = 0
-        debris.maxLife = 0
-        debris.size = 1
-        debris.rotation = 0
-        debris.rotationSpeed = 0
-        debris.color = {1, 1, 1}
-        debris.type = "debris"
-        debris.pool = nil
+    local function resetDebris(d)
+        d.x, d.y, d.vx, d.vy = 0, 0, 0, 0
+        d.life, d.maxLife = 0, 0
+        d.size = 2
+        d.rotation, d.rotationSpeed = 0, 0
+        d.color[1], d.color[2], d.color[3], d.color[4] = 1, 1, 1, 1
+        d.isDebris = true
+        d.isSpark = nil
+        d.pool = nil
     end
 
     return ObjectPool:new(createDebris, resetDebris, 300)

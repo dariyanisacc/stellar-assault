@@ -10,9 +10,7 @@ function SpatialHash:new(cellSize)
 end
 
 function SpatialHash:clear()
-    for k in pairs(self.cells) do
-        self.cells[k] = nil
-    end
+    self.cells = {}
 end
 
 function SpatialHash:getKey(x, y)
@@ -53,37 +51,6 @@ function SpatialHash:insert(entity)
         end
         table.insert(self.cells[key], entity)
     end
-    entity._spatialKeys = keys
-end
-
-function SpatialHash:remove(entity)
-    local keys = entity._spatialKeys or self:getEntityKeys(entity)
-    for _, key in ipairs(keys) do
-        local cell = self.cells[key]
-        if cell then
-            for i = #cell, 1, -1 do
-                if cell[i] == entity then
-                    table.remove(cell, i)
-                end
-            end
-            if #cell == 0 then
-                self.cells[key] = nil
-            end
-        end
-    end
-    entity._spatialKeys = nil
-end
-
-function SpatialHash:update(entity)
-    local newKeys = self:getEntityKeys(entity)
-    self:remove(entity)
-    for _, key in ipairs(newKeys) do
-        if not self.cells[key] then
-            self.cells[key] = {}
-        end
-        table.insert(self.cells[key], entity)
-    end
-    entity._spatialKeys = newKeys
 end
 
 function SpatialHash:getNearby(entity)

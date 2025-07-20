@@ -106,11 +106,7 @@ function MenuState:draw()
     
     -- Draw title
     lg.setFont(titleFont or lg.newFont(48))
-    if highContrast then
-        lg.setColor(1, 1, 1)
-    else
-        lg.setColor(0, 1, 1)
-    end
+    lg.setColor(0, 1, 1)
     local title = "STELLAR ASSAULT"
     local titleWidth = lg.getFont():getWidth(title)
     lg.print(title, self.screenWidth/2 - titleWidth/2, 100)
@@ -128,21 +124,13 @@ end
 
 function MenuState:drawMainMenu()
     lg.setFont(menuFont or lg.newFont(24))
-    local options = {"Start Game", "Level Select", "Select Ship", "Leaderboard", "Options", "Quit"}
+    local options = {"Start Game", "Level Select", "Select Ship", "Options", "Quit"}
     
     for i, option in ipairs(options) do
         if i == self.selection then
-            if highContrast then
-                lg.setColor(1, 0, 0)
-            else
-                lg.setColor(1, 1, 0)
-            end
+            lg.setColor(1, 1, 0)
         else
-            if highContrast then
-                lg.setColor(1, 1, 1)
-            else
-                lg.setColor(1, 1, 1)
-            end
+            lg.setColor(1, 1, 1)
         end
         
         local optionWidth = lg.getFont():getWidth(option)
@@ -151,11 +139,7 @@ function MenuState:drawMainMenu()
     
     -- Draw instructions
     lg.setFont(smallFont or lg.newFont(14))
-    if highContrast then
-        lg.setColor(1, 1, 1)
-    else
-        lg.setColor(0.7, 0.7, 0.7)
-    end
+    lg.setColor(0.7, 0.7, 0.7)
     local nav = inputHints[lastInputType].navigate or "Arrow Keys/D-Pad"
     local select = inputHints[lastInputType].select or "Enter/A"
     local back = inputHints[lastInputType].back or "Escape/B"
@@ -308,11 +292,11 @@ end
 function MenuState:handleMainMenuInput(key)
     if key == "up" then
         self.selection = self.selection - 1
-        if self.selection < 1 then self.selection = 6 end
+        if self.selection < 1 then self.selection = 5 end
         if menuSelectSound then menuSelectSound:play() end
     elseif key == "down" then
         self.selection = self.selection + 1
-        if self.selection > 6 then self.selection = 1 end
+        if self.selection > 5 then self.selection = 1 end
         if menuSelectSound then menuSelectSound:play() end
     elseif key == "return" or key == "space" then
         if menuConfirmSound then menuConfirmSound:play() end
@@ -335,10 +319,8 @@ function MenuState:handleMainMenuInput(key)
                 end
             end
         elseif self.selection == 4 then
-            stateManager:switch("leaderboard", "menu")
-        elseif self.selection == 5 then
             stateManager:switch("options")
-        elseif self.selection == 6 then
+        elseif self.selection == 5 then
             love.event.quit()
         end
     end

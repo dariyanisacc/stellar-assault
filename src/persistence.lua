@@ -8,7 +8,6 @@ local SAVE_FILE = "stellar_assault_save.dat"
 -- Default save data structure
 local defaultSaveData = {
     highScore = 0,
-    leaderboard = {},
     unlockedLevels = {true}, -- Level 1 always unlocked
     totalBossesDefeated = 0,
     statistics = {
@@ -23,9 +22,7 @@ local defaultSaveData = {
         sfxVolume = 1.0,
         musicVolume = 0.2,
         selectedShip = "alpha",
-        displayMode = "windowed",
-        highContrast = false,
-        fontScale = 1
+        displayMode = "windowed"
     },
     controls = {
         -- Default keyboard bindings
@@ -187,42 +184,16 @@ end
 
 -- Public API functions
 function Persistence.getHighScore()
-    if saveData.leaderboard and #saveData.leaderboard > 0 then
-        return saveData.leaderboard[1].score
-    end
     return saveData.highScore or 0
 end
 
-function Persistence.getLeaderboard()
-    return saveData.leaderboard or {}
-end
-
-function Persistence.setHighScore(score, name)
-    name = name or "Player"
-
-    if not saveData.leaderboard then
-        saveData.leaderboard = {}
+function Persistence.setHighScore(score)
+    if score > (saveData.highScore or 0) then
+        saveData.highScore = score
+        Persistence.save()
+        return true
     end
-
-    -- Insert new entry
-    table.insert(saveData.leaderboard, {name = name, score = score})
-
-    -- Sort descending by score
-    table.sort(saveData.leaderboard, function(a, b)
-        return a.score > b.score
-    end)
-
-    -- Trim to top 10
-    while #saveData.leaderboard > 10 do
-        table.remove(saveData.leaderboard)
-    end
-
-    -- Update legacy highScore field
-    saveData.highScore = saveData.leaderboard[1].score
-
-    Persistence.save()
-
-    return score == saveData.highScore
+    return false
 end
 
 function Persistence.unlockLevel(level)
@@ -272,24 +243,6 @@ function Persistence.updateSettings(settings)
     for k, v in pairs(settings) do
         saveData.settings[k] = v
     end
-    Persistence.save()
-end
-
-function Persistence.getHighContrast()
-    return saveData.settings.highContrast or false
-end
-
-function Persistence.setHighContrast(value)
-    saveData.settings.highContrast = value
-    Persistence.save()
-end
-
-function Persistence.getFontScale()
-    return saveData.settings.fontScale or 1
-end
-
-function Persistence.setFontScale(scale)
-    saveData.settings.fontScale = scale
     Persistence.save()
 end
 
