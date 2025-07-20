@@ -57,8 +57,8 @@ The original `main.lua` is backed up as `main_original.lua`. The new architectur
 Remaining tasks from the refactoring checklist:
 
 1. **Spatial Partitioning for Collisions**
-   - Implement grid-based or quadtree collision detection
-   - Currently using O(n×m) brute force
+   - Implemented a spatial hash grid (`src/spatial.lua`)
+   - Collision loops in the main game and `WaveManager` now query this grid
 
 2. **Frame-Rate Independence**
    - Audit all movement/timer code for dt usage

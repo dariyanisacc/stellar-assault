@@ -2,6 +2,7 @@
 local constants = require("src.constants")
 local ObjectPool = require("src.objectpool")
 local Collision = require("src.collision")
+local SpatialHash = require("src.spatial")
 local logger = require("src.logger")
 local Powerup = require("src.entities.powerup")
 local Persistence = require("src.persistence")
@@ -984,68 +985,73 @@ function PlayingState:checkPlayerCollisions()
 end
 
 function PlayingState:checkLaserCollisions()
-    -- Player lasers vs Asteroids
-    for i = #lasers, 1, -1 do
-        local laser = lasers[i]
-        local hit = false
-        
-        -- Check asteroids
-        for j = #asteroids, 1, -1 do
-            local asteroid = asteroids[j]
-            if Collision.checkAABB(laser, asteroid) then
-                self:createHitEffect(laser.x, laser.y)  -- Add hit spark effect
-                self:handleAsteroidDestruction(asteroid, j)
-                self.laserPool:release(laser)
-                table.remove(lasers, i)
-                hit = true
+    -- Build spatial grid of lasers for efficient queries
+    local grid = SpatialHash:new(100)
+    for _, laser in ipairs(lasers) do
+        laser._remove = false
+        grid:insert(laser)
+    end
+
+    -- Check asteroids against nearby lasers
+    for i = #asteroids, 1, -1 do
+        local asteroid = asteroids[i]
+        for _, laser in ipairs(grid:getNearby(asteroid)) do
+            if not laser._remove and Collision.checkAABB(laser, asteroid) then
+                self:createHitEffect(laser.x, laser.y)
+                self:handleAsteroidDestruction(asteroid, i)
+                laser._remove = true
                 break
             end
         end
-        
-        if not hit then
-            -- Check aliens
-            for j = #aliens, 1, -1 do
-                local alien = aliens[j]
-                if Collision.checkAABB(laser, alien) then
-                    self:createHitEffect(laser.x, laser.y)  -- Add hit spark effect
-                    self:handleAlienDestruction(alien, j)
-                    self.laserPool:release(laser)
-                    table.remove(lasers, i)
-                    hit = true
-                    break
-                end
+    end
+
+    -- Check aliens against nearby lasers
+    for i = #aliens, 1, -1 do
+        local alien = aliens[i]
+        for _, laser in ipairs(grid:getNearby(alien)) do
+            if not laser._remove and Collision.checkAABB(laser, alien) then
+                self:createHitEffect(laser.x, laser.y)
+                self:handleAlienDestruction(alien, i)
+                laser._remove = true
+                break
             end
         end
-        
-        -- Check WaveManager enemies
-        if not hit and self.waveManager then
-            local destroyedEnemy, enemyIndex = self.waveManager:checkCollisionsWithLasers(lasers)
-            if destroyedEnemy then
-                -- Handle enemy destruction
-                local enemySize = math.max(destroyedEnemy.width, destroyedEnemy.height)
-                self:createExplosion(destroyedEnemy.x + destroyedEnemy.width/2, 
-                                   destroyedEnemy.y + destroyedEnemy.height/2, enemySize)
-                if explosionSound then
-                    explosionSound:clone():play()
-                end
-                local enemyScore = 50 * currentLevel
-                score = score + enemyScore
-                Persistence.addScore(enemyScore)  -- Add score to persistent storage
-                enemiesDefeated = enemiesDefeated + 1
-                self.sessionEnemiesDefeated = self.sessionEnemiesDefeated + 1
-                
-                -- Check for new high score
-                if score > self.previousHighScore and not self.newHighScore then
-                    self.newHighScore = true
-                    self:showNewHighScoreNotification()
-                end
-                
-                -- 15% chance to spawn powerup (increased from 10%)
-                if random() < 0.15 then
-                    self:spawnPowerup(destroyedEnemy.x + destroyedEnemy.width/2, 
-                                     destroyedEnemy.y + destroyedEnemy.height/2)
-                end
+    end
+
+    -- Check WaveManager enemies
+    if self.waveManager then
+        local destroyedEnemy, enemyIndex = self.waveManager:checkCollisionsWithLasers(lasers, grid)
+        if destroyedEnemy then
+            local enemySize = math.max(destroyedEnemy.width, destroyedEnemy.height)
+            self:createExplosion(destroyedEnemy.x + destroyedEnemy.width/2,
+                               destroyedEnemy.y + destroyedEnemy.height/2, enemySize)
+            if explosionSound then
+                explosionSound:clone():play()
             end
+            local enemyScore = 50 * currentLevel
+            score = score + enemyScore
+            Persistence.addScore(enemyScore)
+            enemiesDefeated = enemiesDefeated + 1
+            self.sessionEnemiesDefeated = self.sessionEnemiesDefeated + 1
+
+            if score > self.previousHighScore and not self.newHighScore then
+                self.newHighScore = true
+                self:showNewHighScoreNotification()
+            end
+
+            if random() < 0.15 then
+                self:spawnPowerup(destroyedEnemy.x + destroyedEnemy.width/2,
+                                 destroyedEnemy.y + destroyedEnemy.height/2)
+            end
+        end
+    end
+
+    -- Remove lasers marked for deletion
+    for i = #lasers, 1, -1 do
+        local l = lasers[i]
+        if l._remove then
+            self.laserPool:release(l)
+            table.remove(lasers, i)
         end
     end
 end
