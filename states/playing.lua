@@ -411,7 +411,15 @@ function PlayingState:updateExplosions(dt)
             local e = table.remove(explosions, 1)
             local pool = e.pool
             if not pool then
-                pool = e.vx and self.particlePool or self.explosionPool
+                if e.isDebris then
+                    pool = self.debrisPool
+                elseif e.isTrail then
+                    pool = self.trailPool
+                elseif e.vx then
+                    pool = self.particlePool
+                else
+                    pool = self.explosionPool
+                end
             end
             pool:release(e)
         end
@@ -445,7 +453,15 @@ function PlayingState:updateExplosions(dt)
             if explosion.life <= 0 then
                 local pool = explosion.pool
                 if not pool then
-                    pool = explosion.vx and self.particlePool or self.explosionPool
+                    if explosion.isDebris then
+                        pool = self.debrisPool
+                    elseif explosion.isTrail then
+                        pool = self.trailPool
+                    elseif explosion.vx then
+                        pool = self.particlePool
+                    else
+                        pool = self.explosionPool
+                    end
                 end
                 pool:release(explosion)
                 table.remove(explosions, i)
@@ -456,10 +472,7 @@ function PlayingState:updateExplosions(dt)
             explosion.alpha = explosion.alpha - dt
 
             if explosion.alpha <= 0 then
-                local pool = explosion.pool
-                if not pool then
-                    pool = explosion.vx and self.particlePool or self.explosionPool
-                end
+                local pool = explosion.pool or self.explosionPool
                 pool:release(explosion)
                 table.remove(explosions, i)
             end
@@ -1131,23 +1144,17 @@ function PlayingState:createExplosion(x, y, size)
 end
 
 function PlayingState:createHitEffect(x, y)
-    -- Create spark particles for hit effects
-    for i = 1, 5 do  -- Add 5 sparks
-        local particle = self.particlePool:get()
-        particle.x = x
-        particle.y = y
-        local angle = random() * pi * 2
-        local speed = random(100, 200)
-        particle.vx = cos(angle) * speed
-        particle.vy = sin(angle) * speed
-        particle.life = 0.3
-        particle.maxLife = 0.3
-        particle.size = 2
-        particle.color = {1, 1, 0, 1}  -- Yellow sparks
-        particle.type = "spark"  -- Mark as spark for special rendering if needed
-        particle.pool = self.particlePool
-        table.insert(explosions, particle)
-    end
+    -- Create a small hit effect using an explosion ring
+    local explosion = self.explosionPool:get()
+    explosion.x = x
+    explosion.y = y
+    explosion.radius = 10
+    explosion.maxRadius = 30
+    explosion.speed = 60
+    explosion.alpha = 0.8
+    explosion.pool = self.explosionPool
+
+    table.insert(explosions, explosion)
 end
 
 function PlayingState:createHeatParticle()
@@ -2189,20 +2196,6 @@ function PlayingState:showNewHighScoreNotification()
         powerupSound:stop()
         powerupSound:play()
     end
-end
-
-function PlayingState:createHitEffect(x, y)
-    -- Create a small hit effect
-    local explosion = self.explosionPool:get()
-    explosion.x = x
-    explosion.y = y
-    explosion.radius = 10
-    explosion.maxRadius = 30
-    explosion.speed = 60
-    explosion.alpha = 0.8
-    explosion.pool = self.explosionPool
-
-    table.insert(explosions, explosion)
 end
 
 return PlayingState
