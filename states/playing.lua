@@ -1574,6 +1574,7 @@ function PlayingState:drawLasers()
         t.maxLife = 0.3
         t.size = 2
         t.color = {1, 1, 1, 1}
+        t.isTrail = true
         t.pool = self.trailPool
         table.insert(explosions, t)
     end
@@ -1593,6 +1594,7 @@ function PlayingState:drawLasers()
         t.maxLife = 0.3
         t.size = 2
         t.color = {1, 0, 0, 1}
+        t.isTrail = true
         t.pool = self.trailPool
         table.insert(explosions, t)
     end

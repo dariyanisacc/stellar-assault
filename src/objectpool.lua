@@ -161,6 +161,7 @@ function ObjectPool.createTrailPool()
             life = 0,
             maxLife = 0,
             size = 2,
+            isTrail = true,
             color = {1, 1, 1, 1}
         }
     end
@@ -174,6 +175,7 @@ function ObjectPool.createTrailPool()
         p.rotationSpeed = nil
         p.isDebris = nil
         p.isSpark = nil
+        p.isTrail = true
         p.pool = nil
     end
 
@@ -206,6 +208,7 @@ function ObjectPool.createDebrisPool()
         d.color[1], d.color[2], d.color[3], d.color[4] = 1, 1, 1, 1
         d.isDebris = true
         d.isSpark = nil
+        d.isTrail = nil
         d.pool = nil
     end
 
