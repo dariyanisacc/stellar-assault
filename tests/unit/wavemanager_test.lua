@@ -41,4 +41,19 @@ describe("WaveManager Spawning", function()
         manager:setPlayerPerformance({killRate = 0, combo = 0})
         assert.is_true(manager.difficultyMultiplier < current)
     end)
+
+    it("increases enemy health when kill rate is high", function()
+        manager:setPlayerPerformance({killRate = 1.0, combo = 0})
+        manager:startWave(5)
+        manager:spawnEnemy()
+        local highHealth = manager.enemies[1].health
+
+        local managerLow = WaveManager:new(player)
+        managerLow:setPlayerPerformance({killRate = 0, combo = 0})
+        managerLow:startWave(5)
+        managerLow:spawnEnemy()
+        local lowHealth = managerLow.enemies[1].health
+
+        assert.is_true(highHealth > lowHealth)
+    end)
 end)
