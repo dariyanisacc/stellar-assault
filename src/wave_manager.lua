@@ -386,7 +386,12 @@ function WaveManager:update(dt)
         self.waveActive = false
         logger.info("Wave " .. self.waveNumber .. " completed")
         if self.waveCompleteCallback then
-            self.waveCompleteCallback(self.waveNumber)
+            local stats = {
+                killRate = self.playerPerformance.killRate,
+                maxCombo = self.playerPerformance.maxCombo,
+                enemiesDefeated = self.enemiesSpawned
+            }
+            self.waveCompleteCallback(self.waveNumber, stats)
         end
     end
 end
@@ -481,6 +486,8 @@ function WaveManager:checkCollision(a, b)
 end
 
 function WaveManager:setWaveCompleteCallback(callback)
+    -- Callback signature: function(waveNumber, stats)
+    -- stats contains killRate, maxCombo, and enemiesDefeated
     self.waveCompleteCallback = callback
 end
 
