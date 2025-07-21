@@ -11,7 +11,7 @@ function Boss.new(level)
     local self = setmetatable({}, Boss)
 
     -- basic placement ----------------------------
-    self.sprite = bossSprite                 -- ← pre‑loaded in main.lua
+    self.sprite = bossSprites and bossSprites[level] or bossSprite
     self.x      = lg.getWidth() / 2
     self.y      = -self.sprite:getHeight()    -- scroll in from top
 
