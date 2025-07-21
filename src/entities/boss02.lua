@@ -10,7 +10,7 @@ function Boss02.new(level)
     local self = setmetatable({}, Boss02)
     
     -- basic placement
-    self.sprite = boss2Sprite or bossSprite  -- fallback if not loaded
+    self.sprite = (bossSprites and bossSprites[2]) or boss2Sprite or bossSprite
     self.x = lg.getWidth() / 2
     self.y = -100
     

@@ -115,43 +115,36 @@ function love.load()
         consoleFont = lg.newFont(14) -- Use default font
     end
     
-    -- Load sprites (boss and player ships)
-    if lf.getInfo("assets/sprites/boss_01.png") then
-        bossSprite = lg.newImage("assets/sprites/boss_01.png")
+    -- Load all sprites dynamically
+    local SpriteManager = require("src.sprite_manager")
+    spriteManager = SpriteManager.load("assets/sprites")
+
+    -- Player ships
+    playerShips = {
+        alpha = spriteManager:get("beginner_ship_alpha"),
+        beta  = spriteManager:get("player_ship_beta"),
+        gamma = spriteManager:get("player_ship_gamma"),
+    }
+
+    -- Enemy ships
+    enemyShips = {
+        basic     = spriteManager:get("enemy_basic"),
+        homing    = spriteManager:get("enemy_homing"),
+        dive      = spriteManager:get("enemy_dive"),
+        zigzag    = spriteManager:get("enemy_zigzag"),
+        formation = spriteManager:get("enemy_formation"),
+    }
+
+    -- Boss sprites (maintain backward compatibility)
+    bossSprites = {}
+    for i = 1, 15 do
+        local sprite = spriteManager:get("boss_" .. i)
+        if sprite then
+            bossSprites[i] = sprite
+        end
     end
-    if lf.getInfo("assets/sprites/boss_02.png") then
-        boss2Sprite = lg.newImage("assets/sprites/boss_02.png")
-    end
-    
-    -- Load individual player ship sprites (using Midjourney sprites)
-    playerShips = {}
-    if lf.getInfo("assets/Midjourney sprites/Player Ships/beginner ship alpha.png") then
-        playerShips.alpha = lg.newImage("assets/Midjourney sprites/Player Ships/beginner ship alpha.png")
-    end
-    if lf.getInfo("assets/Midjourney sprites/Player Ships/Player Ship Beta.png") then
-        playerShips.beta = lg.newImage("assets/Midjourney sprites/Player Ships/Player Ship Beta.png")
-    end
-    if lf.getInfo("assets/Midjourney sprites/Player Ships/Player Ship Gamma.png") then
-        playerShips.gamma = lg.newImage("assets/Midjourney sprites/Player Ships/Player Ship Gamma.png")
-    end
-    
-    -- Load enemy ship sprites (using Midjourney sprites)
-    enemyShips = {}
-    if lf.getInfo("assets/Midjourney sprites/Enemy Ships/Enemy Basic.png") then
-        enemyShips.basic = lg.newImage("assets/Midjourney sprites/Enemy Ships/Enemy Basic.png")
-    end
-    if lf.getInfo("assets/Midjourney sprites/Enemy Ships/Enemy Homing.png") then
-        enemyShips.homing = lg.newImage("assets/Midjourney sprites/Enemy Ships/Enemy Homing.png")
-    end
-    if lf.getInfo("assets/Midjourney sprites/Enemy Ships/Enemy Dive.png") then
-        enemyShips.dive = lg.newImage("assets/Midjourney sprites/Enemy Ships/Enemy Dive.png")
-    end
-    if lf.getInfo("assets/Midjourney sprites/Enemy Ships/Enemy ZigZag.png") then
-        enemyShips.zigzag = lg.newImage("assets/Midjourney sprites/Enemy Ships/Enemy ZigZag.png")
-    end
-    if lf.getInfo("assets/Midjourney sprites/Enemy Ships/Enemy Formation.png") then
-        enemyShips.formation = lg.newImage("assets/Midjourney sprites/Enemy Ships/Enemy Formation.png")
-    end
+    bossSprite = bossSprites[1]
+    boss2Sprite = bossSprites[2]
     
     -- Game configuration
     availableShips = { "alpha", "beta", "gamma" }

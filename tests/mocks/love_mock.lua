@@ -119,6 +119,11 @@ love_mock.filesystem = {
     read = function(path) return nil, "File not found" end,
     write = function(path, data) return true end,
     getInfo = function(path) return nil end,
+    getDirectoryItems = function(path)
+        local items = love_mock.filesystem.__items and love_mock.filesystem.__items[path]
+        if items then return items end
+        return {}
+    end,
     getSaveDirectory = function() return "/tmp/spacedodger" end,
     setIdentity = function(identity) end,
 }
