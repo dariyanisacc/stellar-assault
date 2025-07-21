@@ -424,22 +424,10 @@ function PlayingState:updateExplosions(dt)
 local maxExplosions = 200
 if #explosions > maxExplosions then
 -- Remove oldest explosions/particles
-for i = 1, #explosions - maxExplosions do
-local e = table.remove(explosions, 1)
-local pool = e.pool
-if not pool then
-if e.isDebris then
-pool = self.debrisPool
-elseif e.isTrail then
-pool = self.trailPool
-elseif e.vx then
-pool = self.particlePool
-else
-pool = self.explosionPool
-end
-end
-pool:release(e)
-end
+        for i = 1, #explosions - maxExplosions do
+        local e = table.remove(explosions, 1)
+        e.pool:release(e)
+        end
 end
 
 for i = #explosions, 1, -1 do
@@ -467,42 +455,18 @@ if explosion.color and explosion.life < 0.3 then
 explosion.color[4] = explosion.life / 0.3
 end
 
-if explosion.life <= 0 then
-local pool = explosion.pool
-if not pool then
-if explosion.isDebris then
-pool = self.debrisPool
-elseif explosion.isTrail then
-pool = self.trailPool
-elseif explosion.vx then
-pool = self.particlePool
-else
-pool = self.explosionPool
-end
-end
-pool:release(explosion)
-table.remove(explosions, i)
+        if explosion.life <= 0 then
+        explosion.pool:release(explosion)
+        table.remove(explosions, i)
 end
 else
 -- It's a regular explosion
 explosion.radius = explosion.radius + explosion.speed * dt
 explosion.alpha = explosion.alpha - dt
 
-if explosion.alpha <= 0 then
-local pool = explosion.pool
-if not pool then
-if explosion.isDebris then
-pool = self.debrisPool
-elseif explosion.isTrail then
-pool = self.trailPool
-elseif explosion.vx then
-pool = self.particlePool
-else
-pool = self.explosionPool
-end
-end
-pool:release(explosion)
-table.remove(explosions, i)
+        if explosion.alpha <= 0 then
+        explosion.pool:release(explosion)
+        table.remove(explosions, i)
 end
 end
 end
