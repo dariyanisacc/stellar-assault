@@ -19,4 +19,15 @@ describe("BossManager integration", function()
         mgr:update(5)
         assert.is_not_nil(boss.currentAttack)
     end)
+
+    it("includes bulletHell for quantumPhantom", function()
+        local mgr = BossManager:new()
+        local boss = mgr:spawnBoss("quantumPhantom")
+        local found = false
+        for _, a in ipairs(boss.attacks) do
+            if a == "bulletHell" then found = true break end
+        end
+        assert.is_true(found)
+        assert.is_table(mgr.attackPatterns.bulletHell)
+    end)
 end)

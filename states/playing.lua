@@ -2077,6 +2077,21 @@ boss.alpha = 1
 self:endBossAttack(1)
 end
 
+elseif attackType == "bulletHell" then
+local total = 20
+boss.bulletHellCount = boss.bulletHellCount or 0
+local spawnRate = total / 3
+local expected = math.floor(boss.attackTimer * spawnRate)
+while boss.bulletHellCount < expected and boss.bulletHellCount < total do
+local angle = boss.bulletHellCount * 0.3
+self:createBossLaser(boss.x, boss.y + boss.size/2, angle)
+boss.bulletHellCount = boss.bulletHellCount + 1
+end
+if boss.attackTimer > 3 then
+boss.bulletHellCount = nil
+self:endBossAttack(4)
+end
+
 elseif attackType == "iceBeam" then
 -- Similar pattern to beamSweep but slower and creates ice zones
 if boss.attackTimer > 2 then
