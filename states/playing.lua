@@ -1081,14 +1081,17 @@ explosion.x = x
 explosion.y = y
 explosion.radius = size / 4
 explosion.maxRadius = size
-explosion.speed = size * 2
-explosion.alpha = 1
-explosion.pool = self.explosionPool
+    explosion.speed = size * 2
+    explosion.alpha = 1
+    explosion.pool = self.explosionPool
+    explosion.debrisSpawned = 0
 
 table.insert(explosions, explosion)
 
--- Create explosion ring particles
-local particleCount = math.floor(size / 5)
+    -- Create explosion ring particles with a maximum cap
+    local maxCount = math.min(10, math.floor(size / 8))
+    explosion.debrisMax = maxCount
+    local particleCount = maxCount
 for i = 1, particleCount do
 local angle = (i / particleCount) * pi * 2
 local speed = random(100, 200)
@@ -1110,9 +1113,9 @@ particle.pool = self.particlePool
 table.insert(explosions, particle)
 end
 
--- Add debris particles (rock fragments)
-local debrisCount = math.floor(size / 8)
-for i = 1, debrisCount do
+    -- Add debris particles (rock fragments) with a maximum cap
+    local debrisCount = maxCount
+    for i = 1, debrisCount do
 local angle = random() * pi * 2
 local speed = random(50, 150)
 local particle = self.debrisPool:get()
@@ -1132,9 +1135,10 @@ random(0.4, 0.7),
 random(0.4, 0.7),
 1
 }
-particle.pool = self.debrisPool
-table.insert(explosions, particle)
-end
+        particle.pool = self.debrisPool
+        table.insert(explosions, particle)
+        explosion.debrisSpawned = explosion.debrisSpawned + 1
+    end
 
 -- Add sparks for extra effect
 local sparkCount = math.floor(size / 10)
@@ -1676,9 +1680,9 @@ lg.setColor(1, 1, 0, explosion.alpha * 0.5)
 lg.circle("fill", explosion.x, explosion.y, explosion.radius * 0.7)
 lg.setLineWidth(1)
 
--- Emit debris as the ring expands
-if explosion.alpha > 0.5 then
-local d = self.debrisPool:get()
+    -- Emit debris as the ring expands, respecting the maximum cap
+    if explosion.alpha > 0.5 and explosion.debrisSpawned < (explosion.debrisMax or 0) then
+    local d = self.debrisPool:get()
 local ang = random() * pi * 2
 local speed = random(30, 60)
 d.x = explosion.x
@@ -1693,8 +1697,9 @@ d.rotationSpeed = (random() - 0.5) * 5
 d.isDebris = true
 d.color = {1, random(0.5, 1), 0}
 d.pool = self.debrisPool
-table.insert(explosions, d)
-end
+    table.insert(explosions, d)
+    explosion.debrisSpawned = explosion.debrisSpawned + 1
+    end
 end
 end
 end

@@ -104,7 +104,9 @@ function ObjectPool.createExplosionPool()
             maxRadius = 0,
             speed = 0,
             alpha = 1,
-            particles = {}
+            particles = {},
+            debrisSpawned = 0,
+            debrisMax = 0
         }
     end
     
@@ -116,6 +118,8 @@ function ObjectPool.createExplosionPool()
         explosion.speed = 0
         explosion.alpha = 1
         explosion.particles = {}
+        explosion.debrisSpawned = 0
+        explosion.debrisMax = 0
     end
     
     return ObjectPool:new(createExplosion, resetExplosion, 50)
