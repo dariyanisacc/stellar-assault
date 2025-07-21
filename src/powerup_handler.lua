@@ -86,6 +86,7 @@ function PowerupHandler.spawn(state, x, y, forceType)
     local powerupType = forceType
 
     if not powerupType then
+        -- 10% chance to spawn a homing missile when type isn't specified
         if math.random() < 0.1 then
             powerupType = "homingMissile"
         else
