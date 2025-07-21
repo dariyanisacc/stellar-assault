@@ -105,7 +105,8 @@ constants.boss = {
         hp = 1800,
         speed = 90,
         phaseCooldown = 3,
-        decoyDuration = 5
+        decoyDuration = 5,
+        bulletHellCooldown = 4
     },
     boss02 = {
         hp = 400,  -- Base HP, will scale with level

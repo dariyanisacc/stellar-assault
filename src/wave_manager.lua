@@ -259,6 +259,12 @@ function WaveManager:startWave(waveNumber)
     else
         self.waveNumber = self.waveNumber + 1
     end
+
+    -- Calculate performance based difficulty for this wave
+    local killRate = self.playerPerformance.killRate or 0
+    local increase = killRate > 0.5 and 0.10 or 0.05
+    -- Difficulty starts at 1 and increases per wave based on performance
+    self.waveDifficulty = 1 + (self.waveNumber - 1) * increase
     
     -- Get wave config (cycle through configs if wave number exceeds available configs)
     local configIndex = ((self.waveNumber - 1) % #waveConfigs) + 1
@@ -311,10 +317,10 @@ function WaveManager:spawnEnemy()
     enemy.y = -enemy.height
     
     -- Apply type configuration
-    enemy.speed = enemyType.speed * (1 + self.waveNumber * 0.05)
+    enemy.speed = enemyType.speed * (self.waveDifficulty or 1)
     enemy.behavior = behaviors[enemyType.behavior] or behaviors.move_left
     enemy.behaviorName = enemyType.behavior
-    enemy.health = math.ceil((enemyType.health + math.floor(self.waveNumber / 5)) * self.difficultyMultiplier)
+    enemy.health = math.ceil((enemyType.health + math.floor(self.waveNumber / 5)) * self.difficultyMultiplier * (self.waveDifficulty or 1))
     enemy.maxHealth = enemy.health
     enemy.active = true
     enemy.behaviorState = {}
@@ -386,7 +392,12 @@ function WaveManager:update(dt)
         self.waveActive = false
         logger.info("Wave " .. self.waveNumber .. " completed")
         if self.waveCompleteCallback then
-            self.waveCompleteCallback(self.waveNumber)
+            local stats = {
+                killRate = self.playerPerformance.killRate,
+                maxCombo = self.playerPerformance.maxCombo,
+                enemiesDefeated = self.enemiesSpawned
+            }
+            self.waveCompleteCallback(self.waveNumber, stats)
         end
     end
 end
@@ -481,6 +492,8 @@ function WaveManager:checkCollision(a, b)
 end
 
 function WaveManager:setWaveCompleteCallback(callback)
+    -- Callback signature: function(waveNumber, stats)
+    -- stats contains killRate, maxCombo, and enemiesDefeated
     self.waveCompleteCallback = callback
 end
 

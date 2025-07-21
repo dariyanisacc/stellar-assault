@@ -59,13 +59,21 @@ self.bossDefeatNotified = false
 
 -- Initialize WaveManager
 self.waveManager = WaveManager:new(player)
-self.waveManager:setWaveCompleteCallback(function(waveNumber)
--- Handle wave completion
-score = score + 500 * waveNumber
-logger.info("Wave " .. waveNumber .. " complete! Bonus: " .. (500 * waveNumber))
+self.waveManager:setWaveCompleteCallback(function(waveNumber, stats)
+    -- Handle wave completion
+    score = score + 500 * waveNumber
+    logger.info("Wave " .. waveNumber .. " complete! Bonus: " .. (500 * waveNumber))
 
--- Start next wave after a delay
-self.waveStartTimer = 2.0  -- 2 second delay between waves
+    -- Show wave statistics overlay
+    self.waveOverlay = {
+        killRate = stats.killRate or 0,
+        maxCombo = stats.maxCombo or 0,
+        enemiesDefeated = stats.enemiesDefeated or 0,
+        timer = 5
+    }
+
+    -- Start next wave after a delay
+    self.waveStartTimer = 2.0  -- 2 second delay between waves
 end)
 
 -- Set shoot callback to integrate with existing laser system
@@ -87,6 +95,9 @@ self.flashColor = {1, 1, 1}  -- White flash
 self.sessionStartTime = love.timer.getTime()
 self.sessionEnemiesDefeated = 0
 self.performanceMetrics = {killRate = 0, combo = 0, maxCombo = 0}
+
+ -- Wave completion overlay
+ self.waveOverlay = nil
 
 -- New high score tracking
 self.newHighScore = false
@@ -248,14 +259,22 @@ end
 
 -- Update UI timers
 if self.showControlsHint and self.controlsHintTimer > 0 then
-self.controlsHintTimer = self.controlsHintTimer - dt
-if self.controlsHintTimer <= 3 then  -- Fade out in last 3 seconds
-self.controlsHintAlpha = self.controlsHintTimer / 3
+    self.controlsHintTimer = self.controlsHintTimer - dt
+    if self.controlsHintTimer <= 3 then  -- Fade out in last 3 seconds
+        self.controlsHintAlpha = self.controlsHintTimer / 3
+    end
+    if self.controlsHintTimer <= 0 then
+        self.showControlsHint = false
+    end
 end
-if self.controlsHintTimer <= 0 then
-self.showControlsHint = false
-end
-end
+
+ -- Fade out wave completion overlay
+ if self.waveOverlay then
+     self.waveOverlay.timer = self.waveOverlay.timer - dt
+     if self.waveOverlay.timer <= 0 then
+         self.waveOverlay = nil
+     end
+ end
 
 -- Update score animation
 if score ~= self.previousScore then
@@ -424,22 +443,10 @@ function PlayingState:updateExplosions(dt)
 local maxExplosions = 200
 if #explosions > maxExplosions then
 -- Remove oldest explosions/particles
-for i = 1, #explosions - maxExplosions do
-local e = table.remove(explosions, 1)
-local pool = e.pool
-if not pool then
-if e.isDebris then
-pool = self.debrisPool
-elseif e.isTrail then
-pool = self.trailPool
-elseif e.vx then
-pool = self.particlePool
-else
-pool = self.explosionPool
-end
-end
-pool:release(e)
-end
+        for i = 1, #explosions - maxExplosions do
+        local e = table.remove(explosions, 1)
+        e.pool:release(e)
+        end
 end
 
 for i = #explosions, 1, -1 do
@@ -467,42 +474,18 @@ if explosion.color and explosion.life < 0.3 then
 explosion.color[4] = explosion.life / 0.3
 end
 
-if explosion.life <= 0 then
-local pool = explosion.pool
-if not pool then
-if explosion.isDebris then
-pool = self.debrisPool
-elseif explosion.isTrail then
-pool = self.trailPool
-elseif explosion.vx then
-pool = self.particlePool
-else
-pool = self.explosionPool
-end
-end
-pool:release(explosion)
-table.remove(explosions, i)
+        if explosion.life <= 0 then
+        explosion.pool:release(explosion)
+        table.remove(explosions, i)
 end
 else
 -- It's a regular explosion
 explosion.radius = explosion.radius + explosion.speed * dt
 explosion.alpha = explosion.alpha - dt
 
-if explosion.alpha <= 0 then
-local pool = explosion.pool
-if not pool then
-if explosion.isDebris then
-pool = self.debrisPool
-elseif explosion.isTrail then
-pool = self.trailPool
-elseif explosion.vx then
-pool = self.particlePool
-else
-pool = self.explosionPool
-end
-end
-pool:release(explosion)
-table.remove(explosions, i)
+        if explosion.alpha <= 0 then
+        explosion.pool:release(explosion)
+        table.remove(explosions, i)
 end
 end
 end
@@ -536,8 +519,8 @@ local behavior = choices[love.math.random(#choices)]
 EnemyAI.spawnAlien(self, behavior)
 end
 
-function PlayingState:spawnPowerup(x, y)
-PowerupHandler.spawn(self, x, y)
+function PlayingState:spawnPowerup(x, y, powerupType)
+    PowerupHandler.spawn(self, x, y, powerupType)
 end
 
 -- Make spawn functions globally accessible for debug console
@@ -843,10 +826,15 @@ table.remove(array or asteroids, index)
 end
 
 function PlayingState:handleAsteroidDestruction(asteroid, index)
--- Update combo
-self.combo = self.combo + 1
-self.comboTimer = 2.0  -- Reset combo timer
-self.comboMultiplier = 1 + (self.combo - 1) * 0.1  -- 10% bonus per combo
+    -- Update combo
+    self.combo = self.combo + 1
+    self.comboTimer = 2.0  -- Reset combo timer
+    self.comboMultiplier = 1 + (self.combo - 1) * 0.1  -- 10% bonus per combo
+
+    if self.combo >= 10 and random() < 0.05 then
+        self:spawnPowerup(asteroid.x, asteroid.y, "coolant")
+        self:createPowerupText("COMBO BONUS!", asteroid.x, asteroid.y, {0, 0.5, 1})
+    end
 
 -- Award more points for smaller asteroids (they're harder to hit)
 local sizeMultiplier = asteroid.size <= 25 and 2 or 1
@@ -911,10 +899,15 @@ logger.debug("Asteroid destroyed (size: %d), score: %d", asteroid.size, score)
 end
 
 function PlayingState:handleAlienDestruction(alien, index)
--- Update combo
-self.combo = self.combo + 1
-self.comboTimer = 2.0  -- Reset combo timer
-self.comboMultiplier = 1 + (self.combo - 1) * 0.1  -- 10% bonus per combo
+    -- Update combo
+    self.combo = self.combo + 1
+    self.comboTimer = 2.0  -- Reset combo timer
+    self.comboMultiplier = 1 + (self.combo - 1) * 0.1  -- 10% bonus per combo
+
+    if self.combo >= 10 and random() < 0.05 then
+        self:spawnPowerup(alien.x, alien.y, "coolant")
+        self:createPowerupText("COMBO BONUS!", alien.x, alien.y, {0, 0.5, 1})
+    end
 
 score = score + math.floor(constants.score.alien * self.comboMultiplier)
 Persistence.addScore(math.floor(constants.score.alien * self.comboMultiplier))  -- Add score to persistent storage
@@ -1088,14 +1081,17 @@ explosion.x = x
 explosion.y = y
 explosion.radius = size / 4
 explosion.maxRadius = size
-explosion.speed = size * 2
-explosion.alpha = 1
-explosion.pool = self.explosionPool
+    explosion.speed = size * 2
+    explosion.alpha = 1
+    explosion.pool = self.explosionPool
+    explosion.debrisSpawned = 0
 
 table.insert(explosions, explosion)
 
--- Create explosion ring particles
-local particleCount = math.floor(size / 5)
+    -- Create explosion ring particles with a maximum cap
+    local maxCount = math.min(10, math.floor(size / 8))
+    explosion.debrisMax = maxCount
+    local particleCount = maxCount
 for i = 1, particleCount do
 local angle = (i / particleCount) * pi * 2
 local speed = random(100, 200)
@@ -1117,9 +1113,9 @@ particle.pool = self.particlePool
 table.insert(explosions, particle)
 end
 
--- Add debris particles (rock fragments)
-local debrisCount = math.floor(size / 8)
-for i = 1, debrisCount do
+    -- Add debris particles (rock fragments) with a maximum cap
+    local debrisCount = maxCount
+    for i = 1, debrisCount do
 local angle = random() * pi * 2
 local speed = random(50, 150)
 local particle = self.debrisPool:get()
@@ -1139,9 +1135,10 @@ random(0.4, 0.7),
 random(0.4, 0.7),
 1
 }
-particle.pool = self.debrisPool
-table.insert(explosions, particle)
-end
+        particle.pool = self.debrisPool
+        table.insert(explosions, particle)
+        explosion.debrisSpawned = explosion.debrisSpawned + 1
+    end
 
 -- Add sparks for extra effect
 local sparkCount = math.floor(size / 10)
@@ -1336,6 +1333,21 @@ lg.rectangle("fill", self.screenWidth - 100, 135, 80 * (self.comboTimer / 2.0), 
 lg.setColor(1, 1, 1, 1)
 lg.rectangle("line", self.screenWidth - 100, 135, 80, 4)
 end
+
+ -- Wave completion overlay
+ if self.waveOverlay then
+     local alpha = math.min(self.waveOverlay.timer / 5, 1)
+     local w, h = 220, 60
+     local x = self.screenWidth/2 - w/2
+     local y = 40
+     lg.setColor(0, 0, 0, 0.6 * alpha)
+     lg.rectangle("fill", x, y, w, h, 4)
+     lg.setColor(1, 1, 1, alpha)
+     lg.setFont(smallFont or lg.newFont(12))
+     lg.print(string.format("Kill Rate: %.1f/s", self.waveOverlay.killRate), x + 10, y + 8)
+     lg.print("Max Combo: " .. self.waveOverlay.maxCombo, x + 10, y + 22)
+     lg.print("Enemies: " .. self.waveOverlay.enemiesDefeated, x + 10, y + 36)
+ end
 
 -- Draw heat distortion effect
 local heatPercent = player.heat / player.maxHeat
@@ -1668,9 +1680,9 @@ lg.setColor(1, 1, 0, explosion.alpha * 0.5)
 lg.circle("fill", explosion.x, explosion.y, explosion.radius * 0.7)
 lg.setLineWidth(1)
 
--- Emit debris as the ring expands
-if explosion.alpha > 0.5 then
-local d = self.debrisPool:get()
+    -- Emit debris as the ring expands, respecting the maximum cap
+    if explosion.alpha > 0.5 and explosion.debrisSpawned < (explosion.debrisMax or 0) then
+    local d = self.debrisPool:get()
 local ang = random() * pi * 2
 local speed = random(30, 60)
 d.x = explosion.x
@@ -1685,8 +1697,9 @@ d.rotationSpeed = (random() - 0.5) * 5
 d.isDebris = true
 d.color = {1, random(0.5, 1), 0}
 d.pool = self.debrisPool
-table.insert(explosions, d)
-end
+    table.insert(explosions, d)
+    explosion.debrisSpawned = explosion.debrisSpawned + 1
+    end
 end
 end
 end
@@ -2075,6 +2088,21 @@ end
 if boss.attackTimer > 0.5 then
 boss.alpha = 1
 self:endBossAttack(1)
+end
+
+elseif attackType == "bulletHell" then
+local total = 20
+boss.bulletHellCount = boss.bulletHellCount or 0
+local spawnRate = total / 3
+local expected = math.floor(boss.attackTimer * spawnRate)
+while boss.bulletHellCount < expected and boss.bulletHellCount < total do
+local angle = boss.bulletHellCount * 0.3
+self:createBossLaser(boss.x, boss.y + boss.size/2, angle)
+boss.bulletHellCount = boss.bulletHellCount + 1
+end
+if boss.attackTimer > 3 then
+boss.bulletHellCount = nil
+self:endBossAttack(4)
 end
 
 elseif attackType == "iceBeam" then

@@ -51,7 +51,7 @@ local BOSS_TYPES = {
         name = "QUANTUM PHANTOM",
         health = constants.boss.quantumPhantom.hp,
         speed = constants.boss.quantumPhantom.speed,
-        attacks = {"phaseShift", "decoys", "quantumBlast"},
+        attacks = {"phaseShift", "decoys", "quantumBlast", "bulletHell"},
         color = {0, 1, 1},
         size = 75
     }
@@ -96,6 +96,12 @@ function BossManager:initializeAttackPatterns()
         duration = 2,
         cooldown = 8,
         execute = function(boss, dt) self:executeMegaBeam(boss, dt) end
+    }
+
+    self.attackPatterns.bulletHell = {
+        duration = 3,
+        cooldown = constants.boss.quantumPhantom.bulletHellCooldown,
+        execute = function(boss, dt) self:executeBulletHell(boss, dt) end
     }
 end
 
@@ -358,6 +364,21 @@ function BossManager:executeMegaBeam(boss, dt)
             local angle = -math.pi / 2 + i * 0.05
             self:createBossProjectile(boss.x + i * 15, boss.y, angle, 400 + boss.phase * 50)
         end
+    end
+end
+
+function BossManager:executeBulletHell(boss, dt)
+    local total = 20
+    local spawnRate = total / 3
+    boss.bulletHellCount = boss.bulletHellCount or 0
+    local expected = math.floor(boss.attackTimer * spawnRate)
+    while boss.bulletHellCount < expected and boss.bulletHellCount < total do
+        local angle = boss.bulletHellCount * 0.3
+        self:createBossProjectile(boss.x, boss.y, angle, 300 + boss.phase * 40)
+        boss.bulletHellCount = boss.bulletHellCount + 1
+    end
+    if boss.attackTimer >= 3 then
+        boss.bulletHellCount = nil
     end
 end
 
