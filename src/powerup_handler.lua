@@ -18,6 +18,53 @@ function PowerupHandler.update(state, dt)
             table.remove(powerupTexts, i)
         end
     end
+
+    missiles = missiles or {}
+    for i = #missiles, 1, -1 do
+        local m = missiles[i]
+        if not m.target or m.target._remove then
+            local closest
+            local closestDist = math.huge
+            for _, a in ipairs(aliens or {}) do
+                local dx = (a.x + (a.width or 0)/2) - m.x
+                local dy = (a.y + (a.height or 0)/2) - m.y
+                local d = dx*dx + dy*dy
+                if d < closestDist then
+                    closestDist = d
+                    closest = a
+                end
+            end
+            if state.waveManager and state.waveManager.enemies then
+                for _, a in ipairs(state.waveManager.enemies) do
+                    local dx = (a.x + (a.width or 0)/2) - m.x
+                    local dy = (a.y + (a.height or 0)/2) - m.y
+                    local d = dx*dx + dy*dy
+                    if d < closestDist then
+                        closestDist = d
+                        closest = a
+                    end
+                end
+            end
+            m.target = closest
+        end
+
+        if m.target then
+            local dx = (m.target.x + (m.target.width or 0)/2) - m.x
+            local dy = (m.target.y + (m.target.height or 0)/2) - m.y
+            local dist = math.sqrt(dx*dx + dy*dy)
+            if dist > 0 then
+                m.vx = (dx/dist) * m.speed
+                m.vy = (dy/dist) * m.speed
+            end
+        end
+
+        m.x = m.x + (m.vx or 0) * dt
+        m.y = m.y + (m.vy or -m.speed) * dt
+
+        if m.x < -20 or m.x > state.screenWidth + 20 or m.y < -20 or m.y > state.screenHeight + 20 then
+            table.remove(missiles, i)
+        end
+    end
 end
 
 function PowerupHandler.spawn(state, x, y)
@@ -35,7 +82,12 @@ function PowerupHandler.spawn(state, x, y)
         table.insert(types, "health")
     end
     local isEnhanced = math.random() < 0.1
-    local powerupType = types[math.random(#types)]
+    local powerupType
+    if math.random() < 0.1 then
+        powerupType = "homingMissile"
+    else
+        powerupType = types[math.random(#types)]
+    end
     local powerup = Powerup.new(x, y, powerupType)
     if isEnhanced then
         powerup.enhanced = true
