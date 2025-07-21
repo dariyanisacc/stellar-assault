@@ -115,33 +115,19 @@ function love.load()
         consoleFont = lg.newFont(14) -- Use default font
     end
     
-    -- Load all sprites dynamically
+    -- Load all sprites dynamically and categorize them
     local SpriteManager = require("src.sprite_manager")
     spriteManager = SpriteManager.load("assets/sprites")
 
-    -- Player ships
-    playerShips = {
-        alpha = spriteManager:get("beginner_ship_alpha"),
-        beta  = spriteManager:get("player_ship_beta"),
-        gamma = spriteManager:get("player_ship_gamma"),
-    }
+    -- Categories are determined by filename patterns
+    playerShips = spriteManager:getCategory("player")
+    enemyShips  = spriteManager:getCategory("enemy")
 
-    -- Enemy ships
-    enemyShips = {
-        basic     = spriteManager:get("enemy_basic"),
-        homing    = spriteManager:get("enemy_homing"),
-        dive      = spriteManager:get("enemy_dive"),
-        zigzag    = spriteManager:get("enemy_zigzag"),
-        formation = spriteManager:get("enemy_formation"),
-    }
-
-    -- Boss sprites (maintain backward compatibility)
     bossSprites = {}
-    for i = 1, 15 do
-        local sprite = spriteManager:get("boss_" .. i)
-        if sprite then
-            bossSprites[i] = sprite
-        end
+    local bossCategory = spriteManager:getCategory("boss")
+    for name, sprite in pairs(bossCategory) do
+        local idx = tonumber(name:match("%d+")) or (#bossSprites + 1)
+        bossSprites[idx] = sprite
     end
     bossSprite = bossSprites[1]
     boss2Sprite = bossSprites[2]
@@ -203,39 +189,27 @@ function loadAudio()
     if lf.getInfo("laser.wav") then
         laserSound = la.newSource("laser.wav", "static")
         laserSound:setVolume(0.5)
-        laserSound:setRelative(true)
-        laserSound:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
     end
     
     if lf.getInfo("explosion.wav") then
         explosionSound = la.newSource("explosion.wav", "static")
         explosionSound:setVolume(0.7)
-        explosionSound:setRelative(true)
-        explosionSound:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
     end
     
     if lf.getInfo("powerup.wav") then
         powerupSound = la.newSource("powerup.wav", "static")
         powerupSound:setVolume(0.6)
-        powerupSound:setRelative(true)
-        powerupSound:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
     end
     
     if lf.getInfo("gameover.ogg") then
         gameOverSound = la.newSource("gameover.ogg", "static")
         gameOverSound:setVolume(0.8)
-        gameOverSound:setRelative(true)
-        gameOverSound:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
     end
     
     if lf.getInfo("menu.flac") then
         menuSelectSound = la.newSource("menu.flac", "static")
         menuSelectSound:setVolume(0.4)
         menuConfirmSound = menuSelectSound:clone()
-        menuSelectSound:setRelative(true)
-        menuConfirmSound:setRelative(true)
-        menuSelectSound:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
-        menuConfirmSound:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
     end
     
     -- Background music
@@ -400,8 +374,11 @@ function playPositionalSound(source, x, y)
     if not source or not player then return end
     local clone = source:clone()
     local dx, dy = x - player.x, y - player.y
-    clone:setRelative(true)
-    clone:setPosition(dx, dy, 0)
+    if clone:getChannelCount() == 1 then
+        clone:setRelative(true)
+        clone:setPosition(dx, dy, 0)
+        clone:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
+    end
     clone:setVolume(source:getVolume())
     clone:play()
 end
@@ -723,4 +700,10 @@ function checkCollision(a, b)
     
     return aLeft < bRight and aRight > bLeft and 
            aTop < bBottom and aBottom > bTop
+end
+
+function love.quit()
+    if spriteManager and spriteManager.reportUsage then
+        spriteManager:reportUsage()
+    end
 end
