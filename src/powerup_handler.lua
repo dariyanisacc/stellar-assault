@@ -67,7 +67,7 @@ function PowerupHandler.update(state, dt)
     end
 end
 
-function PowerupHandler.spawn(state, x, y)
+function PowerupHandler.spawn(state, x, y, forceType)
     x = x or math.random(30, state.screenWidth - 30)
     y = y or -30
     local types = {"shield", "rapid", "spread"}
@@ -82,11 +82,15 @@ function PowerupHandler.spawn(state, x, y)
         table.insert(types, "health")
     end
     local isEnhanced = math.random() < 0.1
-    local powerupType
-    if math.random() < 0.1 then
-        powerupType = "homingMissile"
-    else
-        powerupType = types[math.random(#types)]
+
+    local powerupType = forceType
+
+    if not powerupType then
+        if math.random() < 0.1 then
+            powerupType = "homingMissile"
+        else
+            powerupType = types[math.random(#types)]
+        end
     end
     local powerup = Powerup.new(x, y, powerupType)
     if isEnhanced then
