@@ -59,13 +59,21 @@ self.bossDefeatNotified = false
 
 -- Initialize WaveManager
 self.waveManager = WaveManager:new(player)
-self.waveManager:setWaveCompleteCallback(function(waveNumber)
--- Handle wave completion
-score = score + 500 * waveNumber
-logger.info("Wave " .. waveNumber .. " complete! Bonus: " .. (500 * waveNumber))
+self.waveManager:setWaveCompleteCallback(function(waveNumber, stats)
+    -- Handle wave completion
+    score = score + 500 * waveNumber
+    logger.info("Wave " .. waveNumber .. " complete! Bonus: " .. (500 * waveNumber))
 
--- Start next wave after a delay
-self.waveStartTimer = 2.0  -- 2 second delay between waves
+    -- Show wave statistics overlay
+    self.waveOverlay = {
+        killRate = stats.killRate or 0,
+        maxCombo = stats.maxCombo or 0,
+        enemiesDefeated = stats.enemiesDefeated or 0,
+        timer = 5
+    }
+
+    -- Start next wave after a delay
+    self.waveStartTimer = 2.0  -- 2 second delay between waves
 end)
 
 -- Set shoot callback to integrate with existing laser system
@@ -87,6 +95,9 @@ self.flashColor = {1, 1, 1}  -- White flash
 self.sessionStartTime = love.timer.getTime()
 self.sessionEnemiesDefeated = 0
 self.performanceMetrics = {killRate = 0, combo = 0, maxCombo = 0}
+
+ -- Wave completion overlay
+ self.waveOverlay = nil
 
 -- New high score tracking
 self.newHighScore = false
@@ -248,14 +259,22 @@ end
 
 -- Update UI timers
 if self.showControlsHint and self.controlsHintTimer > 0 then
-self.controlsHintTimer = self.controlsHintTimer - dt
-if self.controlsHintTimer <= 3 then  -- Fade out in last 3 seconds
-self.controlsHintAlpha = self.controlsHintTimer / 3
+    self.controlsHintTimer = self.controlsHintTimer - dt
+    if self.controlsHintTimer <= 3 then  -- Fade out in last 3 seconds
+        self.controlsHintAlpha = self.controlsHintTimer / 3
+    end
+    if self.controlsHintTimer <= 0 then
+        self.showControlsHint = false
+    end
 end
-if self.controlsHintTimer <= 0 then
-self.showControlsHint = false
-end
-end
+
+ -- Fade out wave completion overlay
+ if self.waveOverlay then
+     self.waveOverlay.timer = self.waveOverlay.timer - dt
+     if self.waveOverlay.timer <= 0 then
+         self.waveOverlay = nil
+     end
+ end
 
 -- Update score animation
 if score ~= self.previousScore then
@@ -1300,6 +1319,21 @@ lg.rectangle("fill", self.screenWidth - 100, 135, 80 * (self.comboTimer / 2.0), 
 lg.setColor(1, 1, 1, 1)
 lg.rectangle("line", self.screenWidth - 100, 135, 80, 4)
 end
+
+ -- Wave completion overlay
+ if self.waveOverlay then
+     local alpha = math.min(self.waveOverlay.timer / 5, 1)
+     local w, h = 220, 60
+     local x = self.screenWidth/2 - w/2
+     local y = 40
+     lg.setColor(0, 0, 0, 0.6 * alpha)
+     lg.rectangle("fill", x, y, w, h, 4)
+     lg.setColor(1, 1, 1, alpha)
+     lg.setFont(smallFont or lg.newFont(12))
+     lg.print(string.format("Kill Rate: %.1f/s", self.waveOverlay.killRate), x + 10, y + 8)
+     lg.print("Max Combo: " .. self.waveOverlay.maxCombo, x + 10, y + 22)
+     lg.print("Enemies: " .. self.waveOverlay.enemiesDefeated, x + 10, y + 36)
+ end
 
 -- Draw heat distortion effect
 local heatPercent = player.heat / player.maxHeat
