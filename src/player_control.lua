@@ -136,6 +136,11 @@ function PlayerControl.shoot(state)
             state.laserGrid:insert(laser)
         end
 
+        if activePowerups.homingMissile then
+            missiles = missiles or {}
+            table.insert(missiles, {x = player.x, y = player.y - player.height/2, speed = 200})
+        end
+
         if spread > 0 then
             local leftLaser = state.laserPool:get()
             leftLaser.x = player.x

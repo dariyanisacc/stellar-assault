@@ -49,6 +49,12 @@ local POWERUP_TYPES = {
         icon = "C",
         duration = 10,          -- cooling boost duration
         description = "Heat Coolant"
+    },
+    homingMissile = {
+        color = {1, 1, 1},      -- white
+        icon = "M",
+        duration = 5,
+        description = "Homing Missiles"
     }
 }
 
