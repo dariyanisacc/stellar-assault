@@ -536,8 +536,8 @@ local behavior = choices[love.math.random(#choices)]
 EnemyAI.spawnAlien(self, behavior)
 end
 
-function PlayingState:spawnPowerup(x, y)
-PowerupHandler.spawn(self, x, y)
+function PlayingState:spawnPowerup(x, y, powerupType)
+    PowerupHandler.spawn(self, x, y, powerupType)
 end
 
 -- Make spawn functions globally accessible for debug console
@@ -843,10 +843,15 @@ table.remove(array or asteroids, index)
 end
 
 function PlayingState:handleAsteroidDestruction(asteroid, index)
--- Update combo
-self.combo = self.combo + 1
-self.comboTimer = 2.0  -- Reset combo timer
-self.comboMultiplier = 1 + (self.combo - 1) * 0.1  -- 10% bonus per combo
+    -- Update combo
+    self.combo = self.combo + 1
+    self.comboTimer = 2.0  -- Reset combo timer
+    self.comboMultiplier = 1 + (self.combo - 1) * 0.1  -- 10% bonus per combo
+
+    if self.combo >= 10 and random() < 0.05 then
+        self:spawnPowerup(asteroid.x, asteroid.y, "coolant")
+        self:createPowerupText("COMBO BONUS!", asteroid.x, asteroid.y, {0, 0.5, 1})
+    end
 
 -- Award more points for smaller asteroids (they're harder to hit)
 local sizeMultiplier = asteroid.size <= 25 and 2 or 1
@@ -911,10 +916,15 @@ logger.debug("Asteroid destroyed (size: %d), score: %d", asteroid.size, score)
 end
 
 function PlayingState:handleAlienDestruction(alien, index)
--- Update combo
-self.combo = self.combo + 1
-self.comboTimer = 2.0  -- Reset combo timer
-self.comboMultiplier = 1 + (self.combo - 1) * 0.1  -- 10% bonus per combo
+    -- Update combo
+    self.combo = self.combo + 1
+    self.comboTimer = 2.0  -- Reset combo timer
+    self.comboMultiplier = 1 + (self.combo - 1) * 0.1  -- 10% bonus per combo
+
+    if self.combo >= 10 and random() < 0.05 then
+        self:spawnPowerup(alien.x, alien.y, "coolant")
+        self:createPowerupText("COMBO BONUS!", alien.x, alien.y, {0, 0.5, 1})
+    end
 
 score = score + math.floor(constants.score.alien * self.comboMultiplier)
 Persistence.addScore(math.floor(constants.score.alien * self.comboMultiplier))  -- Add score to persistent storage
