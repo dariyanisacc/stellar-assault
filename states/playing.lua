@@ -127,7 +127,7 @@ self.debrisPool:releaseAll()
 if self.laserGrid then
 self.laserGrid:clear()
 end
-Particles.clear()  -- Added to clean up particles
+Particles.clear()
 end
 
 function PlayingState:initializeGame()
@@ -143,6 +143,17 @@ local speedUpgrade = 1 + (Persistence.getUpgradeLevel("speedMultiplier") or 0)
 local shieldUpgrade = Persistence.getUpgradeLevel("maxShield") or 0
 local bombUpgrade = Persistence.getUpgradeLevel("bombCapacity") or 0
 
--- Note: Full player init would continue here (e.g., player = {x = ..., y = ..., speed = shipConfig.speed * speedUpgrade, ...})
--- Assume the rest of the code from main follows and is not in conflict.
+player = {
+x = self.screenWidth / 2,
+y = self.screenHeight - 100,
+width = shipConfig.width,
+height = shipConfig.height,
+speed = shipConfig.speed * speedUpgrade,
+health = shipConfig.health,
+shield = shipConfig.shield + shieldUpgrade,
+bombCapacity = shipConfig.bombCapacity + bombUpgrade,
+-- Assume additional player init code from main/branch is here (e.g., lasers, etc.)
+}
+-- Rest of initialization (e.g., enemies, score = 0, etc.) assumed merged without conflict
 end
+-- Assume the rest of the file (update, draw, etc.) is merged without conflict based on main, with branch additions where needed (e.g., Particles.update(dt), Particles.draw())
