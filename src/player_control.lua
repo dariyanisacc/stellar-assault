@@ -330,4 +330,20 @@ function PlayerControl.update_mobile_ui(buttons, touches)
     -- Existing mobile UI code would go here if implemented
 end
 
+function PlayerControl.createHeatParticle(state)
+    if not state or not state.particlePool then return end
+    local p = state.particlePool:get()
+    if not p then return end
+    p.x = player.x
+    p.y = player.y
+    p.vx = (math.random() - 0.5) * 40
+    p.vy = (math.random() - 0.5) * 40
+    p.life = 0.3
+    p.maxLife = 0.3
+    p.size = 2
+    p.color = {1, 0.5, 0}
+    p.pool = state.particlePool
+    table.insert(explosions, p)
+end
+
 return PlayerControl

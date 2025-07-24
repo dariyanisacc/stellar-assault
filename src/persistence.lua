@@ -60,7 +60,10 @@ local defaultSaveData = {
         unlockBeta = false,
         unlockGamma = false
     },
-    currentScore = 0  -- Store the player's current score for the shop
+    currentScore = 0,  -- Store the player's current score for the shop
+    -- New persistent data
+    levelStats = {},  -- Per-level best score and time
+    unlockedShips = {alpha = true}
 }
 
 -- Current save data
@@ -83,6 +86,25 @@ function Persistence.load()
             if success and loaded then
                 -- Merge with defaults to handle missing fields
                 data = Persistence.merge(defaultSaveData, loaded)
+                local migrated = false
+                -- Migrate old ship unlock flags
+                data.unlockedShips = data.unlockedShips or {alpha = true}
+                if data.upgrades and data.upgrades.unlockBeta and not data.unlockedShips.beta then
+                    data.unlockedShips.beta = true
+                    migrated = true
+                end
+                if data.upgrades and data.upgrades.unlockGamma and not data.unlockedShips.gamma then
+                    data.unlockedShips.gamma = true
+                    migrated = true
+                end
+                -- Ensure level stats table exists
+                if not data.levelStats then
+                    data.levelStats = {}
+                    migrated = true
+                end
+                if migrated then
+                    Persistence.save(data)
+                end
                 logger.info("Save data loaded successfully")
             else
                 logger.error("Failed to parse save data, using defaults")
@@ -98,12 +120,18 @@ end
 
 function Persistence.save(data)
     data = data or saveData
-    
+
     local success, encoded = pcall(function()
         return Persistence.encode(data)
     end)
-    
+
     if success then
+        if love.filesystem.getInfo(SAVE_FILE) then
+            local existing = love.filesystem.read(SAVE_FILE)
+            if existing then
+                love.filesystem.write(SAVE_FILE .. ".bak", existing)
+            end
+        end
         local writeSuccess = love.filesystem.write(SAVE_FILE, encoded)
         if writeSuccess then
             logger.info("Save data written successfully")
@@ -337,6 +365,11 @@ function Persistence.applyUpgrade(key, value, upgradeType)
     else
         -- Set value directly (for unlocks)
         saveData.upgrades[key] = value
+        if key == "unlockBeta" then
+            Persistence.unlockShip("beta")
+        elseif key == "unlockGamma" then
+            Persistence.unlockShip("gamma")
+        end
     end
     
     Persistence.save()
@@ -376,11 +409,53 @@ function Persistence.addScore(amount)
     Persistence.save()
 end
 
+-- Update per-level best stats
+function Persistence.updateLevelStats(level, score, time)
+    saveData.levelStats = saveData.levelStats or {}
+    local stats = saveData.levelStats[level] or {}
+    if not stats.bestScore or score > stats.bestScore then
+        stats.bestScore = score
+    end
+    if time and (not stats.bestTime or time < stats.bestTime) then
+        stats.bestTime = time
+    end
+    saveData.levelStats[level] = stats
+    Persistence.save()
+end
+
+function Persistence.getLevelStats(level)
+    if saveData.levelStats and saveData.levelStats[level] then
+        return saveData.levelStats[level]
+    end
+    return {bestScore = 0}
+end
+
+function Persistence.unlockShip(name)
+    saveData.unlockedShips = saveData.unlockedShips or {alpha = true}
+    if not saveData.unlockedShips[name] then
+        saveData.unlockedShips[name] = true
+        Persistence.save()
+    end
+end
+
+function Persistence.getUnlockedShips()
+    local ships = {}
+    for name in pairs(saveData.unlockedShips or {alpha = true}) do
+        table.insert(ships, name)
+    end
+    return ships
+end
+
 -- Check if a ship is unlocked
 function Persistence.isShipUnlocked(shipName)
     if shipName == "alpha" then
-        return true  -- Alpha is always unlocked
-    elseif shipName == "beta" then
+        return true
+    end
+    if saveData.unlockedShips and saveData.unlockedShips[shipName] then
+        return true
+    end
+    -- Fallback to old upgrade flags
+    if shipName == "beta" then
         return saveData.upgrades and saveData.upgrades.unlockBeta == true
     elseif shipName == "gamma" then
         return saveData.upgrades and saveData.upgrades.unlockGamma == true
