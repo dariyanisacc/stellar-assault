@@ -6,7 +6,13 @@ function PowerupHandler.update(state, dt)
 for i = #powerups, 1, -1 do
 local powerup = powerups[i]
 powerup:update(dt)
+if state.entityGrid then
+state.entityGrid:update(powerup)
+end
 if powerup.y > state.screenHeight + powerup.height then
+if state.entityGrid then
+state.entityGrid:remove(powerup)
+end
 table.remove(powerups, i)
 end
 end
@@ -97,7 +103,11 @@ if isEnhanced then
 powerup.enhanced = true
 powerup.color = {powerup.color[1], powerup.color[2], powerup.color[3], 1}
 end
+powerup.tag = "powerup"
 table.insert(powerups, powerup)
+if state.entityGrid then
+    state.entityGrid:insert(powerup)
+end
 end
 
 function PowerupHandler.checkCollisions(state)
@@ -147,9 +157,12 @@ if powerupSound then
 powerupSound:stop()
 powerupSound:play()
 end
-state:createPowerupText(powerup.description, powerup.x, powerup.y, powerup.color)
-table.remove(powerups, i)
-end
+        state:createPowerupText(powerup.description, powerup.x, powerup.y, powerup.color)
+        if state.entityGrid then
+            state.entityGrid:remove(powerup)
+        end
+        table.remove(powerups, i)
+    end
 end
 end
 

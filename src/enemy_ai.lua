@@ -44,7 +44,13 @@ function EnemyAI.updateAsteroids(state, dt)
             asteroid.y = asteroid.y + (baseSpeed + speedIncrease * currentLevel) * levelMultiplier * dt
         end
         asteroid.rotation = asteroid.rotation + asteroid.rotationSpeed * dt
+        if state.entityGrid then
+            state.entityGrid:update(asteroid)
+        end
         if asteroid.y > state.screenHeight + asteroid.size then
+            if state.entityGrid then
+                state.entityGrid:remove(asteroid)
+            end
             table.remove(asteroids, i)
         end
     end
@@ -80,10 +86,16 @@ function EnemyAI.updateAliens(state, dt)
             EnemyAI.alienShoot(state, alien)
             alien.shootTimer = constants.alien.shootInterval
         end
+        if state.entityGrid then
+            state.entityGrid:update(alien)
+        end
         if alien.y > state.screenHeight + alien.height or
            alien.y < -alien.height or
            alien.x > state.screenWidth + alien.width or
            alien.x < -alien.width then
+            if state.entityGrid then
+                state.entityGrid:remove(alien)
+            end
             table.remove(aliens, i)
         end
     end
@@ -132,9 +144,13 @@ function EnemyAI.spawnAsteroid(state)
         y = -size,
         size = size,
         rotation = math.random() * math.pi * 2,
-        rotationSpeed = math.random() - 0.5
+        rotationSpeed = math.random() - 0.5,
+        tag = "asteroid"
     }
     table.insert(asteroids, asteroid)
+    if state.entityGrid then
+        state.entityGrid:insert(asteroid)
+    end
 end
 
 function EnemyAI.spawnAlien(state, behavior)
@@ -150,7 +166,11 @@ function EnemyAI.spawnAlien(state, behavior)
     alien.vx = 0
     alien.behavior = behavior
     alien.type = behavior or "basic"
+    alien.tag = "alien"
     table.insert(aliens, alien)
+    if state.entityGrid then
+        state.entityGrid:insert(alien)
+    end
 end
 
 return EnemyAI

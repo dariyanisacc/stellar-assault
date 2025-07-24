@@ -58,7 +58,7 @@ self.bossManager = BossManager:new()
 self.bossDefeatNotified = false
 
 -- Initialize WaveManager
-self.waveManager = WaveManager:new(player)
+self.waveManager = WaveManager:new(player, self.entityGrid)
 self.waveManager:setWaveCompleteCallback(function(waveNumber, stats)
     -- Handle wave completion
     score = score + 500 * waveNumber
@@ -121,11 +121,14 @@ end
 self.laserPool:releaseAll()
 self.explosionPool:releaseAll()
 self.particlePool:releaseAll()
-self.trailPool:releaseAll()
-self.debrisPool:releaseAll()
-if self.laserGrid then
-self.laserGrid:clear()
-end
+    self.trailPool:releaseAll()
+    self.debrisPool:releaseAll()
+    if self.laserGrid then
+        self.laserGrid:clear()
+    end
+    if self.entityGrid then
+        self.entityGrid:clear()
+    end
 end
 
 function PlayingState:initializeGame()
@@ -200,6 +203,8 @@ activePowerups = {}
 
 -- Spatial grid for lasers
 self.laserGrid = SpatialHash:new(100)
+ -- Spatial grid for entities (asteroids, aliens, powerups, etc.)
+ self.entityGrid = SpatialHash:new(100)
 
 -- Boss
 boss = nil
@@ -565,29 +570,49 @@ end
 function PlayingState:checkPlayerCollisions()
 if invulnerableTime > 0 then return end
 
--- Player vs Asteroids
-for i = #asteroids, 1, -1 do
-local asteroid = asteroids[i]
-if Collision.checkAABB(player, asteroid) then
-if activePowerups.shield then
-self:handleShieldHit(asteroid, i)
-else
-self:handlePlayerHit(asteroid, i)
-end
-end
-end
-
--- Player vs Aliens
-for i = #aliens, 1, -1 do
-local alien = aliens[i]
-if Collision.checkAABB(player, alien) then
-if activePowerups.shield then
-self:handleShieldHit(alien, i, aliens)
-else
-self:handlePlayerHit(alien, i, aliens)
-end
-end
-end
+    local grid = self.entityGrid
+    for _, entity in ipairs(grid:getNearby(player)) do
+        if entity.tag == "asteroid" then
+            if Collision.checkAABB(player, entity) then
+                local idx = self:findEntityIndex(asteroids, entity)
+                if activePowerups.shield then
+                    self:handleShieldHit(entity, idx or 1)
+                else
+                    self:handlePlayerHit(entity, idx or 1)
+                end
+            end
+        elseif entity.tag == "alien" then
+            if Collision.checkAABB(player, entity) then
+                local idx = self:findEntityIndex(aliens, entity)
+                if activePowerups.shield then
+                    self:handleShieldHit(entity, idx or 1, aliens)
+                else
+                    self:handlePlayerHit(entity, idx or 1, aliens)
+                end
+            end
+        elseif entity.tag == "enemy" and self.waveManager then
+            if Collision.checkAABB(player, entity) then
+                if activePowerups.shield then
+                    local enemySize = math.max(entity.width, entity.height)
+                    self:createExplosion(entity.x + entity.width/2, entity.y + entity.height/2, enemySize)
+                    entity.active = false
+                    self.entityGrid:remove(entity)
+                    local _ = self:findEntityIndex(self.waveManager.enemies, entity)
+                    activePowerups.shield = nil
+                    if shieldBreakSound and playPositionalSound then
+                        playPositionalSound(shieldBreakSound, entity.x + entity.width/2, entity.y + entity.height/2)
+                    end
+                else
+                    self:playerHit()
+                    local enemySize = math.max(entity.width, entity.height)
+                    self:createExplosion(entity.x + entity.width/2, entity.y + entity.height/2, enemySize)
+                    entity.active = false
+                    self.entityGrid:remove(entity)
+                    local _ = self:findEntityIndex(self.waveManager.enemies, entity)
+                end
+            end
+        end
+    end
 
 -- Player vs Alien Lasers
 for i = #alienLasers, 1, -1 do
@@ -633,81 +658,69 @@ end
 end
 
 function PlayingState:checkLaserCollisions()
-local grid = self.laserGrid
+    local grid = self.laserGrid
+    local entityGrid = self.entityGrid
 
--- Check asteroids against nearby lasers
-for i = #asteroids, 1, -1 do
-local asteroid = asteroids[i]
-for _, laser in ipairs(grid:getNearby(asteroid)) do
-if not laser._remove and Collision.checkAABB(laser, asteroid) then
-self:createHitEffect(laser.x, laser.y)
-self:handleAsteroidDestruction(asteroid, i)
-laser._remove = true
-break
-end
-end
-end
+    for i = #lasers, 1, -1 do
+        local laser = lasers[i]
+        for _, entity in ipairs(entityGrid:getNearby(laser)) do
+            if entity.tag == "asteroid" and not laser._remove and Collision.checkAABB(laser, entity) then
+                self:createHitEffect(laser.x, laser.y)
+                local idx = self:findEntityIndex(asteroids, entity)
+                self:handleAsteroidDestruction(entity, idx or 1)
+                laser._remove = true
+                break
+            elseif entity.tag == "alien" and not laser._remove and Collision.checkAABB(laser, entity) then
+                self:createHitEffect(laser.x, laser.y)
+                local idx = self:findEntityIndex(aliens, entity)
+                self:handleAlienDestruction(entity, idx or 1)
+                laser._remove = true
+                break
+            elseif entity.tag == "enemy" and not laser._remove and Collision.checkAABB(laser, entity) then
+                entity.health = entity.health - 1
+                laser._remove = true
+                if entity.health <= 0 then
+                    entity.active = false
+                    self.entityGrid:remove(entity)
+                    local idx = self:findEntityIndex(self.waveManager.enemies, entity)
+                    if idx then
+                        local enemySize = math.max(entity.width, entity.height)
+                        self:createExplosion(entity.x + entity.width/2, entity.y + entity.height/2, enemySize)
+                        if explosionSound and playPositionalSound then
+                            playPositionalSound(explosionSound, entity.x + entity.width/2, entity.y + entity.height/2)
+                        end
+                        local enemyScore = 50 * currentLevel
+                        score = score + enemyScore
+                        Persistence.addScore(enemyScore)
+                        enemiesDefeated = enemiesDefeated + 1
+                        self.sessionEnemiesDefeated = self.sessionEnemiesDefeated + 1
+                        if score > self.previousHighScore and not self.newHighScore then
+                            self.newHighScore = true
+                            self:showNewHighScoreNotification()
+                        end
+                        if random() < 0.15 then
+                            self:spawnPowerup(entity.x + entity.width/2, entity.y + entity.height/2)
+                        end
+                    end
+                end
+                break
+            end
+        end
+        if laser._remove then
+            if self.laserGrid then
+                self.laserGrid:remove(laser)
+            end
+            self.laserPool:release(laser)
+            table.remove(lasers, i)
+        end
+    end
 
--- Check aliens against nearby lasers
-for i = #aliens, 1, -1 do
-local alien = aliens[i]
-for _, laser in ipairs(grid:getNearby(alien)) do
-if not laser._remove and Collision.checkAABB(laser, alien) then
-self:createHitEffect(laser.x, laser.y)
-self:handleAlienDestruction(alien, i)
-laser._remove = true
-break
-end
-end
-end
-
--- Check WaveManager enemies
-if self.waveManager then
-local destroyedEnemy, enemyIndex = self.waveManager:checkCollisionsWithLasers(lasers, grid)
-if destroyedEnemy then
-local enemySize = math.max(destroyedEnemy.width, destroyedEnemy.height)
-self:createExplosion(destroyedEnemy.x + destroyedEnemy.width/2,
-destroyedEnemy.y + destroyedEnemy.height/2, enemySize)
-if explosionSound and playPositionalSound then
-playPositionalSound(explosionSound,
-destroyedEnemy.x + destroyedEnemy.width/2,
-destroyedEnemy.y + destroyedEnemy.height/2)
-end
-local enemyScore = 50 * currentLevel
-score = score + enemyScore
-Persistence.addScore(enemyScore)
-enemiesDefeated = enemiesDefeated + 1
-self.sessionEnemiesDefeated = self.sessionEnemiesDefeated + 1
-
-if score > self.previousHighScore and not self.newHighScore then
-self.newHighScore = true
-self:showNewHighScoreNotification()
-end
-
-if random() < 0.15 then
-self:spawnPowerup(destroyedEnemy.x + destroyedEnemy.width/2,
-destroyedEnemy.y + destroyedEnemy.height/2)
-end
-end
-end
-
--- Remove lasers marked for deletion
-for i = #lasers, 1, -1 do
-local l = lasers[i]
-if l._remove then
-if self.laserGrid then
-self.laserGrid:remove(l)
-end
-self.laserPool:release(l)
-table.remove(lasers, i)
-end
-end
 end
 
 function PlayingState:checkPowerupCollisions()
-for i = #powerups, 1, -1 do
-local powerup = powerups[i]
-if Collision.checkAABB(player, powerup) then
+local grid = self.entityGrid
+for _, powerup in ipairs(grid:getNearby(player)) do
+if powerup.tag == "powerup" and Collision.checkAABB(player, powerup) then
 local result = powerup:collect(player)
 
 -- Handle enhanced powerups with roguelike variations
@@ -781,7 +794,10 @@ end
 -- Create floating text
 self:createPowerupText(powerup.description, powerup.x, powerup.y, powerup.color)
 
-table.remove(powerups, i)
+ if self.entityGrid then
+     self.entityGrid:remove(powerup)
+ end
+ local _ = self:findEntityIndex(powerups, powerup)
 end
 end
 end
@@ -812,6 +828,15 @@ self.laserPool:release(laser)
 table.remove(lasers, i)
 end
 end
+end
+
+function PlayingState:findEntityIndex(list, entity)
+    for i = #list, 1, -1 do
+        if list[i] == entity then
+            return i
+        end
+    end
+    return nil
 end
 
 -- Helper functions for collision handling
@@ -882,6 +907,9 @@ end
 end
 
 -- Remove the destroyed asteroid
+if self.entityGrid then
+    self.entityGrid:remove(asteroid)
+end
 table.remove(asteroids, index)
 enemiesDefeated = enemiesDefeated + 1
 self.sessionEnemiesDefeated = self.sessionEnemiesDefeated + 1
@@ -915,6 +943,9 @@ function PlayingState:handleAlienDestruction(alien, index)
 score = score + math.floor(constants.score.alien * self.comboMultiplier)
 Persistence.addScore(math.floor(constants.score.alien * self.comboMultiplier))  -- Add score to persistent storage
 self:createExplosion(alien.x, alien.y, 40)
+if self.entityGrid then
+    self.entityGrid:remove(alien)
+end
 table.remove(aliens, index)
 enemiesDefeated = enemiesDefeated + 1
 self.sessionEnemiesDefeated = self.sessionEnemiesDefeated + 1
