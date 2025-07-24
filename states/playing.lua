@@ -551,6 +551,20 @@ stateManager.current:spawnBoss()
 end
 end
 
+-- Toggle player invulnerability
+_G.toggleGodMode = function()
+    if stateManager.currentName == "playing" and player then
+        player.godMode = not player.godMode
+        if player.godMode then
+            player.shield = 999
+            player.maxShield = 999
+        else
+            player.shield = constants.player.shield
+            player.maxShield = constants.player.maxShield
+        end
+    end
+end
+
 function PlayingState:checkCollisions()
 self:checkPlayerCollisions()
 self:checkLaserCollisions()
