@@ -1,4 +1,4 @@
-local love_mock = require("tests.mocks.love_mock")
+local love_mock = require("tests.mocks/love_mock")
 _G.love = love_mock
 love.filesystem.append = function() end
 
@@ -14,10 +14,10 @@ describe("Explosion particle limits", function()
         state.particlePool = ObjectPool.createParticlePool()
         state.debrisPool = ObjectPool.createDebrisPool()
         _G.explosions = {}
-    end)
+    end
 
     it("spawns debris particle system", function()
         state:createExplosion(100, 100, 200)
         assert.is_true(Particles.getActiveCount() > 0)
     end)
-end)
+end
