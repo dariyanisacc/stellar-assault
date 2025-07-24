@@ -165,9 +165,9 @@ drag = constants.player.drag,
 -- Heat system
 heat = 0,                -- Current heat level (0-100)
 maxHeat = 100,           -- Max before overheat
-heatRate = 4 * (shipConfig.heatMultiplier or 1),  -- Heat added per shot (adjusted by ship type) - reduced from 10 to 4
-coolRate = 30,           -- Cooling per second when not shooting - increased from 20 to 30
-overheatPenalty = 2,     -- Seconds unable to shoot on overheat
+heatRate = 5 * (shipConfig.heatMultiplier or 1),   -- Heat added per shot (adjusted by ship type)
+coolRate = 25,           -- Cooling per second (continuous)
+overheatPenalty = 1.5,   -- Seconds unable to shoot on overheat (reduced for faster recovery)
 overheatTimer = 0        -- Timer when overheated
 }
 
@@ -221,6 +221,9 @@ boost = false
 
 -- Trigger state
 self.triggerPressed = false
+
+-- Shooting cooldown
+self.shootCooldown = 0
 
 -- Combo system
 self.combo = 0
@@ -1356,11 +1359,11 @@ if heatPercent > 0.7 then
 local vignetteAlpha = (heatPercent - 0.7) * 0.5  -- 0 to 0.15 alpha
 lg.setColor(1, 0, 0, vignetteAlpha)
 -- Draw gradient vignette
-local vignetteSize = 100
+local vignetteSize = 50  -- Reduced from 100 for better performance
 for i = 0, vignetteSize do
 local alpha = vignetteAlpha * (1 - i / vignetteSize)
 lg.setColor(1, 0, 0, alpha)
-lg.rectangle("line", i, i, self.screenWidth - i2, self.screenHeight - i2)
+lg.rectangle("line", i, i, self.screenWidth - i*2, self.screenHeight - i*2)
 end
 end
 
@@ -1891,19 +1894,19 @@ end
 end
 
 function PlayingState:keypressed(key, scancode, isrepeat)
-PlayerControl.keypressed(self, key)
+PlayerControl.handleKeyPress(self, key)
 end
 
 function PlayingState:keyreleased(key, scancode)
-PlayerControl.keyreleased(self, key)
+PlayerControl.handleKeyRelease(self, key)
 end
 
 function PlayingState:gamepadpressed(joystick, button)
-PlayerControl.gamepadpressed(self, button)
+PlayerControl.handleGamepadPress(self, button)
 end
 
 function PlayingState:gamepadreleased(joystick, button)
-PlayerControl.gamepadreleased(self, button)
+PlayerControl.handleGamepadRelease(self, button)
 end
 
 -- Boss-related methods

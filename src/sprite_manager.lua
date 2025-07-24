@@ -15,20 +15,24 @@ function SpriteManager.load(path)
     local files = lf.getDirectoryItems(path)
     for _, file in ipairs(files) do
         if file:match('%.png$') then
-            local key = file:gsub('%.png$', ''):gsub('%s+', '_'):lower()
             local image = lg.newImage(path .. '/' .. file)
-            manager.sprites[key] = image
-            manager.used[key] = false
+            local raw_key = file:gsub('%.png$', '')
+            local lower_raw_key = raw_key:lower()
+            local global_key = lower_raw_key:gsub('%s+', '_')
 
-            local lower = file:lower()
-            if lower:match('^boss') then
-                manager.categories.boss[key] = image
-            elseif lower:match('enemy') then
-                manager.categories.enemy[key] = image
-            elseif lower:match('player') or lower:match('ship') then
-                manager.categories.player[key] = image
+            manager.sprites[global_key] = image
+            manager.used[global_key] = false
+
+            if lower_raw_key:match('^boss') then
+                manager.categories.boss[global_key] = image
+            elseif lower_raw_key:match('^enemy') then
+                local category_key = lower_raw_key:gsub('^enemy%s*', '')
+                manager.categories.enemy[category_key] = image
+            elseif lower_raw_key:match('player') or lower_raw_key:match('ship') then
+                local category_key = lower_raw_key:match('.* (%w+)$') or lower_raw_key
+                manager.categories.player[category_key] = image
             else
-                manager.categories.misc[key] = image
+                manager.categories.misc[global_key] = image
             end
         end
     end

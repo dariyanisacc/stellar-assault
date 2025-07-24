@@ -137,7 +137,7 @@ function love.load()
     selectedShip = "alpha"
     
     -- Global sprite scale factor (adjust as needed; 4 makes sprites 4x larger)
-    spriteScale = 1
+    spriteScale = 0.15  -- Adjust this value lower (e.g., 0.1) if still too large, or higher if too small
     
     -- Load audio
     loadAudio()
