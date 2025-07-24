@@ -112,6 +112,13 @@ local function registerGameCommands(console)
         console:log("Assets reloaded")
         logger.info("Debug: Reloaded assets (%s)", what)
     end)
+
+    -- Reload constants only
+    console:register("reload_constants", "Reload game constants", function(args)
+        package.loaded["src.constants"] = nil
+        constants = require("src.constants")
+        console:log("Constants reloaded")
+    end)
     
     -- Log level
     console:register("loglevel", "Set log level (debug/info/warn/error)", function(args)
