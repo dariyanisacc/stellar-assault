@@ -320,6 +320,11 @@ function WaveManager:spawnEnemy()
     enemy.speed = enemyType.speed * (self.waveDifficulty or 1)
     enemy.behavior = behaviors[enemyType.behavior] or behaviors.move_left
     enemy.behaviorName = enemyType.behavior
+    if enemyType.behavior == "move_left" then
+        enemy.type = "basic"
+    else
+        enemy.type = enemyType.behavior
+    end
     enemy.health = math.ceil((enemyType.health + math.floor(self.waveNumber / 5)) * self.difficultyMultiplier * (self.waveDifficulty or 1))
     enemy.maxHealth = enemy.health
     enemy.active = true
