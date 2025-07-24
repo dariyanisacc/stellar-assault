@@ -52,6 +52,10 @@ laserCloneIndex = 1
 local soundReferenceDistance = 50
 local soundMaxDistance = 800
 
+-- Audio lists for volume updates
+local sfxSources = {}
+local musicSources = {}
+
 -- Settings (persist across states)
 masterVolume = constants.audio.defaultMasterVolume
 sfxVolume = constants.audio.defaultSFXVolume
@@ -197,6 +201,7 @@ function loadAudio()
         laserSound = la.newSource("laser.wav", "static")
         laserSound.baseVolume = 0.5
         laserSound:setVolume(laserSound.baseVolume * sfxVolume * masterVolume)
+        table.insert(sfxSources, laserSound)
 
         -- Preload clones for rapid firing
         laserClones = {}
@@ -205,6 +210,7 @@ function loadAudio()
             c.baseVolume = laserSound.baseVolume
             c:setVolume(c.baseVolume * sfxVolume * masterVolume)
             table.insert(laserClones, c)
+            table.insert(sfxSources, c)  -- Add clones to sfxSources for volume updates
         end
         laserCloneIndex = 1
     end
@@ -213,27 +219,39 @@ function loadAudio()
         explosionSound = la.newSource("explosion.wav", "static")
         explosionSound.baseVolume = 0.7
         explosionSound:setVolume(explosionSound.baseVolume * sfxVolume * masterVolume)
+        table.insert(sfxSources, explosionSound)
     end
 
     if lf.getInfo("powerup.wav") then
         powerupSound = la.newSource("powerup.wav", "static")
         powerupSound.baseVolume = 0.6
         powerupSound:setVolume(powerupSound.baseVolume * sfxVolume * masterVolume)
+        table.insert(sfxSources, powerupSound)
+    end
+
+    if lf.getInfo("shield_break.wav") then
+        shieldBreakSound = la.newSource("shield_break.wav", "static")
+        shieldBreakSound.baseVolume = 0.7
+        shieldBreakSound:setVolume(shieldBreakSound.baseVolume * sfxVolume * masterVolume)
+        table.insert(sfxSources, shieldBreakSound)
     end
 
     if lf.getInfo("gameover.ogg") then
         gameOverSound = la.newSource("gameover.ogg", "static")
         gameOverSound.baseVolume = 0.8
         gameOverSound:setVolume(gameOverSound.baseVolume * sfxVolume * masterVolume)
+        table.insert(sfxSources, gameOverSound)
     end
 
     if lf.getInfo("menu.flac") then
         menuSelectSound = la.newSource("menu.flac", "static")
         menuSelectSound.baseVolume = 0.4
         menuSelectSound:setVolume(menuSelectSound.baseVolume * sfxVolume * masterVolume)
+        table.insert(sfxSources, menuSelectSound)
         menuConfirmSound = menuSelectSound:clone()
         menuConfirmSound.baseVolume = menuSelectSound.baseVolume
         menuConfirmSound:setVolume(menuConfirmSound.baseVolume * sfxVolume * masterVolume)
+        table.insert(sfxSources, menuConfirmSound)
     end
     
     -- Background music
@@ -242,6 +260,22 @@ function loadAudio()
         backgroundMusic.baseVolume = 1.0
         backgroundMusic:setLooping(true)
         backgroundMusic:setVolume(backgroundMusic.baseVolume * musicVolume * masterVolume)
+        table.insert(musicSources, backgroundMusic)
+    end
+
+    if lf.getInfo("boss.mp3") then
+        bossMusic = la.newSource("boss.mp3", "stream")
+        bossMusic.baseVolume = 0.8
+        bossMusic:setLooping(true)
+        bossMusic:setVolume(bossMusic.baseVolume * musicVolume * masterVolume)
+        table.insert(musicSources, bossMusic)
+    end
+
+    if lf.getInfo("victory.ogg") then
+        victorySound = la.newSource("victory.ogg", "static")
+        victorySound.baseVolume = 0.8
+        victorySound:setVolume(victorySound.baseVolume * sfxVolume * masterVolume)
+        table.insert(sfxSources, victorySound)
     end
 end
 
@@ -332,46 +366,34 @@ function applyWindowMode()
         {width = 2560, height = 1440}
     }
     
+    local flags = {
+        vsync = 1,
+        minwidth = constants.window.minWidth,
+        minheight = constants.window.minHeight
+    }
+    
     -- Apply window settings based on display mode
     if displayMode == "borderless" then
-        -- Get desktop dimensions
-        local dw, dh = lw.getDesktopDimensions()
-        
-        -- Set to borderless at desktop size in one step
-        lw.setMode(dw, dh, {
-            fullscreen = false,
-            borderless = true,
-            resizable = false,
-            vsync = 1,
-            display = 1,
-            minwidth = constants.window.minWidth,
-            minheight = constants.window.minHeight
-        })
-        
-        -- Position at 0,0 and maximize
-        lw.setPosition(0, 0)
-        lw.maximize()
+        -- Borderless fullscreen (desktop mode)
+        flags.fullscreen = true
+        flags.fullscreentype = "desktop"
+        flags.resizable = false
+        lw.setMode(0, 0, flags)  -- 0,0 uses desktop dimensions automatically
         
     elseif displayMode == "fullscreen" then
         -- Exclusive fullscreen
         local resolution = resolutions[currentResolution] or resolutions[1]
-        lw.setMode(resolution.width, resolution.height, {
-            fullscreen = true,
-            fullscreentype = "exclusive",
-            resizable = false,
-            minwidth = constants.window.minWidth,
-            minheight = constants.window.minHeight
-        })
+        flags.fullscreen = true
+        flags.fullscreentype = "exclusive"
+        flags.resizable = false
+        lw.setMode(resolution.width, resolution.height, flags)
         
     else  -- windowed
         local resolution = resolutions[currentResolution] or resolutions[1]
-        lw.setMode(resolution.width, resolution.height, {
-            fullscreen = false,
-            borderless = false,
-            resizable = true,
-            minwidth = constants.window.minWidth,
-            minheight = constants.window.minHeight
-        })
+        flags.fullscreen = false
+        flags.borderless = false
+        flags.resizable = true
+        lw.setMode(resolution.width, resolution.height, flags)
     end
     
     -- Reinitialize starfield for new window size
@@ -379,28 +401,20 @@ function applyWindowMode()
 end
 
 function updateAudioVolumes()
-    -- Update all audio sources with new volume settings
-    local sources = {laserSound, explosionSound, powerupSound,
-                    gameOverSound, menuSelectSound, menuConfirmSound}
-
-    for _, source in ipairs(sources) do
+    -- Update all SFX sources with new volume settings
+    for _, source in ipairs(sfxSources) do
         if source then
             local base = source.baseVolume or 1
             source:setVolume(base * sfxVolume * masterVolume)
         end
     end
 
-    -- Update preloaded clones
-    if laserClones then
-        for _, c in ipairs(laserClones) do
-            local base = c.baseVolume or 1
-            c:setVolume(base * sfxVolume * masterVolume)
+    -- Update all music sources
+    for _, source in ipairs(musicSources) do
+        if source then
+            local base = source.baseVolume or 1
+            source:setVolume(base * musicVolume * masterVolume)
         end
-    end
-
-    if backgroundMusic then
-        local base = backgroundMusic.baseVolume or 1
-        backgroundMusic:setVolume(base * musicVolume * masterVolume)
     end
 end
 
@@ -693,26 +707,20 @@ function drawDebugOverlay()
         lg.print("Entities:", x, y)
         y = y + lineHeight
         
-        if asteroids then
-            lg.print(string.format("  Asteroids: %d", #asteroids), x, y)
-            y = y + lineHeight
-        end
-        if aliens then
-            lg.print(string.format("  Aliens: %d", #aliens), x, y)
-            y = y + lineHeight
-        end
-        if lasers then
-            lg.print(string.format("  Lasers: %d", #lasers), x, y)
-            y = y + lineHeight
-        end
-        if explosions then
-            lg.print(string.format("  Explosions: %d", #explosions), x, y)
-            y = y + lineHeight
-        end
-        if powerups then
-            lg.print(string.format("  Powerups: %d", #powerups), x, y)
-            y = y + lineHeight
-        end
+        lg.print(string.format("  Asteroids: %d", asteroids and #asteroids or 0), x, y)
+        y = y + lineHeight
+        
+        lg.print(string.format("  Aliens: %d", aliens and #aliens or 0), x, y)
+        y = y + lineHeight
+        
+        lg.print(string.format("  Lasers: %d", lasers and #lasers or 0), x, y)
+        y = y + lineHeight
+        
+        lg.print(string.format("  Explosions: %d", explosions and #explosions or 0), x, y)
+        y = y + lineHeight
+        
+        lg.print(string.format("  Powerups: %d", powerups and #powerups or 0), x, y)
+        y = y + lineHeight
     end
     
     -- Controls hint
