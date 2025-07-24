@@ -1215,11 +1215,12 @@ end
 if backgroundMusic then backgroundMusic:stop() end
 
 -- Switch to game over state with new high score flag
-if stateManager then
-stateManager:switch("gameover", self.newHighScore)
-end
-end
-end
+        if stateManager then
+            local elapsed = love.timer.getTime() - self.sessionStartTime
+            stateManager:switch("gameover", self.newHighScore, self.sessionEnemiesDefeated, elapsed)
+        end
+        end
+    end
 
 -- Add screen bomb effect function
 function PlayingState:screenBomb()
@@ -2245,11 +2246,12 @@ end
 if backgroundMusic then backgroundMusic:stop() end
 
 -- Switch to game over state with new high score flag
-if stateManager then
-stateManager:switch("gameover", self.newHighScore)
-end
-end
-end
+        if stateManager then
+            local elapsed = love.timer.getTime() - self.sessionStartTime
+            stateManager:switch("gameover", self.newHighScore, self.sessionEnemiesDefeated, elapsed)
+        end
+        end
+    end
 
 -- New helper functions
 function PlayingState:saveGameStats()
