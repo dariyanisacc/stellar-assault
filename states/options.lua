@@ -34,11 +34,7 @@ function OptionsState:enter()
     
     -- New: Display mode options as list
     self.displayModes = {"windowed", "fullscreen", "borderless"}
-    self.fontSizeOptions = {
-        {label = "Small", scale = 0.8},
-        {label = "Normal", scale = 1.0},
-        {label = "Large", scale = 1.3}
-    }
+    self.fontScaleRange = {min = 0.8, max = 1.3}
     
     -- Find current index (default to 3 for borderless if not set)
     local dmValue = 3  -- Default to borderless
@@ -50,13 +46,7 @@ function OptionsState:enter()
     end
     
     local settings = Persistence.getSettings()
-    local fontIndex = 2
-    for i, opt in ipairs(self.fontSizeOptions) do
-        if math.abs(opt.scale - (settings.fontScale or 1)) < 0.01 then
-            fontIndex = i
-            break
-        end
-    end
+    local fontValue = settings.fontScale or 1
 
     -- Menu items (change Display Mode to list type)
     self.menuItems = {
@@ -66,7 +56,7 @@ function OptionsState:enter()
         {name = "SFX Volume", type = "slider", value = sfxVolume or 1.0},
         {name = "Music Volume", type = "slider", value = musicVolume or 0.2},
         {name = "High Contrast", type = "toggle", value = settings.highContrast or false},
-        {name = "Font Size", type = "list", value = fontIndex},
+        {name = "Font Size", type = "slider", value = fontValue},
         {name = "Controls", type = "button"},
         {name = "Apply", type = "button"},
         {name = "Back", type = "button"}
@@ -189,8 +179,6 @@ function OptionsState:draw()
                 text = text .. ": " .. self.resolutions[item.value].name
             elseif item.name == "Display Mode" then
                 text = text .. ": " .. self.displayModes[item.value]:gsub("^%l", string.upper)
-            elseif item.name == "Font Size" then
-                text = text .. ": " .. self.fontSizeOptions[item.value].label
             end
         elseif item.type == "slider" then
             text = text .. ": " .. math.floor(item.value * 100) .. "%"
@@ -213,8 +201,17 @@ function OptionsState:draw()
             lg.rectangle("fill", barX, barY, barWidth, barHeight)
             
             -- Fill
-            lg.setColor(0, 1, 1)
-            lg.rectangle("fill", barX, barY, barWidth * item.value, barHeight)
+            local fillValue = item.value
+            if item.name == "Font Size" then
+                fillValue = (item.value - self.fontScaleRange.min) /
+                             (self.fontScaleRange.max - self.fontScaleRange.min)
+            end
+            if highContrast then
+                lg.setColor(1, 1, 1, 1)
+            else
+                lg.setColor(0, 1, 1, 1)
+            end
+            lg.rectangle("fill", barX, barY, barWidth * fillValue, barHeight)
             
             -- Border
             lg.setColor(1, 1, 1)
@@ -308,29 +305,30 @@ function OptionsState:adjustValue(direction)
             maxValue = #self.resolutions
         elseif item.name == "Display Mode" then
             maxValue = #self.displayModes
-        elseif item.name == "Font Size" then
-            maxValue = #self.fontSizeOptions
         end
         if item.value < 1 then item.value = maxValue end
         if item.value > maxValue then item.value = 1 end
-        if item.name == "Font Size" then
-            fontScale = self.fontSizeOptions[item.value].scale
-            applyFontScale()
-        end
         if menuSelectSound then menuSelectSound:play() end
     elseif item.type == "toggle" then
         item.value = not item.value
         if item.name == "High Contrast" then
             highContrast = item.value
+            Persistence.updateSettings({highContrast = highContrast})
         end
     elseif item.type == "slider" then
         -- For continuous adjustment, direction is already scaled by dt
-        if math.abs(direction) < 1 then
-            item.value = math.max(0, math.min(1, item.value + direction))
+        local newVal
+        if item.name == "Font Size" then
+            newVal = item.value + direction * (math.abs(direction) < 1 and 0.05 or 0.1)
+            newVal = math.max(self.fontScaleRange.min, math.min(self.fontScaleRange.max, newVal))
         else
-            -- For single keypress adjustment
-            item.value = math.max(0, math.min(1, item.value + direction * 0.1))
+            if math.abs(direction) < 1 then
+                newVal = math.max(0, math.min(1, item.value + direction))
+            else
+                newVal = math.max(0, math.min(1, item.value + direction * 0.1))
+            end
         end
+        item.value = newVal
         
         -- Update global values
         if item.name == "Master Volume" then
@@ -339,6 +337,10 @@ function OptionsState:adjustValue(direction)
             sfxVolume = item.value
         elseif item.name == "Music Volume" then
             musicVolume = item.value
+        elseif item.name == "Font Size" then
+            fontScale = item.value
+            applyFontScale()
+            Persistence.updateSettings({fontScale = fontScale})
         end
         
         -- Apply audio changes immediately
@@ -404,7 +406,7 @@ function OptionsState:applySettings()
     local hcItem = self.menuItems[6]
     local fsItem = self.menuItems[7]
     highContrast = hcItem.value
-    fontScale = self.fontSizeOptions[fsItem.value].scale
+    fontScale = fsItem.value
     applyFontScale()
 
     -- Save settings
