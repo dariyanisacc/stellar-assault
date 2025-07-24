@@ -105,15 +105,8 @@ function MenuState:draw()
     end
     
     -- Draw title
-    lg.setFont(titleFont or lg.newFont(48))
-    if highContrast then
-        lg.setColor(1, 1, 1)
-    else
-        lg.setColor(0, 1, 1)
-    end
-    local title = "STELLAR ASSAULT"
-    local titleWidth = lg.getFont():getWidth(title)
-    lg.print(title, self.screenWidth/2 - titleWidth/2, 100)
+    local titleColor = highContrast and {1, 1, 1} or {0, 1, 1}
+    uiManager:drawMessage("STELLAR ASSAULT", self.screenWidth/2, 100, titleColor, titleFont)
     
     if self.menuState == "main" then
         self:drawMainMenu()
@@ -150,18 +143,12 @@ function MenuState:drawMainMenu()
     end
     
     -- Draw instructions
-    lg.setFont(smallFont or lg.newFont(14))
-    if highContrast then
-        lg.setColor(1, 1, 1)
-    else
-        lg.setColor(0.7, 0.7, 0.7)
-    end
     local nav = inputHints[lastInputType].navigate or "Arrow Keys/D-Pad"
     local select = inputHints[lastInputType].select or "Enter/A"
     local back = inputHints[lastInputType].back or "Escape/B"
     local instructions = nav .. ": Navigate | " .. select .. ": Select | " .. back .. ": Back"
-    local instructWidth = lg.getFont():getWidth(instructions)
-    lg.print(instructions, self.screenWidth/2 - instructWidth/2, self.screenHeight - 30)
+    local instrColor = highContrast and {1, 1, 1} or {0.7, 0.7, 0.7}
+    uiManager:drawMessage(instructions, self.screenWidth/2, self.screenHeight - 30, instrColor, smallFont)
 end
 
 function MenuState:drawSaveMenu()
@@ -523,14 +510,11 @@ function MenuState:drawShipSelect()
     lg.print(statText, self.screenWidth/2 - statWidth/2, statsY)
     
     -- Instructions
-    lg.setFont(smallFont or lg.newFont(14))
-    lg.setColor(0.7, 0.7, 0.7)
     local nav = lastInputType == "gamepad" and "D-Pad" or "Left/Right"
     local confirm = inputHints[lastInputType].confirm or "Enter"
     local back = inputHints[lastInputType].back or "Escape"
     local instructions = nav .. ": Select | " .. confirm .. ": Confirm | " .. back .. ": Back"
-    local instructWidth = lg.getFont():getWidth(instructions)
-    lg.print(instructions, self.screenWidth/2 - instructWidth/2, self.screenHeight - 30)
+    uiManager:drawMessage(instructions, self.screenWidth/2, self.screenHeight - 30, {0.7, 0.7, 0.7}, smallFont)
 end
 
 function MenuState:handleShipSelectInput(key)

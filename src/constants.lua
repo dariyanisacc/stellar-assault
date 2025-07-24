@@ -164,6 +164,32 @@ constants.levels = {
     bossFrequency = 4 -- Every 4th wave → boss (as per the plan, though currently using enemiesForBoss)
 }
 
+-- Balance tuning values
+constants.balance = {
+    -- Chance for timed powerup spawns
+    timedPowerupChance = 0.3,
+    -- Seconds between timed powerup checks
+    powerupInterval = 10,
+
+    -- Enemy drop chances
+    waveEnemyPowerupChance = 0.15,
+    alienPowerupChance = 0.2,
+    asteroidSmallPowerupChance = 0.15,
+    asteroidLargePowerupChance = 0.05,
+    comboBonusChance = 0.05,
+
+    -- Gameplay pacing
+    waveStartDelay = 2.0,
+    maxLasers = 100,
+    laserWarningThreshold = 90,
+
+    -- Misc
+    enhancedPowerupChance = 0.1,
+    specialPowerupChance = 0.1,
+    alienLaserSpeedMultiplier = 0.7,
+    bossSpawnRate = 4
+}
+
 -- Audio settings
 constants.audio = {
     defaultMasterVolume = 1.0,

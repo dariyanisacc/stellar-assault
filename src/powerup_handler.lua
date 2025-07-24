@@ -87,15 +87,15 @@ end
 if currentLevel >= 4 then
 table.insert(types, "health")
 end
-local isEnhanced = math.random() < 0.1
+    local isEnhanced = math.random() < constants.balance.enhancedPowerupChance
 
 local powerupType = forceType
-if not powerupType then
-if math.random() < 0.1 then
-powerupType = "homingMissile"
-else
-powerupType = types[math.random(#types)]
-end
+    if not powerupType then
+    if math.random() < constants.balance.specialPowerupChance then
+        powerupType = "homingMissile"
+    else
+        powerupType = types[math.random(#types)]
+    end
 end
 
 local powerup = Powerup.new(x, y, powerupType)

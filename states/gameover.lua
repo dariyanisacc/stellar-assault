@@ -3,21 +3,28 @@ local lg = love.graphics
 
 local GameOverState = {}
 
-function GameOverState:enter(isNewHighScore)
+function GameOverState:enter(isNewHighScore, kills, duration)
     self.selection = 1 -- 1 = Restart Level, 2 = Main Menu
     self.finalScore = score or 0
     self.levelReached = levelAtDeath or currentLevel or 1
     self.screenWidth = lg.getWidth()
     self.screenHeight = lg.getHeight()
     self.isNewHighScore = isNewHighScore or false
-    
+    self.killCount = kills or 0
+    self.playTime = duration or 0
+
     -- Animation timers
     self.animationTimer = 0
     self.textAlpha = 0
-    
+
     -- Get high score for display
     local Persistence = require("src.persistence")
     self.highScore = Persistence.getHighScore()
+    self.bestKillCount = Persistence.getBestKillCount()
+    self.bestSurvivalTime = Persistence.getBestSurvivalTime()
+
+    self.newBestKill = Persistence.updateBestKillCount(self.killCount)
+    self.newBestTime = Persistence.updateBestSurvivalTime(self.playTime)
 end
 
 function GameOverState:update(dt)
@@ -63,21 +70,36 @@ function GameOverState:draw()
     
     -- Stats
     lg.setFont(menuFont or lg.newFont(24))
-    lg.setColor(1, 1, 1, self.textAlpha)
-    
+
+    local killText = "Enemies Defeated: " .. tostring(self.killCount)
+    local minutes = math.floor(self.playTime / 60)
+    local seconds = math.floor(self.playTime % 60)
+    local timeText = string.format("Time Survived: %02d:%02d", minutes, seconds)
+
     local stats = {
         "Final Score: " .. string.format("%d", self.finalScore),
         "High Score: " .. string.format("%d", self.highScore),
-        "Level Reached: " .. self.levelReached
+        "Level Reached: " .. self.levelReached,
+        killText,
+        timeText
     }
     
     -- Add completion status if game was completed
     if gameComplete then
         table.insert(stats, "Game Completed!")
     end
-    
+
     local y = self.isNewHighScore and 260 or 250
     for _, stat in ipairs(stats) do
+        local color = {1, 1, 1, self.textAlpha}
+        if stat == killText and self.newBestKill then
+            local pulse = math.sin(self.animationTimer * 4) * 0.2 + 0.8
+            color = {0, 1, 0, self.textAlpha * pulse}
+        elseif stat == timeText and self.newBestTime then
+            local pulse = math.sin(self.animationTimer * 4) * 0.2 + 0.8
+            color = {0, 1, 0, self.textAlpha * pulse}
+        end
+        lg.setColor(color)
         local statWidth = lg.getFont():getWidth(stat)
         lg.print(stat, self.screenWidth/2 - statWidth/2, y)
         y = y + 40

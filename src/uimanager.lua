@@ -2,6 +2,16 @@
 local constants = require("src.constants")
 local lg = love.graphics
 
+local function setColorContrast(normal, contrast)
+    local c = normal
+    if highContrast and contrast then
+        c = contrast
+    elseif not highContrast then
+        c = normal
+    end
+    lg.setColor(c[1], c[2], c[3], c[4] or 1)
+end
+
 local UIManager = {}
 UIManager.__index = UIManager
 
@@ -17,7 +27,7 @@ function UIManager:drawScore(x, y, score)
     x = x or self.margin
     y = y or self.margin
     
-    lg.setColor(1, 1, 1)
+    setColorContrast({0, 1, 1}, {1, 1, 1})
     lg.setFont(uiFont or lg.newFont(18))
     lg.print("Score: " .. (score or 0), x, y)
 end
@@ -26,7 +36,7 @@ function UIManager:drawLives(x, y, lives)
     x = x or self.margin
     y = y or self.margin + 25
     
-    lg.setColor(1, 1, 1)
+    setColorContrast({0, 1, 1}, {1, 1, 1})
     lg.setFont(uiFont or lg.newFont(18))
     lg.print("Lives: " .. (lives or 0), x, y)
 end
@@ -35,7 +45,7 @@ function UIManager:drawLevel(x, y, level)
     x = x or self.margin
     y = y or self.margin + 50
     
-    lg.setColor(1, 1, 1)
+    setColorContrast({0, 1, 1}, {1, 1, 1})
     lg.setFont(uiFont or lg.newFont(18))
     lg.print("Level: " .. (level or 1), x, y)
 end
@@ -53,17 +63,18 @@ function UIManager:drawHealthBar(x, y, current, max, width, height, label)
     -- Fill
     if current > 0 then
         local fillWidth = (current / max) * width
-        lg.setColor(0, 1, 1)
+        setColorContrast({0, 1, 1}, {1, 0, 0})
         lg.rectangle("fill", x, y, fillWidth, height)
     end
     
     -- Border
-    lg.setColor(1, 1, 1)
+    setColorContrast({1, 1, 1}, {1, 1, 1})
     lg.rectangle("line", x, y, width, height)
     
     -- Label
     if label then
         lg.setFont(smallFont or lg.newFont(14))
+        setColorContrast({0, 1, 1}, {1, 1, 1})
         lg.print(label, x + 2, y - 16)
     end
 end
@@ -73,18 +84,18 @@ function UIManager:drawPowerupBar(x, y, width, current, max, color)
     height = constants.ui.powerupBarHeight
     
     -- Background
-    lg.setColor(0.2, 0.2, 0.2, 0.8)
+    lg.setColor(0.2, 0.2, 0.2, highContrast and 1 or 0.8)
     lg.rectangle("fill", x, y, width, height)
     
     -- Fill
     if current > 0 then
         local fillWidth = (current / max) * width
-        lg.setColor(color[1], color[2], color[3], 0.8)
+        setColorContrast({color[1], color[2], color[3], 0.8}, {1, 1, 1, 0.8})
         lg.rectangle("fill", x, y, fillWidth, height)
     end
     
     -- Border
-    lg.setColor(color[1], color[2], color[3], 1)
+    setColorContrast({color[1], color[2], color[3], 1}, {1, 1, 1, 1})
     lg.rectangle("line", x, y, width, height)
 end
 
@@ -107,7 +118,7 @@ function UIManager:drawActivePowerups(x, y, powerups)
     local drawY = y
     for powerup, timer in pairs(powerups or {}) do
         local color = colors[powerup] or {1, 1, 1}
-        lg.setColor(color)
+        setColorContrast(color, {1, 1, 1})
         
         -- Draw text
         local text = powerup .. ": " .. string.format("%.1f", timer) .. "s"
@@ -131,7 +142,7 @@ function UIManager:drawBossHealth(boss)
     
     -- Boss name
     lg.setFont(menuFont or lg.newFont(24))
-    lg.setColor(1, 0, 0)
+    setColorContrast({1, 0, 0}, {1, 1, 1})
     local name = boss.name or "BOSS"
     local nameWidth = lg.getFont():getWidth(name)
     lg.print(name, lg.getWidth() / 2 - nameWidth / 2, y - 30)
@@ -141,7 +152,7 @@ function UIManager:drawBossHealth(boss)
     
     -- Shield bar if applicable
     if boss.shield and boss.maxShield and boss.shield > 0 then
-        lg.setColor(0, 0.5, 1)
+        setColorContrast({0, 0.5, 1}, {1, 1, 1})
         local shieldHeight = 5
         lg.rectangle("fill", x, y - shieldHeight - 2, 
                     (boss.shield / boss.maxShield) * barWidth, shieldHeight)
@@ -155,7 +166,7 @@ function UIManager:drawMessage(text, x, y, color, font)
     font = font or titleFont or lg.newFont(48)
     
     lg.setFont(font)
-    lg.setColor(color)
+    setColorContrast(color, {1, 1, 1})
     
     local width = lg.getFont():getWidth(text)
     lg.print(text, x - width / 2, y)
@@ -189,7 +200,7 @@ function UIManager:drawCombo(combo, x, y)
         color = {1, 0.5, 0} -- Orange for medium combos
     end
     
-    lg.setColor(color)
+    setColorContrast(color, {1, 1, 1})
     lg.print("x" .. combo, x, y)
 end
 
@@ -207,7 +218,8 @@ function UIManager:drawWarning(text, severity)
     local pulse = math.sin(love.timer.getTime() * 10) * 0.5 + 0.5
     
     lg.setFont(menuFont or lg.newFont(24))
-    lg.setColor(color[1], color[2], color[3], pulse)
+    local c = highContrast and {1, 1, 1, pulse} or {color[1], color[2], color[3], pulse}
+    lg.setColor(c)
     
     local width = lg.getFont():getWidth(text)
     lg.print(text, lg.getWidth() / 2 - width / 2, 150)
@@ -222,11 +234,11 @@ function UIManager:drawMinimap(x, y, width, height, entities, viewRange)
     viewRange = viewRange or 2000
     
     -- Background
-    lg.setColor(0, 0, 0, 0.5)
+    lg.setColor(0, 0, 0, highContrast and 0.8 or 0.5)
     lg.rectangle("fill", x, y, width, height)
     
     -- Border
-    lg.setColor(0, 1, 1, 0.5)
+    setColorContrast({0, 1, 1, 0.5}, {1, 1, 1, 0.5})
     lg.rectangle("line", x, y, width, height)
     
     -- Draw entities
@@ -236,12 +248,12 @@ function UIManager:drawMinimap(x, y, width, height, entities, viewRange)
     
     -- Player
     if player then
-        lg.setColor(0, 1, 0)
+        setColorContrast({0, 1, 0}, {1, 1, 1})
         lg.circle("fill", centerX, centerY, 3)
     end
     
     -- Enemies
-    lg.setColor(1, 0, 0, 0.8)
+    setColorContrast({1, 0, 0, 0.8}, {1, 1, 1, 0.8})
     for _, entity in ipairs(entities or {}) do
         local relX = (entity.x - player.x) * scale
         local relY = (entity.y - player.y) * scale

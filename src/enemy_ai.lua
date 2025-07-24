@@ -105,7 +105,7 @@ function EnemyAI.alienShoot(state, alien)
     local laser = state.laserPool:get()
     laser.x = alien.x
     laser.y = alien.y + alien.height/2
-    laser.speed = constants.laser.speed * 0.7
+    laser.speed = constants.laser.speed * constants.balance.alienLaserSpeedMultiplier
     laser.isAlien = true
     table.insert(alienLasers, laser)
 end
@@ -122,8 +122,8 @@ function EnemyAI.spawnEntities(state, dt)
     end
 
     -- WaveManager handles alien spawning now
-    if state.powerupTimer >= 10 then
-        if math.random() < 0.3 then
+    if state.powerupTimer >= constants.balance.powerupInterval then
+        if math.random() < constants.balance.timedPowerupChance then
             state:spawnPowerup()
         end
         state.powerupTimer = 0

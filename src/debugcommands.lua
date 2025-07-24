@@ -112,6 +112,13 @@ local function registerGameCommands(console)
         console:log("Assets reloaded")
         logger.info("Debug: Reloaded assets (%s)", what)
     end)
+
+    -- Reload constants only
+    console:register("reload_constants", "Reload game constants", function(args)
+        package.loaded["src.constants"] = nil
+        constants = require("src.constants")
+        console:log("Constants reloaded")
+    end)
     
     -- Log level
     console:register("loglevel", "Set log level (debug/info/warn/error)", function(args)
@@ -161,6 +168,19 @@ local function registerGameCommands(console)
             console:log("God mode: " .. (player.godMode and "ENABLED" or "DISABLED"))
         else
             console:log("No player found")
+        end
+    end)
+
+    -- Quick toggle using global function
+    console:register("toggleGodMode", "Toggle god mode", function(args)
+        if stateManager.currentName ~= "playing" or not player then
+            console:log("Must be in playing state")
+            return
+        end
+        if _G.toggleGodMode then
+            _G.toggleGodMode()
+            console:log("God mode: " .. (player.godMode and "ENABLED" or "DISABLED"))
+            logger.info("Debug: toggleGodMode -> %s", player.godMode and "ON" or "OFF")
         end
     end)
     
@@ -243,6 +263,67 @@ local function registerGameCommands(console)
             console:log("Unknown entity: " .. entity)
             console:log("Available: asteroid, alien, powerup, boss")
         end
+    end)
+
+    console:register("spawnEnemy", "Spawn enemy via state (usage: spawnEnemy alien)", function(args)
+        if stateManager.currentName ~= "playing" then
+            console:log("Must be in playing state")
+            return
+        end
+
+        local etype = args[2]
+        if not etype then
+            console:log("Usage: spawnEnemy <alien|asteroid|powerup|boss>")
+            return
+        end
+
+        local playing = stateManager.currentState
+        if not playing then return end
+
+        if etype == "alien" then
+            playing:spawnAlien()
+        elseif etype == "asteroid" then
+            playing:spawnAsteroid()
+        elseif etype == "powerup" then
+            playing:spawnPowerup()
+        elseif etype == "boss" then
+            playing:spawnBoss()
+        else
+            console:log("Unknown enemy type: " .. etype)
+            return
+        end
+        console:log("Spawned enemy: " .. etype)
+        logger.info("Debug: spawnEnemy %s", etype)
+    end)
+
+    console:register("setScore", "Set player score (usage: setScore 1000)", function(args)
+        if stateManager.currentName ~= "playing" then
+            console:log("Must be in playing state")
+            return
+        end
+
+        local value = tonumber(args[2])
+        if not value then
+            console:log("Usage: setScore <value>")
+            return
+        end
+
+        score = math.max(0, value)
+        console:log("Score set to " .. score)
+        logger.info("Debug: setScore %d", score)
+    end)
+
+    console:register("unlockLevel", "Unlock level (usage: unlockLevel 2)", function(args)
+        local level = tonumber(args[2])
+        if not level then
+            console:log("Usage: unlockLevel <number>")
+            return
+        end
+
+        local Persistence = require("src.persistence")
+        Persistence.unlockLevel(level)
+        console:log("Level " .. level .. " unlocked")
+        logger.info("Debug: unlockLevel %d", level)
     end)
     
     console:register("level", "Jump to level (usage: level 5)", function(args)
