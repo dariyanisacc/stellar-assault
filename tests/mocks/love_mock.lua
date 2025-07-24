@@ -110,7 +110,7 @@ love_mock.mouse = {
 
 -- Mock joystick module
 love_mock.joystick = {
-    getJoysticks = function() return {} end,
+    getJoysticks = function() return {} end
     getJoystickCount = function() return 0 end,
 }
 
@@ -144,6 +144,15 @@ love_mock.math = {
             setSeed = function(self, seed) math.randomseed(seed) end,
         }
     end,
+}
+
+-- Mock filesystem module
+love_mock.filesystem = {
+    exists = function(path) return false end,
+    read = function(path) return "test data", 9 end,
+    write = function(path, data) end,
+    append = function(path, data) end,
+    -- Assume additional mocks from main if needed
 }
 
 return love_mock
