@@ -1,5 +1,5 @@
 -- Particle Pool Regression Tests
-local love_mock = require("tests.mocks.love_mock")
+local love_mock = require("tests.mocks/love_mock")
 _G.love = love_mock
 love.filesystem.append = function() end
 
@@ -29,16 +29,15 @@ describe("Particle Pools", function()
         love.math.random = rand
         math.random = rand
 
-        state = setmetatable({
-            explosionPool = ObjectPool.createExplosionPool(),
-            particlePool = ObjectPool.createParticlePool(),
-            trailPool = ObjectPool.createTrailPool(),
-            debrisPool = ObjectPool.createDebrisPool()
-        }, {__index = PlayingState})
+        state = setmetatable({}, {__index = PlayingState})
+        state.explosionPool = ObjectPool.createExplosionPool()
+        state.particlePool = ObjectPool.createParticlePool()
+        state.trailPool = ObjectPool.createTrailPool()
+        state.debrisPool = ObjectPool.createDebrisPool()
 
-        -- Added from main for completeness
+        -- Added from main for heat particle test
         PlayerControl.createHeatParticle = function(self)
-            local exp = self.explosionPool:get()
+            local exp = state.explosionPool:get()
             exp.pool = self.explosionPool
             table.insert(explosions, exp)
         end
@@ -54,7 +53,6 @@ describe("Particle Pools", function()
         assert.is_not_nil(explosions[1].pool)
     end)
 
-    -- Added from main for completeness
     it("assigns pool on heat particle", function()
         state:createHeatParticle()
         assert.is_not_nil(explosions[1].pool)
