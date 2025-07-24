@@ -26,6 +26,29 @@ love_mock.graphics = {
     origin = function() end,
     setShader = function(shader) end,
     newShader = function(code) return {type = "shader"} end,
+    newParticleSystem = function(image, buffer)
+        local ps = {
+            image = image,
+            buffer = buffer or 100,
+            count = 0,
+            emit = function(self, num) self.count = self.count + (num or 1) end,
+            update = function(self, dt)
+                if self.count > 0 then
+                    self.count = math.max(0, self.count - dt * 60)
+                end
+            end,
+            getCount = function(self) return self.count end,
+            setPosition = function() end,
+            setParticleLifetime = function() end,
+            setSizes = function() end,
+            setSpeed = function() end,
+            setSpread = function() end,
+            setLinearAcceleration = function() end,
+            setColors = function() end,
+            reset = function(self) self.count = 0 end,
+        }
+        return ps
+    end,
 }
 
 -- Mock audio module

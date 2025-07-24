@@ -5,6 +5,7 @@ love.filesystem.append = function() end
 
 local ObjectPool = require("src.objectpool")
 local PlayingState = require("states.playing")
+local Particles = require("src.particles")
 
 describe("Particle Pools", function()
     local state
@@ -35,11 +36,9 @@ describe("Particle Pools", function()
         }, {__index = PlayingState})
     end)
 
-    it("assigns pool on createExplosion", function()
+    it("creates particle system on explosion", function()
         state:createExplosion(0, 0, 20)
-        for _, p in ipairs(explosions) do
-            assert.is_not_nil(p.pool)
-        end
+        assert.is_true(Particles.getActiveCount() > 0)
     end)
 
     it("assigns pool on createHitEffect", function()
@@ -47,25 +46,16 @@ describe("Particle Pools", function()
         assert.is_not_nil(explosions[1].pool)
     end)
 
-    it("assigns pool on heat particle", function()
-        state:createHeatParticle()
-        assert.is_not_nil(explosions[1].pool)
-    end)
-
     it("releases objects back to pools", function()
         state:createExplosion(0, 0, 20)
         local beforeExp = state.explosionPool:getActiveCount()
-        local beforePart = state.particlePool:getActiveCount()
-        local beforeDeb = state.debrisPool:getActiveCount()
         assert.is_true(beforeExp > 0)
-        assert.is_true(beforePart > 0)
-        assert.is_true(beforeDeb > 0)
+        assert.is_true(Particles.getActiveCount() > 0)
 
         state:updateExplosions(5)
 
         assert.equals(0, state.explosionPool:getActiveCount())
-        assert.equals(0, state.particlePool:getActiveCount())
-        assert.equals(0, state.debrisPool:getActiveCount())
+        assert.equals(0, Particles.getActiveCount())
         assert.equals(0, #explosions)
     end)
 

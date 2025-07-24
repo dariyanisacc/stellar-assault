@@ -11,6 +11,7 @@ local PlayerControl = require("src.player_control")
 local EnemyAI = require("src.enemy_ai")
 local PowerupHandler = require("src.powerup_handler")
 local BossManager = require("src.bossmanager")
+local Particles = require("src.particles")
 local lg = love.graphics
 local la = love.audio
 local lm = love.math or math
@@ -356,7 +357,10 @@ self:checkGameConditions()
 end
 
 function PlayingState:updatePlayer(dt)
-PlayerControl.update(self, dt)
+    PlayerControl.update(self, dt)
+    if player then
+        Particles.emitTrail(player.x, player.y + player.height / 2)
+    end
 end
 
 function PlayingState:updateAsteroids(dt)
@@ -364,7 +368,10 @@ EnemyAI.updateAsteroids(self, dt)
 end
 
 function PlayingState:updateAliens(dt)
-EnemyAI.updateAliens(self, dt)
+    EnemyAI.updateAliens(self, dt)
+    for _, a in ipairs(aliens) do
+        Particles.emitTrail(a.x, a.y + a.height / 2, {1, 0, 0})
+    end
 end
 
 function PlayingState:updateLasers(dt)
@@ -442,7 +449,8 @@ end
 end
 
 function PlayingState:updateExplosions(dt)
--- Limit explosion/particle count for performance
+    Particles.update(dt)
+    -- Limit explosion/particle count for performance
 local maxExplosions = 200
 if #explosions > maxExplosions then
 -- Remove oldest explosions/particles
@@ -1091,81 +1099,9 @@ explosion.maxRadius = size
 
 table.insert(explosions, explosion)
 
-    -- Create explosion ring particles with a maximum cap
     local maxCount = math.min(10, math.floor(size / 8))
     explosion.debrisMax = maxCount
-    local particleCount = maxCount
-for i = 1, particleCount do
-local angle = (i / particleCount) * pi * 2
-local speed = random(100, 200)
-local particle = self.particlePool:get()
-particle.x = x
-particle.y = y
-particle.vx = cos(angle) * speed
-particle.vy = sin(angle) * speed
-particle.life = random(0.5, 1.0)
-particle.maxLife = particle.life
-particle.size = random(2, 4)
-particle.color = {
-1,
-random(0.5, 1),
-random(0, 0.3),
-1
-}
-particle.pool = self.particlePool
-table.insert(explosions, particle)
-end
-
-    -- Add debris particles (rock fragments) with a maximum cap
-    local debrisCount = maxCount
-    for i = 1, debrisCount do
-local angle = random() * pi * 2
-local speed = random(50, 150)
-local particle = self.debrisPool:get()
-particle.x = x + random(-5, 5)
-particle.y = y + random(-5, 5)
-particle.vx = cos(angle) * speed
-particle.vy = sin(angle) * speed
-particle.life = random(0.8, 1.5)
-particle.maxLife = particle.life
-particle.size = random(3, 6)
-particle.rotation = random() * pi * 2
-particle.rotationSpeed = (random() - 0.5) * 5
-particle.isDebris = true  -- Mark as debris for special rendering
-particle.color = {
-random(0.4, 0.7),  -- Grayish colors for rock debris
-random(0.4, 0.7),
-random(0.4, 0.7),
-1
-}
-        particle.pool = self.debrisPool
-        table.insert(explosions, particle)
-        explosion.debrisSpawned = explosion.debrisSpawned + 1
-    end
-
--- Add sparks for extra effect
-local sparkCount = math.floor(size / 10)
-for i = 1, sparkCount do
-local angle = random() * pi * 2
-local speed = random(200, 400)  -- Faster than debris
-local particle = self.particlePool:get()
-particle.x = x
-particle.y = y
-particle.vx = cos(angle) * speed
-particle.vy = sin(angle) * speed
-particle.life = random(0.2, 0.4)  -- Short lived
-particle.maxLife = particle.life
-particle.size = random(1, 2)  -- Small
-particle.isSpark = true
-particle.color = {
-1,
-random(0.8, 1),
-random(0, 0.5),
-1
-}
-particle.pool = self.particlePool
-table.insert(explosions, particle)
-end
+    Particles.emitExplosionDebris(x, y, size)
 
 if explosionSound and playPositionalSound then
 playPositionalSound(explosionSound, x, y)
@@ -1650,7 +1586,8 @@ end
 end
 
 function PlayingState:drawExplosions()
-for _, explosion in ipairs(explosions) do
+    Particles.draw()
+    for _, explosion in ipairs(explosions) do
 if explosion.vx then
 -- It's a particle
 local alpha = explosion.color and explosion.color[4] or (explosion.life / explosion.maxLife)
