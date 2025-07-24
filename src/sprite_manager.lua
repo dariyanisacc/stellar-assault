@@ -1,5 +1,8 @@
 local lg = love.graphics
 local lf = love.filesystem
+local logger = require("src.logger")
+
+assetFallbacks = assetFallbacks or {}
 
 local SpriteManager = {}
 SpriteManager.__index = SpriteManager
@@ -15,7 +18,15 @@ function SpriteManager.load(path)
     local files = lf.getDirectoryItems(path)
     for _, file in ipairs(files) do
         if file:match('%.png$') then
-            local image = lg.newImage(path .. '/' .. file)
+            local ok, imageOrErr = pcall(lg.newImage, path .. '/' .. file)
+            local image
+            if ok then
+                image = imageOrErr
+            else
+                logger.error('Failed to load sprite %s/%s: %s', path, file, imageOrErr)
+                assetFallbacks[path .. '/' .. file] = true
+                image = lg.newImage(love.image.newImageData(1,1))
+            end
             local raw_key = file:gsub('%.png$', '')
             local lower_raw_key = raw_key:lower()
             local global_key = lower_raw_key:gsub('%s+', '_')

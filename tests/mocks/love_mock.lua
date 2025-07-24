@@ -3,7 +3,9 @@ local love_mock = {}
 
 -- Mock graphics module
 love_mock.graphics = {
-    newImage = function(path) return {path = path, type = "image"} end,
+    newImage = function(path)
+        return {path = path, type = "image"}
+    end,
     newFont = function(size) return {size = size, type = "font"} end,
     setFont = function(font) end,
     setColor = function(r, g, b, a) end,
@@ -26,6 +28,13 @@ love_mock.graphics = {
     origin = function() end,
     setShader = function(shader) end,
     newShader = function(code) return {type = "shader"} end,
+}
+
+-- Minimal image module for placeholder creation
+love_mock.image = {
+    newImageData = function(w, h)
+        return {width = w, height = h, type = "imagedata"}
+    end
 }
 
 -- Mock audio module
@@ -52,6 +61,13 @@ love_mock.audio = {
     end,
     stop = function() end,
     setVolume = function(volume) end,
+}
+
+-- Minimal sound module for creating silent placeholders
+love_mock.sound = {
+    newSoundData = function(samples, rate, bits, channels)
+        return {samples = samples, rate = rate, bits = bits, channels = channels, type = "sounddata"}
+    end
 }
 
 -- Mock timer module

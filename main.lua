@@ -8,6 +8,9 @@ local DebugConsole = require("src.debugconsole")
 local logger = require("src.logger")
 local Persistence = require("src.persistence")
 
+-- Track assets that fall back to defaults
+assetFallbacks = assetFallbacks or {}
+
 -- Performance optimizations: cache Love2D modules
 local lg = love.graphics
 local la = love.audio
@@ -86,6 +89,41 @@ function updateInputType(inputType)
     end
 end
 
+-- Safely check if a file exists
+local function safeFileExists(path)
+    local ok, info = pcall(lf.getInfo, path)
+    if not ok then
+        logger.error("Error checking file %s: %s", path, info)
+        assetFallbacks[path] = true
+        return false
+    end
+    if not info then
+        logger.error("File not found: %s", path)
+        assetFallbacks[path] = true
+        return false
+    end
+    return true
+end
+
+-- Create a silent audio source as placeholder
+local function createSilentSource()
+    local sd = love.sound.newSoundData(4410, 44100, 16, 1)
+    local src = la.newSource(sd, "static")
+    src:setVolume(0)
+    return src
+end
+
+-- Safely load an audio source
+local function safeNewSource(path, type)
+    local ok, src = pcall(la.newSource, path, type)
+    if not ok then
+        logger.error("Failed to load audio %s: %s", path, src)
+        assetFallbacks[path] = true
+        return createSilentSource()
+    end
+    return src
+end
+
 function love.load()
     -- Window setup
     lw.setTitle("Stellar Assault")
@@ -109,8 +147,15 @@ function love.load()
     mediumFont = lg.newFont(20)
     
     -- Try to load monospace font, fall back to default
-    if lf.getInfo("assets/fonts/monospace.ttf") then
-        consoleFont = lg.newFont("assets/fonts/monospace.ttf", 14)
+    if safeFileExists("assets/fonts/monospace.ttf") then
+        local ok, font = pcall(lg.newFont, "assets/fonts/monospace.ttf", 14)
+        if ok then
+            consoleFont = font
+        else
+            logger.error("Failed to load font %s: %s", "assets/fonts/monospace.ttf", font)
+            assetFallbacks["assets/fonts/monospace.ttf"] = true
+            consoleFont = lg.newFont(14)
+        end
     else
         consoleFont = lg.newFont(14) -- Use default font
     end
@@ -178,45 +223,63 @@ function love.load()
     logger.info("Stellar Assault started")
     logger.info("Love2D version: %d.%d.%d", love.getVersion())
     logger.info("Resolution: %dx%d", lg.getWidth(), lg.getHeight())
-    
+
     -- Start with menu
     stateManager:switch("menu")
+
+    if next(assetFallbacks) then
+        assetFallbackWarning = "Some assets failed to load and placeholders are being used."
+        logger.warn(assetFallbackWarning)
+    end
 end
 
 function loadAudio()
     la.setDistanceModel("inverseclamped")
     -- Sound effects
-    if lf.getInfo("laser.wav") then
-        laserSound = la.newSource("laser.wav", "static")
+    if safeFileExists("laser.wav") then
+        laserSound = safeNewSource("laser.wav", "static")
         laserSound:setVolume(0.5)
+    else
+        laserSound = createSilentSource()
     end
-    
-    if lf.getInfo("explosion.wav") then
-        explosionSound = la.newSource("explosion.wav", "static")
+
+    if safeFileExists("explosion.wav") then
+        explosionSound = safeNewSource("explosion.wav", "static")
         explosionSound:setVolume(0.7)
+    else
+        explosionSound = createSilentSource()
     end
-    
-    if lf.getInfo("powerup.wav") then
-        powerupSound = la.newSource("powerup.wav", "static")
+
+    if safeFileExists("powerup.wav") then
+        powerupSound = safeNewSource("powerup.wav", "static")
         powerupSound:setVolume(0.6)
+    else
+        powerupSound = createSilentSource()
     end
-    
-    if lf.getInfo("gameover.ogg") then
-        gameOverSound = la.newSource("gameover.ogg", "static")
+
+    if safeFileExists("gameover.ogg") then
+        gameOverSound = safeNewSource("gameover.ogg", "static")
         gameOverSound:setVolume(0.8)
+    else
+        gameOverSound = createSilentSource()
     end
-    
-    if lf.getInfo("menu.flac") then
-        menuSelectSound = la.newSource("menu.flac", "static")
+
+    if safeFileExists("menu.flac") then
+        menuSelectSound = safeNewSource("menu.flac", "static")
         menuSelectSound:setVolume(0.4)
         menuConfirmSound = menuSelectSound:clone()
+    else
+        menuSelectSound = createSilentSource()
+        menuConfirmSound = menuSelectSound
     end
-    
+
     -- Background music
-    if lf.getInfo("background.mp3") then
-        backgroundMusic = la.newSource("background.mp3", "stream")
+    if safeFileExists("background.mp3") then
+        backgroundMusic = safeNewSource("background.mp3", "stream")
         backgroundMusic:setLooping(true)
         backgroundMusic:setVolume(musicVolume * masterVolume)
+    else
+        backgroundMusic = createSilentSource()
     end
 end
 
@@ -229,7 +292,7 @@ function applyFontScale()
 end
 
 function loadSettings()
-    if lf.getInfo("settings.dat") then
+    if safeFileExists("settings.dat") then
         local data = lf.read("settings.dat")
         local lines = {}
         for line in data:gmatch("[^\n]+") do
@@ -270,6 +333,8 @@ function loadSettings()
             updateAudioVolumes()
             applyFontScale()
         end
+    else
+        assetFallbacks["settings.dat"] = true
     end
 end
 
@@ -473,6 +538,13 @@ function love.draw()
         lg.setFont(menuFont)
         lg.setColor(notif.color[1], notif.color[2], notif.color[3], notif.timer)
         lg.printf(notif.text, 0, lg.getHeight() / 2 - 50, lg.getWidth(), "center")
+        lg.setColor(1, 1, 1, 1)
+    end
+
+    if assetFallbackWarning then
+        lg.setFont(menuFont)
+        lg.setColor(1, 0.3, 0.3, 1)
+        lg.printf(assetFallbackWarning, 0, 10, lg.getWidth(), "center")
         lg.setColor(1, 1, 1, 1)
     end
     
