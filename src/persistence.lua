@@ -15,7 +15,9 @@ local defaultSaveData = {
         totalPlayTime = 0,
         totalEnemiesDefeated = 0,
         totalDeaths = 0,
-        favoriteShip = "alpha"
+        favoriteShip = "alpha",
+        bestKillCount = 0,
+        bestSurvivalTime = 0
     },
     achievements = {},
     settings = {
@@ -249,6 +251,32 @@ end
 function Persistence.incrementBossesDefeated()
     saveData.totalBossesDefeated = (saveData.totalBossesDefeated or 0) + 1
     Persistence.save()
+end
+
+function Persistence.getBestKillCount()
+    return saveData.statistics.bestKillCount or 0
+end
+
+function Persistence.getBestSurvivalTime()
+    return saveData.statistics.bestSurvivalTime or 0
+end
+
+function Persistence.updateBestKillCount(kills)
+    if kills > (saveData.statistics.bestKillCount or 0) then
+        saveData.statistics.bestKillCount = kills
+        Persistence.save()
+        return true
+    end
+    return false
+end
+
+function Persistence.updateBestSurvivalTime(time)
+    if time > (saveData.statistics.bestSurvivalTime or 0) then
+        saveData.statistics.bestSurvivalTime = time
+        Persistence.save()
+        return true
+    end
+    return false
 end
 
 function Persistence.updateStatistics(stats)
