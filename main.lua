@@ -42,6 +42,10 @@ backgroundMusic = nil
 bossMusic = nil
 victorySound = nil
 
+-- Preloaded laser sound clones for concurrent playback
+laserClones = nil
+laserCloneIndex = 1
+
 -- Positional audio settings
 local soundReferenceDistance = 50
 local soundMaxDistance = 800
@@ -188,35 +192,53 @@ function loadAudio()
     -- Sound effects
     if lf.getInfo("laser.wav") then
         laserSound = la.newSource("laser.wav", "static")
-        laserSound:setVolume(0.5)
+        laserSound.baseVolume = 0.5
+        laserSound:setVolume(laserSound.baseVolume * sfxVolume * masterVolume)
+
+        -- Preload clones for rapid firing
+        laserClones = {}
+        for i = 1, 5 do
+            local c = laserSound:clone()
+            c.baseVolume = laserSound.baseVolume
+            c:setVolume(c.baseVolume * sfxVolume * masterVolume)
+            table.insert(laserClones, c)
+        end
+        laserCloneIndex = 1
     end
     
     if lf.getInfo("explosion.wav") then
         explosionSound = la.newSource("explosion.wav", "static")
-        explosionSound:setVolume(0.7)
+        explosionSound.baseVolume = 0.7
+        explosionSound:setVolume(explosionSound.baseVolume * sfxVolume * masterVolume)
     end
-    
+
     if lf.getInfo("powerup.wav") then
         powerupSound = la.newSource("powerup.wav", "static")
-        powerupSound:setVolume(0.6)
+        powerupSound.baseVolume = 0.6
+        powerupSound:setVolume(powerupSound.baseVolume * sfxVolume * masterVolume)
     end
-    
+
     if lf.getInfo("gameover.ogg") then
         gameOverSound = la.newSource("gameover.ogg", "static")
-        gameOverSound:setVolume(0.8)
+        gameOverSound.baseVolume = 0.8
+        gameOverSound:setVolume(gameOverSound.baseVolume * sfxVolume * masterVolume)
     end
-    
+
     if lf.getInfo("menu.flac") then
         menuSelectSound = la.newSource("menu.flac", "static")
-        menuSelectSound:setVolume(0.4)
+        menuSelectSound.baseVolume = 0.4
+        menuSelectSound:setVolume(menuSelectSound.baseVolume * sfxVolume * masterVolume)
         menuConfirmSound = menuSelectSound:clone()
+        menuConfirmSound.baseVolume = menuSelectSound.baseVolume
+        menuConfirmSound:setVolume(menuConfirmSound.baseVolume * sfxVolume * masterVolume)
     end
     
     -- Background music
     if lf.getInfo("background.mp3") then
         backgroundMusic = la.newSource("background.mp3", "stream")
+        backgroundMusic.baseVolume = 1.0
         backgroundMusic:setLooping(true)
-        backgroundMusic:setVolume(musicVolume * masterVolume)
+        backgroundMusic:setVolume(backgroundMusic.baseVolume * musicVolume * masterVolume)
     end
 end
 
@@ -355,31 +377,52 @@ end
 
 function updateAudioVolumes()
     -- Update all audio sources with new volume settings
-    local sources = {laserSound, explosionSound, powerupSound, 
+    local sources = {laserSound, explosionSound, powerupSound,
                     gameOverSound, menuSelectSound, menuConfirmSound}
-    
+
     for _, source in ipairs(sources) do
         if source then
-            source:setVolume(source:getVolume() * sfxVolume * masterVolume)
+            local base = source.baseVolume or 1
+            source:setVolume(base * sfxVolume * masterVolume)
         end
     end
-    
+
+    -- Update preloaded clones
+    if laserClones then
+        for _, c in ipairs(laserClones) do
+            local base = c.baseVolume or 1
+            c:setVolume(base * sfxVolume * masterVolume)
+        end
+    end
+
     if backgroundMusic then
-        backgroundMusic:setVolume(musicVolume * masterVolume)
+        local base = backgroundMusic.baseVolume or 1
+        backgroundMusic:setVolume(base * musicVolume * masterVolume)
     end
 end
 
 -- Play a sound at a given world position with distance-based attenuation
 function playPositionalSound(source, x, y)
     if not source or not player then return end
-    local clone = source:clone()
+    local clone
+
+    -- Use preloaded clones for laser to allow overlapping sounds
+    if source == laserSound and laserClones then
+        clone = laserClones[laserCloneIndex]
+        laserCloneIndex = (laserCloneIndex % #laserClones) + 1
+    else
+        clone = source:clone()
+        clone.baseVolume = source.baseVolume
+    end
+
     local dx, dy = x - player.x, y - player.y
     if clone:getChannelCount() == 1 then
         clone:setRelative(true)
         clone:setPosition(dx, dy, 0)
         clone:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
     end
-    clone:setVolume(source:getVolume())
+    local base = clone.baseVolume or source.baseVolume or 1
+    clone:setVolume(base * sfxVolume * masterVolume)
     clone:play()
 end
 
