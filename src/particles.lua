@@ -92,7 +92,7 @@ function Particles.clear()
         a.release(a.ps)
     end
     active = {}
-    -- Do not reset pools here; keep pooled objects for reuse
+    -- Do not reset trailPool or debrisPool; keep for reuse to avoid recreation overhead
 end
 
 function Particles.getActiveCount()
