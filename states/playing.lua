@@ -73,7 +73,7 @@ self.waveManager:setWaveCompleteCallback(function(waveNumber, stats)
     }
 
     -- Start next wave after a delay
-    self.waveStartTimer = 2.0  -- 2 second delay between waves
+    self.waveStartTimer = constants.balance.waveStartDelay  -- delay between waves
 end)
 
 -- Set shoot callback to integrate with existing laser system
@@ -369,7 +369,7 @@ end
 
 function PlayingState:updateLasers(dt)
 -- Limit laser count for performance
-local maxLasers = 100
+    local maxLasers = constants.balance.maxLasers
 if #lasers > maxLasers then
 -- Remove oldest lasers
 for i = 1, #lasers - maxLasers do
@@ -379,9 +379,9 @@ end
 end
 
 -- Log warning if approaching capacity
-if #lasers > 90 then
-logger.warn("Laser pool near capacity: %d / %d", #lasers, maxLasers)
-end
+    if #lasers > constants.balance.laserWarningThreshold then
+        logger.warn("Laser pool near capacity: %d / %d", #lasers, maxLasers)
+    end
 
 -- Update player lasers
 for i = #lasers, 1, -1 do
@@ -684,10 +684,10 @@ self.newHighScore = true
 self:showNewHighScoreNotification()
 end
 
-if random() < 0.15 then
-self:spawnPowerup(destroyedEnemy.x + destroyedEnemy.width/2,
-destroyedEnemy.y + destroyedEnemy.height/2)
-end
+    if random() < constants.balance.waveEnemyPowerupChance then
+        self:spawnPowerup(destroyedEnemy.x + destroyedEnemy.width/2,
+                          destroyedEnemy.y + destroyedEnemy.height/2)
+    end
 end
 end
 
@@ -834,7 +834,7 @@ function PlayingState:handleAsteroidDestruction(asteroid, index)
     self.comboTimer = 2.0  -- Reset combo timer
     self.comboMultiplier = 1 + (self.combo - 1) * 0.1  -- 10% bonus per combo
 
-    if self.combo >= 10 and random() < 0.05 then
+    if self.combo >= 10 and random() < constants.balance.comboBonusChance then
         self:spawnPowerup(asteroid.x, asteroid.y, "coolant")
         self:createPowerupText("COMBO BONUS!", asteroid.x, asteroid.y, {0, 0.5, 1})
     end
@@ -893,7 +893,9 @@ self:showNewHighScoreNotification()
 end
 
 -- Higher chance for smaller asteroids to drop powerups (they're the reward for dealing with splits)
-local powerupChance = asteroid.size <= 25 and 0.15 or 0.05
+    local powerupChance = asteroid.size <= 25 and
+        constants.balance.asteroidSmallPowerupChance or
+        constants.balance.asteroidLargePowerupChance
 if random() < powerupChance then
 self:spawnPowerup(asteroid.x, asteroid.y)
 end
@@ -907,7 +909,7 @@ function PlayingState:handleAlienDestruction(alien, index)
     self.comboTimer = 2.0  -- Reset combo timer
     self.comboMultiplier = 1 + (self.combo - 1) * 0.1  -- 10% bonus per combo
 
-    if self.combo >= 10 and random() < 0.05 then
+    if self.combo >= 10 and random() < constants.balance.comboBonusChance then
         self:spawnPowerup(alien.x, alien.y, "coolant")
         self:createPowerupText("COMBO BONUS!", alien.x, alien.y, {0, 0.5, 1})
     end
@@ -930,8 +932,8 @@ self.newHighScore = true
 self:showNewHighScoreNotification()
 end
 
--- 20% chance to drop powerup (increased from 10%)
-if random() < 0.2 then
+    -- Chance to drop powerup
+    if random() < constants.balance.alienPowerupChance then
 -- Select a random powerup type
 local powerupTypes = {"shield", "rapidFire", "multiShot"}
 if currentLevel >= 2 then
