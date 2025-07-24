@@ -2271,6 +2271,7 @@ stats.totalDeaths = 1
 end
 
 Persistence.updateStatistics(stats)
+    Persistence.updateLevelStats(currentLevel, score, sessionTime)
 end
 end
 
