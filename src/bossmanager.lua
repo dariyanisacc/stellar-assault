@@ -57,8 +57,9 @@ local BOSS_TYPES = {
     }
 }
 
-function BossManager:new()
+function BossManager:new(game)
     local self = setmetatable({}, BossManager)
+    self.game = game
     self.activeBoss = nil
     self.attackPatterns = {}
     self:initializeAttackPatterns()
@@ -192,7 +193,7 @@ function BossManager:updateMovement(boss, dt)
         boss.x = boss.x + math.sin(boss.stateTimer * 0.5) * boss.speed * dt
     elseif boss.type == "frostTitan" then
         -- Slow, deliberate movements
-        local targetX = player and player.x or boss.x
+        local targetX = self.game and self.game.player and self.game.player.x or boss.x
         local dx = targetX - boss.x
         boss.x = boss.x + math.min(math.max(dx * 0.5, -boss.speed), boss.speed) * dt
     end

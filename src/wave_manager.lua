@@ -234,9 +234,10 @@ local waveConfigs = {
     }
 }
 
-function WaveManager:new(player)
+function WaveManager:new(game)
     local self = setmetatable({}, WaveManager)
-    self.player = player
+    self.game = game
+    self.player = game.player
     self.enemies = {}
     self.pool = {}
     self.waveNumber = 0

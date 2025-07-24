@@ -3,7 +3,8 @@ local lg = love.graphics
 
 local PauseState = {}
 
-function PauseState:enter()
+function PauseState:enter(game)
+    self.game = game
     self.selection = 1 -- 1 = Resume, 2 = Options, 3 = Main Menu
     self.screenWidth = lg.getWidth()
     self.screenHeight = lg.getHeight()
@@ -83,7 +84,7 @@ function PauseState:keypressed(key)
         if self.selection == 1 then
             -- Resume
             gameState = "playing"
-            stateManager:switch("playing", {resume = true})
+            stateManager:switch("playing", {resume = true, game = self.game})
         elseif self.selection == 2 then
             -- Options
             stateManager:switch("options")
@@ -98,7 +99,7 @@ function PauseState:keypressed(key)
     elseif key == "escape" then
         -- Quick resume
         gameState = "playing"
-        stateManager:switch("playing", {resume = true})
+        stateManager:switch("playing", {resume = true, game = self.game})
     end
 end
 
@@ -107,7 +108,7 @@ function PauseState:gamepadpressed(joystick, button)
     if button == "start" then
         -- Quick resume
         gameState = "playing"
-        stateManager:switch("playing", {resume = true})
+        stateManager:switch("playing", {resume = true, game = self.game})
         return
     end
     

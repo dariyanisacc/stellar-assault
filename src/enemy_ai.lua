@@ -22,6 +22,7 @@ function EnemyAI.zigzagMovement(alien, dt, state)
 end
 
 function EnemyAI.updateAsteroids(state, dt)
+    local asteroids = state.game.asteroids
     local baseSpeed = constants.asteroid.baseSpeed
     local speedIncrease = constants.asteroid.speedIncrease
     local levelMultiplier = constants.levels.asteroidSpeedMultiplier[math.min(currentLevel, 5)]
@@ -51,6 +52,7 @@ function EnemyAI.updateAsteroids(state, dt)
 end
 
 function EnemyAI.updateAliens(state, dt)
+    local aliens = state.game.aliens
     for i = #aliens, 1, -1 do
         local alien = aliens[i]
         -- Choose movement based on behavior
@@ -95,7 +97,7 @@ function EnemyAI.alienShoot(state, alien)
     laser.y = alien.y + alien.height/2
     laser.speed = constants.laser.speed * 0.7
     laser.isAlien = true
-    table.insert(alienLasers, laser)
+    table.insert(state.game.alienLasers, laser)
 end
 
 function EnemyAI.spawnEntities(state, dt)
@@ -134,7 +136,7 @@ function EnemyAI.spawnAsteroid(state)
         rotation = math.random() * math.pi * 2,
         rotationSpeed = math.random() - 0.5
     }
-    table.insert(asteroids, asteroid)
+    table.insert(state.game.asteroids, asteroid)
 end
 
 function EnemyAI.spawnAlien(state, behavior)
@@ -150,7 +152,7 @@ function EnemyAI.spawnAlien(state, behavior)
     alien.vx = 0
     alien.behavior = behavior
     alien.type = behavior or "basic"
-    table.insert(aliens, alien)
+    table.insert(state.game.aliens, alien)
 end
 
 return EnemyAI

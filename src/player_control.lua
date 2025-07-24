@@ -3,6 +3,9 @@ local PlayerControl = {}
 
 -- Update player movement and heat system
 function PlayerControl.update(state, dt)
+    local player = state.game.player
+    local lasers = state.game.lasers
+    local activePowerups = state.game.activePowerups
     -- Thrust direction based on input
     local dx, dy = 0, 0
     if state.keys.left then dx = dx - 1 end

@@ -3,9 +3,11 @@ local lg = love.graphics
 
 local GameOverState = {}
 
-function GameOverState:enter(isNewHighScore)
+function GameOverState:enter(params)
+    self.game = params and params.game
+    local isNewHighScore = params and params.isNewHighScore
     self.selection = 1 -- 1 = Restart Level, 2 = Main Menu
-    self.finalScore = score or 0
+    self.finalScore = self.game and self.game.score or 0
     self.levelReached = levelAtDeath or currentLevel or 1
     self.screenWidth = lg.getWidth()
     self.screenHeight = lg.getHeight()
@@ -123,7 +125,7 @@ function GameOverState:keypressed(key)
             -- Restart Level
             currentLevel = self.levelReached
             gameState = "playing"
-            stateManager:switch("playing")
+            stateManager:switch("playing", {game = self.game})
         elseif self.selection == 2 then
             -- Main Menu
             gameState = "menu"

@@ -11,6 +11,7 @@ local PlayerControl = require("src.player_control")
 local EnemyAI = require("src.enemy_ai")
 local PowerupHandler = require("src.powerup_handler")
 local BossManager = require("src.bossmanager")
+local GameState = require("src.gamestate")
 local lg = love.graphics
 local la = love.audio
 local lm = love.math or math
@@ -27,13 +28,16 @@ local cos = math.cos
 local pi = math.pi
 
 function PlayingState:enter(params)
--- Check if we're resuming from pause
-if params and params.resume then
--- Just update screen dimensions when resuming
-self.screenWidth = lg.getWidth()
-self.screenHeight = lg.getHeight()
-return  -- Skip initialization
-end
+    -- Reuse game state when resuming
+    if params and params.resume and params.game then
+        self.game = params.game
+        self.screenWidth = lg.getWidth()
+        self.screenHeight = lg.getHeight()
+        return
+    end
+
+    -- Create a new game state on fresh start
+    self.game = GameState:new()
 
 -- Initialize game objects (only on fresh start)
 self:initializeGame()
@@ -54,14 +58,14 @@ self.trailPool = ObjectPool.createTrailPool()
 self.debrisPool = ObjectPool.createDebrisPool()
 
 -- Boss manager handles boss lifecycle
-self.bossManager = BossManager:new()
+self.bossManager = BossManager:new(self.game)
 self.bossDefeatNotified = false
 
 -- Initialize WaveManager
-self.waveManager = WaveManager:new(player)
+self.waveManager = WaveManager:new(self.game)
 self.waveManager:setWaveCompleteCallback(function(waveNumber, stats)
     -- Handle wave completion
-    score = score + 500 * waveNumber
+    self.game.score = self.game.score + 500 * waveNumber
     logger.info("Wave " .. waveNumber .. " complete! Bonus: " .. (500 * waveNumber))
 
     -- Show wave statistics overlay
@@ -79,7 +83,7 @@ end)
 -- Set shoot callback to integrate with existing laser system
 self.waveManager:setShootCallback(function(laser)
 -- Add enemy laser to the alienLasers array
-table.insert(alienLasers, laser)
+table.insert(self.game.alienLasers, laser)
 end)
 
 -- Start first wave
@@ -141,7 +145,7 @@ local speedUpgrade = 1 + (Persistence.getUpgradeLevel("speedMultiplier") or 0)
 local shieldUpgrade = Persistence.getUpgradeLevel("maxShield") or 0
 local bombUpgrade = Persistence.getUpgradeLevel("bombCapacity") or 0
 
-player = {
+self.game.player = {
 x = self.screenWidth / 2,
 y = self.screenHeight - 100,
 width = constants.player.width,
@@ -172,8 +176,8 @@ overheatTimer = 0        -- Timer when overheated
 }
 
 -- Game state
-score = 0
-lives = constants.player.lives + (Persistence.getUpgradeLevel("extraLives") or 0)
+self.game.score = 0
+self.game.lives = constants.player.lives + (Persistence.getUpgradeLevel("extraLives") or 0)
 invulnerableTime = 0
 enemiesDefeated = 0
 levelComplete = false
@@ -189,14 +193,14 @@ currentLevel = 1
 end
 
 -- Entity arrays
-asteroids = {}
-aliens = {}
-lasers = {}
-alienLasers = {}
-explosions = {}
-powerups = {}
-powerupTexts = {}
-activePowerups = {}
+self.game.asteroids = {}
+self.game.aliens = {}
+self.game.lasers = {}
+self.game.alienLasers = {}
+self.game.explosions = {}
+self.game.powerups = {}
+self.game.powerupTexts = {}
+self.game.activePowerups = {}
 
 -- Spatial grid for lasers
 self.laserGrid = SpatialHash:new(100)
@@ -370,11 +374,12 @@ end
 function PlayingState:updateLasers(dt)
 -- Limit laser count for performance
 local maxLasers = 100
+local lasers = self.game.lasers
 if #lasers > maxLasers then
 -- Remove oldest lasers
 for i = 1, #lasers - maxLasers do
-self.laserPool:release(lasers[1])
-table.remove(lasers, 1)
+    self.laserPool:release(lasers[1])
+    table.remove(lasers, 1)
 end
 end
 
@@ -385,7 +390,7 @@ end
 
 -- Update player lasers
 for i = #lasers, 1, -1 do
-local laser = lasers[i]
+    local laser = lasers[i]
 
 -- Update position based on velocity if it exists (for spread shots)
 if laser.vx and laser.vy then
@@ -418,8 +423,8 @@ end
 end
 
 -- Update alien lasers
-for i = #alienLasers, 1, -1 do
-local laser = alienLasers[i]
+for i = #self.game.alienLasers, 1, -1 do
+    local laser = self.game.alienLasers[i]
 
 -- Update position based on velocity if it exists (for boss lasers)
 if laser.vx and laser.vy then
@@ -435,8 +440,8 @@ if laser.y > self.screenHeight + laser.height or
 laser.y < -laser.height or
 laser.x < -laser.width or
 laser.x > self.screenWidth + laser.width then
-self.laserPool:release(laser)
-table.remove(alienLasers, i)
+        self.laserPool:release(laser)
+        table.remove(self.game.alienLasers, i)
 end
 end
 end
@@ -566,8 +571,8 @@ function PlayingState:checkPlayerCollisions()
 if invulnerableTime > 0 then return end
 
 -- Player vs Asteroids
-for i = #asteroids, 1, -1 do
-local asteroid = asteroids[i]
+for i = #self.game.asteroids, 1, -1 do
+    local asteroid = self.game.asteroids[i]
 if Collision.checkAABB(player, asteroid) then
 if activePowerups.shield then
 self:handleShieldHit(asteroid, i)
@@ -578,26 +583,26 @@ end
 end
 
 -- Player vs Aliens
-for i = #aliens, 1, -1 do
-local alien = aliens[i]
+for i = #self.game.aliens, 1, -1 do
+    local alien = self.game.aliens[i]
 if Collision.checkAABB(player, alien) then
 if activePowerups.shield then
-self:handleShieldHit(alien, i, aliens)
+    self:handleShieldHit(alien, i, self.game.aliens)
 else
-self:handlePlayerHit(alien, i, aliens)
+    self:handlePlayerHit(alien, i, self.game.aliens)
 end
 end
 end
 
 -- Player vs Alien Lasers
-for i = #alienLasers, 1, -1 do
-local laser = alienLasers[i]
+for i = #self.game.alienLasers, 1, -1 do
+    local laser = self.game.alienLasers[i]
 if Collision.checkAABB(player, laser) then
 if not activePowerups.shield then
 self:playerHit()
 end
-self.laserPool:release(laser)
-table.remove(alienLasers, i)
+    self.laserPool:release(laser)
+    table.remove(self.game.alienLasers, i)
 end
 end
 
@@ -634,10 +639,11 @@ end
 
 function PlayingState:checkLaserCollisions()
 local grid = self.laserGrid
+local lasers = self.game.lasers
 
 -- Check asteroids against nearby lasers
-for i = #asteroids, 1, -1 do
-local asteroid = asteroids[i]
+for i = #self.game.asteroids, 1, -1 do
+    local asteroid = self.game.asteroids[i]
 for _, laser in ipairs(grid:getNearby(asteroid)) do
 if not laser._remove and Collision.checkAABB(laser, asteroid) then
 self:createHitEffect(laser.x, laser.y)
@@ -649,8 +655,8 @@ end
 end
 
 -- Check aliens against nearby lasers
-for i = #aliens, 1, -1 do
-local alien = aliens[i]
+for i = #self.game.aliens, 1, -1 do
+    local alien = self.game.aliens[i]
 for _, laser in ipairs(grid:getNearby(alien)) do
 if not laser._remove and Collision.checkAABB(laser, alien) then
 self:createHitEffect(laser.x, laser.y)
@@ -674,7 +680,7 @@ destroyedEnemy.x + destroyedEnemy.width/2,
 destroyedEnemy.y + destroyedEnemy.height/2)
 end
 local enemyScore = 50 * currentLevel
-score = score + enemyScore
+self.game.score = self.game.score + enemyScore
 Persistence.addScore(enemyScore)
 enemiesDefeated = enemiesDefeated + 1
 self.sessionEnemiesDefeated = self.sessionEnemiesDefeated + 1
@@ -766,7 +772,7 @@ end
 end
 -- If result is true, it was an instant effect (shield)
 
-score = score + constants.score.powerup
+self.game.score = self.game.score + constants.score.powerup
 
 -- Check for new high score
 if score > self.previousHighScore and not self.newHighScore then
@@ -793,6 +799,7 @@ end
 
 function PlayingState:checkBossCollisions()
 local bossEntity = self.bossManager.activeBoss
+local lasers = self.game.lasers
 if not bossEntity then return end
 
 -- Boss vs Player
@@ -816,16 +823,16 @@ end
 
 -- Helper functions for collision handling
 function PlayingState:handleShieldHit(entity, index, array)
-activePowerups.shield = nil
-self:createExplosion(entity.x, entity.y, entity.size or 40)
-table.remove(array or asteroids, index)
+    activePowerups.shield = nil
+    self:createExplosion(entity.x, entity.y, entity.size or 40)
+    table.remove(array or self.game.asteroids, index)
 if shieldBreakSound then shieldBreakSound:play() end
 end
 
 function PlayingState:handlePlayerHit(entity, index, array)
-self:playerHit()
-self:createExplosion(entity.x, entity.y, entity.size or 40)
-table.remove(array or asteroids, index)
+    self:playerHit()
+    self:createExplosion(entity.x, entity.y, entity.size or 40)
+    table.remove(array or self.game.asteroids, index)
 end
 
 function PlayingState:handleAsteroidDestruction(asteroid, index)
@@ -841,7 +848,7 @@ function PlayingState:handleAsteroidDestruction(asteroid, index)
 
 -- Award more points for smaller asteroids (they're harder to hit)
 local sizeMultiplier = asteroid.size <= 25 and 2 or 1
-score = score + math.floor(constants.score.asteroid * self.comboMultiplier * sizeMultiplier)
+self.game.score = self.game.score + math.floor(constants.score.asteroid * self.comboMultiplier * sizeMultiplier)
 Persistence.addScore(math.floor(constants.score.asteroid * self.comboMultiplier * sizeMultiplier))
 
 -- Create explosion
@@ -867,7 +874,7 @@ vx = math.cos(angle) * speed,
 vy = math.sin(angle) * speed,
 isFragment = true  -- Mark as fragment for special handling
 }
-table.insert(asteroids, fragment)
+    table.insert(self.game.asteroids, fragment)
 end
 
 -- Extra screen shake for splitting
@@ -882,7 +889,7 @@ end
 end
 
 -- Remove the destroyed asteroid
-table.remove(asteroids, index)
+    table.remove(self.game.asteroids, index)
 enemiesDefeated = enemiesDefeated + 1
 self.sessionEnemiesDefeated = self.sessionEnemiesDefeated + 1
 
@@ -912,10 +919,10 @@ function PlayingState:handleAlienDestruction(alien, index)
         self:createPowerupText("COMBO BONUS!", alien.x, alien.y, {0, 0.5, 1})
     end
 
-score = score + math.floor(constants.score.alien * self.comboMultiplier)
+self.game.score = self.game.score + math.floor(constants.score.alien * self.comboMultiplier)
 Persistence.addScore(math.floor(constants.score.alien * self.comboMultiplier))  -- Add score to persistent storage
 self:createExplosion(alien.x, alien.y, 40)
-table.remove(aliens, index)
+table.remove(self.game.aliens, index)
 enemiesDefeated = enemiesDefeated + 1
 self.sessionEnemiesDefeated = self.sessionEnemiesDefeated + 1
 
@@ -977,7 +984,7 @@ end
 -- Trigger boss hit flash
 self.bossHitFlash = 0.8
 
-score = score + 10
+self.game.score = self.game.score + 10
 Persistence.addScore(10)  -- Add score to persistent storage
 
 -- Check for new high score
@@ -992,7 +999,7 @@ end
 function PlayingState:handleBossDefeat()
 if boss.state ~= "dying" then
 -- Only add score and set state once
-score = score + constants.score.boss
+    self.game.score = self.game.score + constants.score.boss
 Persistence.addScore(constants.score.boss)  -- Add score to persistent storage
 boss.state = "dying"
 boss.stateTimer = 0
@@ -1041,7 +1048,7 @@ end
 end
 
 function PlayingState:onBossDefeated()
-score = score + constants.score.boss
+self.game.score = self.game.score + constants.score.boss
 Persistence.addScore(constants.score.boss)
 logger.info("Boss defeated! Level %d complete", currentLevel)
 
@@ -1224,17 +1231,17 @@ end
 -- Add screen bomb effect function
 function PlayingState:screenBomb()
 -- Count enemies before clearing
-local enemiesCleared = #asteroids + #aliens
+local enemiesCleared = #self.game.asteroids + #self.game.aliens
 
 -- Create explosions for all enemies
-for _, asteroid in ipairs(asteroids) do
+for _, asteroid in ipairs(self.game.asteroids) do
 self:createExplosion(asteroid.x, asteroid.y, asteroid.size)
-score = score + constants.score.asteroid
+    self.game.score = self.game.score + constants.score.asteroid
 end
 
-for _, alien in ipairs(aliens) do
+for _, alien in ipairs(self.game.aliens) do
 self:createExplosion(alien.x, alien.y, 40)
-score = score + constants.score.alien
+    self.game.score = self.game.score + constants.score.alien
 end
 
 -- Update statistics
@@ -1247,9 +1254,9 @@ self:showNewHighScoreNotification()
 end
 
 -- Clear all enemies and enemy projectiles
-asteroids = {}
-aliens = {}
-alienLasers = {}
+self.game.asteroids = {}
+self.game.aliens = {}
+self.game.alienLasers = {}
 
 -- Don't affect boss
 if boss then
@@ -1503,13 +1510,13 @@ lg.print("FPS: " .. tostring(love.timer.getFPS()), 10, y)
 y = y + lineHeight
 
 -- Entity counts
-lg.print("Lasers: " .. #lasers .. " / 100", 10, y)
+lg.print("Lasers: " .. #self.game.lasers .. " / 100", 10, y)
 y = y + lineHeight
-lg.print("Aliens: " .. #aliens, 10, y)
+lg.print("Aliens: " .. #self.game.aliens, 10, y)
 y = y + lineHeight
-lg.print("Asteroids: " .. #asteroids, 10, y)
+lg.print("Asteroids: " .. #self.game.asteroids, 10, y)
 y = y + lineHeight
-lg.print("Explosions: " .. #explosions .. " / 200", 10, y)
+lg.print("Explosions: " .. #self.game.explosions .. " / 200", 10, y)
 y = y + lineHeight
 lg.print("Powerups: " .. #powerups, 10, y)
 y = y + lineHeight
@@ -1583,7 +1590,7 @@ end
 end
 
 function PlayingState:drawAliens()
-    for _, alien in ipairs(aliens) do
+    for _, alien in ipairs(self.game.aliens) do
         local sprite = enemyShips and enemyShips[alien.type or "basic"]
         if sprite then
             lg.setColor(1, 1, 1, 1)
@@ -1914,9 +1921,9 @@ function PlayingState:spawnBoss()
 if bossSpawned or self.bossManager.activeBoss then return end
 
 -- Clear remaining enemies
-asteroids = {}
-aliens = {}
-alienLasers = {}
+self.game.asteroids = {}
+self.game.aliens = {}
+self.game.alienLasers = {}
 
 -- Determine boss type based on level
 local bossType
@@ -2210,7 +2217,7 @@ bossSpawned = false
 enemiesDefeated = 0
 
 -- Add bonus score
-score = score + constants.score.levelComplete
+self.game.score = self.game.score + constants.score.levelComplete
 
 -- Check for new high score
 if score > self.previousHighScore and not self.newHighScore then
