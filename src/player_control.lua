@@ -121,6 +121,13 @@ function PlayerControl.update(state, dt)
         player.color = {1, 1, 1}
     end
 
+    if heatPercent > 0.6 then
+        local particleChance = (heatPercent - 0.6) * 2.5
+        if math.random() < particleChance * dt then
+            PlayerControl.createHeatParticle(state)
+        end
+    end
+
     -- Continuous shooting while key is held
     if state.keys.shoot then
         PlayerControl.shoot(state)
@@ -323,6 +330,24 @@ function PlayerControl.handleGamepadRelease(state, button)
     if button == "x" then
         state.keys.boost = false
     end
+end
+
+function PlayerControl.createHeatParticle(state)
+    local particle = state.particlePool:get()
+    particle.x = player.x + math.random(-player.width/4, player.width/4)
+    particle.y = player.y + player.height/2
+    particle.vx = math.random(-20, 20)
+    particle.vy = math.random(-80, -120)
+    particle.life = math.random(0.8, 1.2)
+    particle.maxLife = particle.life
+    particle.size = math.random(3, 5)
+    local heatPercent = player.heat / player.maxHeat
+    local r = 1
+    local g = 1 - heatPercent * 0.7
+    particle.color = {r, g, 0, 0.7}
+    particle.type = "heat"
+    particle.pool = state.particlePool
+    table.insert(explosions, particle)
 end
 
 -- Mobile UI helpers

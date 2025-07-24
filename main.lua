@@ -86,35 +86,88 @@ function updateInputType(inputType)
     end
 end
 
-function love.load()
-    -- Window setup
+function initWindow()
     lw.setTitle("Stellar Assault")
-    -- Start with a default window mode that will be updated after loading settings
     lw.setMode(800, 600, {
         fullscreen = false,
         resizable = true,
         minwidth = constants.window.minWidth,
         minheight = constants.window.minHeight
     })
-    
-    -- Graphics setup
+
     lg.setDefaultFilter("nearest", "nearest")
     lg.setBackgroundColor(0.05, 0.05, 0.1)
-    
-    -- Load fonts
+end
+
+function loadFonts()
     titleFont = lg.newFont(48)
     menuFont = lg.newFont(24)
     uiFont = lg.newFont(18)
     smallFont = lg.newFont(14)
     mediumFont = lg.newFont(20)
-    
-    -- Try to load monospace font, fall back to default
+
     if lf.getInfo("assets/fonts/monospace.ttf") then
         consoleFont = lg.newFont("assets/fonts/monospace.ttf", 14)
     else
-        consoleFont = lg.newFont(14) -- Use default font
+        consoleFont = lg.newFont(14)
     end
-    
+end
+
+function loadAudioResources()
+    la.setDistanceModel("inverseclamped")
+    if lf.getInfo("laser.wav") then
+        laserSound = la.newSource("laser.wav", "static")
+        laserSound:setVolume(0.5)
+    end
+
+    if lf.getInfo("explosion.wav") then
+        explosionSound = la.newSource("explosion.wav", "static")
+        explosionSound:setVolume(0.7)
+    end
+
+    if lf.getInfo("powerup.wav") then
+        powerupSound = la.newSource("powerup.wav", "static")
+        powerupSound:setVolume(0.6)
+    end
+
+    if lf.getInfo("gameover.ogg") then
+        gameOverSound = la.newSource("gameover.ogg", "static")
+        gameOverSound:setVolume(0.8)
+    end
+
+    if lf.getInfo("menu.flac") then
+        menuSelectSound = la.newSource("menu.flac", "static")
+        menuSelectSound:setVolume(0.4)
+        menuConfirmSound = menuSelectSound:clone()
+    end
+
+    if lf.getInfo("background.mp3") then
+        backgroundMusic = la.newSource("background.mp3", "stream")
+        backgroundMusic:setLooping(true)
+        backgroundMusic:setVolume(musicVolume * masterVolume)
+    end
+end
+
+function initStates()
+    stateManager = StateManager:new()
+    stateManager:register("menu", require("states.menu"))
+    stateManager:register("intro", require("states.intro"))
+    stateManager:register("playing", require("states.playing"))
+    stateManager:register("pause", require("states.pause"))
+    stateManager:register("gameover", require("states.gameover"))
+    stateManager:register("options", require("states.options"))
+    stateManager:register("levelselect", require("states.levelselect"))
+    stateManager:register("leaderboard", require("states.leaderboard"))
+
+    debugConsole = DebugConsole:new()
+    local debugCommands = require("src.debugcommands")
+    debugCommands.register(debugConsole)
+end
+
+function love.load()
+    initWindow()
+    loadFonts()
+
     -- Load all sprites dynamically and categorize them
     local SpriteManager = require("src.sprite_manager")
     spriteManager = SpriteManager.load("assets/sprites")
@@ -139,8 +192,7 @@ function love.load()
     -- Global sprite scale factor (adjust as needed; 4 makes sprites 4x larger)
     spriteScale = 0.15  -- Adjust this value lower (e.g., 0.1) if still too large, or higher if too small
     
-    -- Load audio
-    loadAudio()
+    loadAudioResources()
     
     -- Apply saved settings
     loadSettings()
@@ -148,32 +200,13 @@ function love.load()
     -- Apply the loaded window mode
     applyWindowMode()
     
-    -- Initialize persistence system
     Persistence.init()
     local psettings = Persistence.getSettings()
     highContrast = psettings.highContrast or false
     fontScale = psettings.fontScale or 1
     applyFontScale()
-    
-    -- Initialize state manager
-    stateManager = StateManager:new()
-    
-    -- Register all game states
-    stateManager:register("menu", require("states.menu"))
-    stateManager:register("intro", require("states.intro"))
-    stateManager:register("playing", require("states.playing"))
-    stateManager:register("pause", require("states.pause"))
-    stateManager:register("gameover", require("states.gameover"))
-    stateManager:register("options", require("states.options"))
-    stateManager:register("levelselect", require("states.levelselect"))
-    stateManager:register("leaderboard", require("states.leaderboard"))
-    
-    -- Initialize debug systems
-    debugConsole = DebugConsole:new()
-    
-    -- Register additional game-specific commands
-    local debugCommands = require("src.debugcommands")
-    debugCommands.register(debugConsole)
+
+    initStates()
     
     logger.info("Stellar Assault started")
     logger.info("Love2D version: %d.%d.%d", love.getVersion())
@@ -183,42 +216,6 @@ function love.load()
     stateManager:switch("menu")
 end
 
-function loadAudio()
-    la.setDistanceModel("inverseclamped")
-    -- Sound effects
-    if lf.getInfo("laser.wav") then
-        laserSound = la.newSource("laser.wav", "static")
-        laserSound:setVolume(0.5)
-    end
-    
-    if lf.getInfo("explosion.wav") then
-        explosionSound = la.newSource("explosion.wav", "static")
-        explosionSound:setVolume(0.7)
-    end
-    
-    if lf.getInfo("powerup.wav") then
-        powerupSound = la.newSource("powerup.wav", "static")
-        powerupSound:setVolume(0.6)
-    end
-    
-    if lf.getInfo("gameover.ogg") then
-        gameOverSound = la.newSource("gameover.ogg", "static")
-        gameOverSound:setVolume(0.8)
-    end
-    
-    if lf.getInfo("menu.flac") then
-        menuSelectSound = la.newSource("menu.flac", "static")
-        menuSelectSound:setVolume(0.4)
-        menuConfirmSound = menuSelectSound:clone()
-    end
-    
-    -- Background music
-    if lf.getInfo("background.mp3") then
-        backgroundMusic = la.newSource("background.mp3", "stream")
-        backgroundMusic:setLooping(true)
-        backgroundMusic:setVolume(musicVolume * masterVolume)
-    end
-end
 
 function applyFontScale()
     titleFont = lg.newFont(48 * fontScale)

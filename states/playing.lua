@@ -240,119 +240,112 @@ self.scoreAnimScale = 1
 end
 
 function PlayingState:update(dt)
-if gameState == "paused" then return end
+    if gameState == "paused" then return end
 
--- Update screen dimensions
-self.screenWidth = lg.getWidth()
-self.screenHeight = lg.getHeight()
+    self.screenWidth = lg.getWidth()
+    self.screenHeight = lg.getHeight()
 
--- Update camera
-if self.camera then
-self.camera:update(dt)
-end
-
--- Update combo timer
-if self.comboTimer > 0 then
-self.comboTimer = self.comboTimer - dt
-if self.comboTimer <= 0 then
-self.combo = 0
-self.comboMultiplier = 1
-end
-end
-
--- Update UI timers
-if self.showControlsHint and self.controlsHintTimer > 0 then
-    self.controlsHintTimer = self.controlsHintTimer - dt
-    if self.controlsHintTimer <= 3 then  -- Fade out in last 3 seconds
-        self.controlsHintAlpha = self.controlsHintTimer / 3
+    if self.camera then
+        self.camera:update(dt)
     end
-    if self.controlsHintTimer <= 0 then
-        self.showControlsHint = false
+
+    self:handleTimers(dt)
+    self:updatePlayer(dt)
+    self:updateEntities(dt)
+    self:updateWaveManager(dt)
+
+    if self.bossManager.activeBoss then
+        self:updateBoss(dt)
+    end
+
+    self:spawnEntities(dt)
+    self:processCollisions()
+
+    self:updatePerformanceMetrics()
+    if self.waveManager then
+        self.waveManager:setPlayerPerformance(self.performanceMetrics)
+    end
+
+    self:checkGameConditions()
+end
+
+function PlayingState:handleTimers(dt)
+    if self.comboTimer > 0 then
+        self.comboTimer = self.comboTimer - dt
+        if self.comboTimer <= 0 then
+            self.combo = 0
+            self.comboMultiplier = 1
+        end
+    end
+
+    if self.showControlsHint and self.controlsHintTimer > 0 then
+        self.controlsHintTimer = self.controlsHintTimer - dt
+        if self.controlsHintTimer <= 3 then
+            self.controlsHintAlpha = self.controlsHintTimer / 3
+        end
+        if self.controlsHintTimer <= 0 then
+            self.showControlsHint = false
+        end
+    end
+
+    if self.waveOverlay then
+        self.waveOverlay.timer = self.waveOverlay.timer - dt
+        if self.waveOverlay.timer <= 0 then
+            self.waveOverlay = nil
+        end
+    end
+
+    if score ~= self.previousScore then
+        self.scoreAnimTimer = 0.3
+        self.scoreAnimScale = 1.2
+        self.previousScore = score
+    end
+    if self.scoreAnimTimer > 0 then
+        self.scoreAnimTimer = self.scoreAnimTimer - dt
+        self.scoreAnimScale = 1 + (self.scoreAnimTimer / 0.3) * 0.2
+    end
+
+    if invulnerableTime > 0 then
+        invulnerableTime = invulnerableTime - dt
+    end
+
+    if self.playerHitFlash > 0 then
+        self.playerHitFlash = self.playerHitFlash - dt * 4
+    end
+    if self.bossHitFlash > 0 then
+        self.bossHitFlash = self.bossHitFlash - dt * 6
     end
 end
 
- -- Fade out wave completion overlay
- if self.waveOverlay then
-     self.waveOverlay.timer = self.waveOverlay.timer - dt
-     if self.waveOverlay.timer <= 0 then
-         self.waveOverlay = nil
-     end
- end
-
--- Update score animation
-if score ~= self.previousScore then
-self.scoreAnimTimer = 0.3
-self.scoreAnimScale = 1.2
-self.previousScore = score
-end
-if self.scoreAnimTimer > 0 then
-self.scoreAnimTimer = self.scoreAnimTimer - dt
-self.scoreAnimScale = 1 + (self.scoreAnimTimer / 0.3) * 0.2
+function PlayingState:updateEntities(dt)
+    self:updateAsteroids(dt)
+    self:updateAliens(dt)
+    self:updateLasers(dt)
+    self:updateExplosions(dt)
+    self:updatePowerups(dt)
 end
 
--- Update timers
-if invulnerableTime > 0 then
-invulnerableTime = invulnerableTime - dt
+function PlayingState:updateWaveManager(dt)
+    if not self.waveManager then return end
+    self.waveManager:update(dt)
+
+    if self.waveStartTimer and self.waveStartTimer > 0 then
+        self.waveStartTimer = self.waveStartTimer - dt
+        if self.waveStartTimer <= 0 and not self.waveManager:isActive() then
+            self.waveManager:startWave()
+        end
+    end
+
+    for _, enemy in ipairs(self.waveManager.enemies) do
+        if enemy.y > self.screenHeight - 50 then
+            enemy.y = -enemy.height
+            enemy.vy = nil
+        end
+    end
 end
 
--- Update flash effects
-if self.playerHitFlash > 0 then
-self.playerHitFlash = self.playerHitFlash - dt * 4  -- Fade out quickly
-end
-if self.bossHitFlash > 0 then
-self.bossHitFlash = self.bossHitFlash - dt * 6  -- Boss flash fades faster
-end
-
--- Update player
-self:updatePlayer(dt)
-
--- Update entities
-self:updateAsteroids(dt)
-self:updateAliens(dt)
-self:updateLasers(dt)
-self:updateExplosions(dt)
-self:updatePowerups(dt)
-
--- Update WaveManager
-if self.waveManager then
-self.waveManager:update(dt)
-
--- Handle wave start timer
-if self.waveStartTimer and self.waveStartTimer > 0 then
-self.waveStartTimer = self.waveStartTimer - dt
-if self.waveStartTimer <= 0 and not self.waveManager:isActive() then
-self.waveManager:startWave()
-end
-end
-
--- Safety check: Force all enemies to spawn from top (in case any spawn from bottom)
-for _, enemy in ipairs(self.waveManager.enemies) do
-if enemy.y > self.screenHeight - 50 then  -- If spawned near bottom
-enemy.y = -enemy.height  -- Reset to top
-enemy.vy = nil  -- Clear any upward velocity
-end
-end
-end
-
--- Update boss if exists
-if self.bossManager.activeBoss then
-self:updateBoss(dt)
-end
-
--- Spawn entities
-self:spawnEntities(dt)
-
--- Check collisions
-self:checkCollisions()
-
--- Update performance metrics for dynamic difficulty
-self:updatePerformanceMetrics()
-if self.waveManager then
-self.waveManager:setPlayerPerformance(self.performanceMetrics)
-end
-
--- Check win/lose conditions
-self:checkGameConditions()
+function PlayingState:processCollisions()
+    self:checkCollisions()
 end
 
 function PlayingState:updatePlayer(dt)
