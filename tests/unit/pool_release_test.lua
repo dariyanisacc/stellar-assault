@@ -5,6 +5,7 @@ love.filesystem.append = function() end
 
 local ObjectPool = require("src.objectpool")
 local PlayingState = require("states.playing")
+local PlayerControl = require("src.player_control")
 
 describe("Particle Pools", function()
     local state
@@ -33,6 +34,12 @@ describe("Particle Pools", function()
             trailPool = ObjectPool.createTrailPool(),
             debrisPool = ObjectPool.createDebrisPool()
         }, {__index = PlayingState})
+
+        PlayerControl.createHeatParticle = function(self)
+            local exp = self.explosionPool:get()
+            exp.pool = self.explosionPool
+            table.insert(explosions, exp)
+        end
     end)
 
     it("assigns pool on createExplosion", function()
