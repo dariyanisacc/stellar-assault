@@ -32,12 +32,8 @@ function MenuState:update(dt)
     self.screenHeight = lg.getHeight()
     
     -- Analog stick navigation
-    local joysticks = love.joystick.getJoysticks()
-    if #joysticks > 0 then
-        local joystick = joysticks[1]
-        if joystick:isGamepad() then
-            local jy = joystick:getGamepadAxis("lefty")
-            local jx = joystick:getGamepadAxis("leftx")
+    local jy = inputManager:getAxis("lefty")
+    local jx = inputManager:getAxis("leftx")
             
             -- Handle vertical movement
             if math.abs(jy) > 0.5 then
@@ -94,7 +90,6 @@ function MenuState:update(dt)
                 self.analogStates.left = false
                 self.analogStates.right = false
             end
-        end
     end
 end
 
@@ -555,6 +550,16 @@ function MenuState:handleShipSelectInput(key)
     elseif key == "escape" then
         self.menuState = "main"
         if menuSelectSound then menuSelectSound:play() end
+    end
+end
+
+function MenuState:onPress(action)
+    self:keypressed(action)
+end
+
+function MenuState:onRelease(action)
+    if self.keyreleased then
+        self:keyreleased(action)
     end
 end
 

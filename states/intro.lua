@@ -108,4 +108,14 @@ function IntroState:gamepadpressed(joystick, button)
     end
 end
 
+function IntroState:onPress(action)
+    self:keypressed(action)
+end
+
+function IntroState:onRelease(action)
+    if self.keyreleased then
+        self:keyreleased(action)
+    end
+end
+
 return IntroState

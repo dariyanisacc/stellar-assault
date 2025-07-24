@@ -150,6 +150,16 @@ function GameOverState:gamepadpressed(joystick, button)
     end
 end
 
+function GameOverState:onPress(action)
+    self:keypressed(action)
+end
+
+function GameOverState:onRelease(action)
+    if self.keyreleased then
+        self:keyreleased(action)
+    end
+end
+
 -- Removed checkHighScore function as it's now handled by Persistence module
 
 return GameOverState

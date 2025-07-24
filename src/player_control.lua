@@ -11,25 +11,20 @@ function PlayerControl.update(state, dt)
     if state.keys.down then dy = dy + 1 end
 
     -- Add analog stick input
-    local joysticks = love.joystick.getJoysticks()
-    if #joysticks > 0 then
-        local joystick = joysticks[1]
-        if joystick:isGamepad() then
-            local jx, jy = joystick:getGamepadAxis("leftx"), joystick:getGamepadAxis("lefty")
-            if math.abs(jx) > 0.2 then dx = dx + jx end
-            if math.abs(jy) > 0.2 then dy = dy + jy end
+    local jx = inputManager:getAxis("leftx")
+    local jy = inputManager:getAxis("lefty")
+    if math.abs(jx) > 0.2 then dx = dx + jx end
+    if math.abs(jy) > 0.2 then dy = dy + jy end
 
-            -- Right trigger for single shot
-            local triggerValue = joystick:getGamepadAxis("triggerright")
-            if triggerValue and triggerValue > 0.5 then
-                if not state.triggerPressed then
-                    PlayerControl.shoot(state)
-                    state.triggerPressed = true
-                end
-            else
-                state.triggerPressed = false
-            end
+    -- Right trigger for single shot
+    local triggerValue = inputManager:getAxis("triggerright")
+    if triggerValue and triggerValue > 0.5 then
+        if not state.triggerPressed then
+            PlayerControl.shoot(state)
+            state.triggerPressed = true
         end
+    else
+        state.triggerPressed = false
     end
 
     -- Normalize direction

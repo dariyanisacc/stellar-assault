@@ -7,6 +7,7 @@ local constants = require("src.constants")
 local DebugConsole = require("src.debugconsole")
 local logger = require("src.logger")
 local Persistence = require("src.persistence")
+local InputManager = require("src.inputmanager")
 
 -- Performance optimizations: cache Love2D modules
 local lg = love.graphics
@@ -18,6 +19,7 @@ local le = love.event
 
 -- Global state manager
 stateManager = nil
+inputManager = nil
 
 -- Debug systems
 debugConsole = nil
@@ -77,14 +79,6 @@ inputHints = {
         action = "X"
     }
 }
-
--- Function to update last input type
-function updateInputType(inputType)
-    if lastInputType ~= inputType then
-        lastInputType = inputType
-        logger.debug("Input type changed to: %s", inputType)
-    end
-end
 
 function love.load()
     -- Window setup
@@ -157,6 +151,8 @@ function love.load()
     
     -- Initialize state manager
     stateManager = StateManager:new()
+    -- Initialize input manager
+    inputManager = InputManager:new(stateManager)
     
     -- Register all game states
     stateManager:register("menu", require("states.menu"))
@@ -486,8 +482,6 @@ function love.draw()
 end
 
 function love.keypressed(key, scancode, isrepeat)
-    updateInputType("keyboard")
-    
     -- Check debug console first
     if debugConsole:keypressed(key) then
         return -- Console handled the key
@@ -530,36 +524,35 @@ function love.keypressed(key, scancode, isrepeat)
         logger.info("Debug overlay: %s", debugOverlay and "enabled" or "disabled")
     end
     
-    -- Pass to state
-    stateManager:keypressed(key, scancode, isrepeat)
+    -- Pass to input manager
+    inputManager:keypressed(key)
 end
 
 function love.keyreleased(key, scancode)
-    stateManager:keyreleased(key, scancode)
+    inputManager:keyreleased(key)
 end
 
 function love.mousepressed(x, y, button, istouch, presses)
-    updateInputType("keyboard")  -- Treat mouse as keyboard context
+    inputManager:updateInputType("keyboard")
     stateManager:mousepressed(x, y, button, istouch, presses)
 end
 
 function love.mousemoved(x, y, dx, dy, istouch)
-    updateInputType("keyboard")  -- Treat mouse as keyboard context
+    inputManager:updateInputType("keyboard")
 end
 
 function love.gamepadaxis(joystick, axis, value)
-    if math.abs(value) > 0.2 then  -- Deadzone to avoid noise
-        updateInputType("gamepad")
+    if math.abs(value) > 0.2 then
+        inputManager:updateInputType("gamepad")
     end
 end
 
 function love.gamepadpressed(joystick, button)
-    updateInputType("gamepad")
-    stateManager:gamepadpressed(joystick, button)
+    inputManager:gamepadpressed(button)
 end
 
 function love.gamepadreleased(joystick, button)
-    stateManager:gamepadreleased(joystick, button)
+    inputManager:gamepadreleased(button)
 end
 
 function love.resize(w, h)

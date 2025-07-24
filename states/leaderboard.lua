@@ -64,4 +64,14 @@ function LeaderboardState:gamepadpressed(joystick, button)
     end
 end
 
+function LeaderboardState:onPress(action)
+    self:keypressed(action)
+end
+
+function LeaderboardState:onRelease(action)
+    if self.keyreleased then
+        self:keyreleased(action)
+    end
+end
+
 return LeaderboardState

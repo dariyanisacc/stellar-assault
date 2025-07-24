@@ -93,12 +93,8 @@ function OptionsState:update(dt)
     end
     
     -- Analog stick navigation
-    local joysticks = love.joystick.getJoysticks()
-    if #joysticks > 0 then
-        local joystick = joysticks[1]
-        if joystick:isGamepad() then
-            local jy = joystick:getGamepadAxis("lefty")
-            local jx = joystick:getGamepadAxis("leftx")
+    local jy = inputManager:getAxis("lefty")
+    local jx = inputManager:getAxis("leftx")
 
             -- Helper function to handle direction
             local function handleAnalogDirection(dir, value, threshold, key)
@@ -130,8 +126,6 @@ function OptionsState:update(dt)
             handleAnalogDirection("down", jy, 0.5, "down")
             handleAnalogDirection("left", jx, 0.5, "left")
             handleAnalogDirection("right", jx, 0.5, "right")
-        end
-    end
 end
 
 function OptionsState:draw()
@@ -640,6 +634,14 @@ function OptionsState:gamepadreleased(joystick, button)
     if key then
         self:keyreleased(key)
     end
+end
+
+function OptionsState:onPress(action)
+    self:keypressed(action)
+end
+
+function OptionsState:onRelease(action)
+    self:keyreleased(action)
 end
 
 return OptionsState

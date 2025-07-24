@@ -405,4 +405,14 @@ function LevelSelectState:keypressed(key)
     end
 end
 
+function LevelSelectState:onPress(action)
+    self:keypressed(action)
+end
+
+function LevelSelectState:onRelease(action)
+    if self.keyreleased then
+        self:keyreleased(action)
+    end
+end
+
 return LevelSelectState

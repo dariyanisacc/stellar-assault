@@ -1906,7 +1906,15 @@ PlayerControl.handleGamepadPress(self, button)
 end
 
 function PlayingState:gamepadreleased(joystick, button)
-PlayerControl.handleGamepadRelease(self, button)
+    PlayerControl.handleGamepadRelease(self, button)
+end
+
+function PlayingState:onPress(action)
+    self:keypressed(action)
+end
+
+function PlayingState:onRelease(action)
+    self:keyreleased(action)
 end
 
 -- Boss-related methods

@@ -125,4 +125,14 @@ function PauseState:gamepadpressed(joystick, button)
     end
 end
 
+function PauseState:onPress(action)
+    self:keypressed(action)
+end
+
+function PauseState:onRelease(action)
+    if self.keyreleased then
+        self:keyreleased(action)
+    end
+end
+
 return PauseState
