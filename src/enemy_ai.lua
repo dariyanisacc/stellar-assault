@@ -149,6 +149,7 @@ function EnemyAI.spawnAlien(state, behavior)
     alien.vy = constants.alien.speed
     alien.vx = 0
     alien.behavior = behavior
+    alien.type = behavior or "basic"
     table.insert(aliens, alien)
 end
 

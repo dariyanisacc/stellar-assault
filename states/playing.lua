@@ -1546,11 +1546,14 @@ end
 
 -- Draw player ship sprite if available, otherwise fall back to rectangle
 if playerShips and playerShips[selectedShip] then
-lg.setColor(1, 1, 1)
-local sprite = playerShips[selectedShip]
-local scale = (player.width / sprite:getWidth()) * 4  -- Scale to match player width * 4
-lg.draw(sprite, player.x, player.y, 0, scale, scale,
-sprite:getWidth()/2, sprite:getHeight()/2)
+    lg.setColor(1, 1, 1)
+    local sprite = playerShips[selectedShip]
+    lg.draw(sprite,
+        player.x - sprite:getWidth() * spriteScale / 2,
+        player.y - sprite:getHeight() * spriteScale / 2,
+        0,
+        spriteScale,
+        spriteScale)
 else
 -- Fallback to rectangle if no sprite
 lg.setColor(0, 1, 1)
@@ -1577,24 +1580,24 @@ end
 end
 
 function PlayingState:drawAliens()
-for _, alien in ipairs(aliens) do
--- Use homing enemy sprite for legacy aliens if available
-if enemyShips and enemyShips.homing then
-lg.setColor(1, 1, 1, 1)
-local sprite = enemyShips.homing
--- Calculate scale to fit alien dimensions * 4
-local scaleX = (alien.width / sprite:getWidth()) * 4
-local scaleY = (alien.height / sprite:getHeight()) * 4
--- Draw centered at alien position
-lg.draw(sprite, alien.x, alien.y, 0, scaleX, scaleY, sprite:getWidth()/2, sprite:getHeight()/2)
-else
--- Fallback to pink rectangle if sprite not loaded
-lg.setColor(1, 0, 0.5)
-lg.rectangle("fill", alien.x - alien.width/2, alien.y - alien.height/2,
-alien.width, alien.height)
-end
-end
-lg.setColor(1, 1, 1)
+    for _, alien in ipairs(aliens) do
+        local sprite = enemyShips and enemyShips[alien.type or "basic"]
+        if sprite then
+            lg.setColor(1, 1, 1, 1)
+            lg.draw(sprite,
+                alien.x - sprite:getWidth() * spriteScale / 2,
+                alien.y - sprite:getHeight() * spriteScale / 2,
+                0,
+                spriteScale,
+                spriteScale)
+        else
+            -- Fallback to pink rectangle if sprite not loaded
+            lg.setColor(1, 0, 0.5)
+            lg.rectangle("fill", alien.x - alien.width/2, alien.y - alien.height/2,
+                          alien.width, alien.height)
+        end
+    end
+    lg.setColor(1, 1, 1)
 end
 
 function PlayingState:drawLasers()
@@ -1926,6 +1929,16 @@ bossType = bossTypes[random(#bossTypes)]
 end
 
 boss = self.bossManager:spawnBoss(bossType, self.screenWidth / 2, -100)
+-- Assign sprite based on level index if available
+if boss then
+    if bossSprites and bossSprites[currentLevel] then
+        boss.sprite = bossSprites[currentLevel]
+    elseif currentLevel == 2 and boss2Sprite then
+        boss.sprite = boss2Sprite
+    else
+        boss.sprite = bossSprite
+    end
+end
 bossSpawned = true
 self.bossDefeatNotified = false
 logger.info("Boss spawned: %s at level %d", bossType, currentLevel)
@@ -2165,9 +2178,24 @@ end
 end
 
 function PlayingState:drawBoss()
-if self.bossManager.activeBoss then
-self.bossManager:draw()
-end
+    if not self.bossManager.activeBoss then return end
+
+    local b = self.bossManager.activeBoss
+    if b.sprite then
+        lg.setColor(1, 1, 1, 1)
+        lg.draw(b.sprite,
+            b.x - b.sprite:getWidth() * spriteScale / 2,
+            b.y - b.sprite:getHeight() * spriteScale / 2,
+            0,
+            spriteScale,
+            spriteScale)
+        -- Draw any attack effects from the boss manager
+        if self.bossManager.drawAttackEffects then
+            self.bossManager:drawAttackEffects(b)
+        end
+    else
+        self.bossManager:draw()
+    end
 end
 
 function PlayingState:checkGameConditions()
