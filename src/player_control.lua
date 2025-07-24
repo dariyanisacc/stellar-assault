@@ -19,15 +19,10 @@ function PlayerControl.update(state, dt)
             if math.abs(jx) > 0.2 then dx = dx + jx end
             if math.abs(jy) > 0.2 then dy = dy + jy end
 
-            -- Right trigger for single shot
+            -- Right trigger for continuous shooting
             local triggerValue = joystick:getGamepadAxis("triggerright")
             if triggerValue and triggerValue > 0.5 then
-                if not state.triggerPressed then
-                    PlayerControl.shoot(state)
-                    state.triggerPressed = true
-                end
-            else
-                state.triggerPressed = false
+                PlayerControl.shoot(state)
             end
         end
     end
@@ -64,19 +59,21 @@ function PlayerControl.update(state, dt)
     player.x = player.x + player.vx * dt
     player.y = player.y + player.vy * dt
 
-    -- Clamp to screen
-    local margin = 5
+    -- Clamp to screen with bounce prevention
     local width, height = love.graphics.getDimensions()
-    player.x = math.max(margin, math.min(width - margin, player.x))
-    player.y = math.max(margin, math.min(height - margin, player.y))
-
-    -- Make sure player doesn't go off-screen
     if player.x < player.width/2 then
         player.x = player.width/2
         player.vx = math.max(0, player.vx)
-    elseif player.x > state.screenWidth - player.width/2 then
-        player.x = state.screenWidth - player.width/2
+    elseif player.x > width - player.width/2 then
+        player.x = width - player.width/2
         player.vx = math.min(0, player.vx)
+    end
+    if player.y < player.height/2 then
+        player.y = player.height/2
+        player.vy = math.max(0, player.vy)
+    elseif player.y > height - player.height/2 then
+        player.y = height - player.height/2
+        player.vy = math.min(0, player.vy)
     end
 
     -- Always decrement shoot cooldown
@@ -330,6 +327,7 @@ function PlayerControl.update_mobile_ui(buttons, touches)
     -- Existing mobile UI code would go here if implemented
 end
 
+-- Create a heat particle (used in tests)
 function PlayerControl.createHeatParticle(state)
     if not state or not state.particlePool then return end
     local p = state.particlePool:get()
