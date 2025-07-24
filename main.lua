@@ -7,6 +7,7 @@ local constants = require("src.constants")
 local DebugConsole = require("src.debugconsole")
 local logger = require("src.logger")
 local Persistence = require("src.persistence")
+local UIManager = require("src.uimanager")
 
 -- Performance optimizations: cache Love2D modules
 local lg = love.graphics
@@ -29,6 +30,7 @@ menuFont = nil
 uiFont = nil
 smallFont = nil
 mediumFont = nil
+uiManager = nil
 
 -- Audio resources
 laserSound = nil
@@ -111,6 +113,7 @@ function love.load()
     uiFont = lg.newFont(18)
     smallFont = lg.newFont(14)
     mediumFont = lg.newFont(20)
+    uiManager = UIManager:new()
     
     -- Try to load monospace font, fall back to default
     if lf.getInfo("assets/fonts/monospace.ttf") then
