@@ -83,7 +83,14 @@ function ParticleManager:createExplosion(x, y, size)
     -- Play sound if available
     if explosionSound then
         local sound = explosionSound:clone()
-        sound:setVolume(math.min(1, size / 50))  -- Scale volume with size
+        sound.baseVolume = (explosionSound.baseVolume or 1) * math.min(1, size / 50)
+        sound:setVolume(sound.baseVolume * sfxVolume * masterVolume)
+        if player and sound.getChannelCount and sound:getChannelCount() == 1 then
+            local dx, dy = x - player.x, y - player.y
+            sound:setRelative(true)
+            sound:setPosition(dx, dy, 0)
+            sound:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
+        end
         sound:play()
     end
     
