@@ -1772,18 +1772,10 @@ lg.setColor(1, 0.7, 0.5, 1)
 lg.print("ENEMIES: " .. enemyCount, panelPadding, 40)
 end
 
--- === CENTER SECTION: Score with animation ===
-lg.push()
-lg.translate(self.screenWidth/2, 15)
-lg.scale(self.scoreAnimScale, self.scoreAnimScale)
-
-lg.setFont(menuFont or lg.newFont(26))
-lg.setColor(1, 1, 1, 1)
-local scoreText = tostring(score)  -- No leading zeros
-local scoreWidth = lg.getFont():getWidth(scoreText)
-lg.print(scoreText, -scoreWidth/2, -13)
-
-lg.pop()
+local scoreText = "Score: " .. tostring(score)
+local scoreFont = uiFont or lg.newFont(18)
+local scoreWidth = scoreFont:getWidth(scoreText)
+uiManager:drawScore(self.screenWidth/2 - scoreWidth/2, 5, score)
 
 -- Compact bars below score
 local barWidth = 150  -- Reduced from 200
@@ -1816,8 +1808,11 @@ local highScoreText = "HIGH: " .. tostring(highScore)
 local highScoreWidth = lg.getFont():getWidth(highScoreText)
 lg.print(highScoreText, self.screenWidth - highScoreWidth - panelPadding, 5)
 
--- Lives (compact icons)
-self:drawLifeIcons(self.screenWidth - 80, 30, lives, 12)
+-- Lives display
+local livesText = "Lives: " .. tostring(lives)
+local livesFont = uiFont or lg.newFont(18)
+local livesWidth = livesFont:getWidth(livesText)
+uiManager:drawLives(self.screenWidth - livesWidth - panelPadding, 30, lives)
 
 -- Bombs (smaller icons)
 if player.bombs and player.bombs > 0 then

@@ -151,15 +151,8 @@ function OptionsState:draw()
     end
     
     -- Title
-    lg.setFont(titleFont or lg.newFont(48))
-    if highContrast then
-        lg.setColor(1, 1, 1)
-    else
-        lg.setColor(0, 1, 1)
-    end
-    local title = "OPTIONS"
-    local titleWidth = lg.getFont():getWidth(title)
-    lg.print(title, self.screenWidth/2 - titleWidth/2, 80)
+    local titleColor = highContrast and {1, 1, 1} or {0, 1, 1}
+    uiManager:drawMessage("OPTIONS", self.screenWidth/2, 80, titleColor, titleFont)
     
     -- Draw menu items
     lg.setFont(menuFont or lg.newFont(24))
@@ -227,18 +220,12 @@ function OptionsState:draw()
     end
     
     -- Instructions
-    lg.setFont(smallFont or lg.newFont(14))
-    if highContrast then
-        lg.setColor(1, 1, 1)
-    else
-        lg.setColor(0.5, 0.5, 0.5)
-    end
     local nav = inputHints[lastInputType].navigate or "Arrow Keys"
     local select = inputHints[lastInputType].select or "Enter"
     local adjust = lastInputType == "gamepad" and "Left/Right Stick" or "Left/Right"
     local instructions = nav .. ": Navigate | " .. select .. ": Select | " .. adjust .. ": Adjust"
-    local instructWidth = lg.getFont():getWidth(instructions)
-    lg.print(instructions, self.screenWidth/2 - instructWidth/2, self.screenHeight - 40)
+    local instrColor = highContrast and {1, 1, 1} or {0.5, 0.5, 0.5}
+    uiManager:drawMessage(instructions, self.screenWidth/2, self.screenHeight - 40, instrColor, smallFont)
 end
 
 function OptionsState:keypressed(key)
@@ -518,17 +505,12 @@ function OptionsState:drawControlsMenu()
     
     -- Instructions
     lg.setFont(smallFont or lg.newFont(14))
-    if highContrast then
-        lg.setColor(1, 1, 1)
-    else
-        lg.setColor(0.5, 0.5, 0.5)
-    end
     local nav = inputHints[lastInputType].navigate or "Arrow Keys"
     local remap = inputHints[lastInputType].action or "Enter"
     local back = inputHints[lastInputType].back or "ESC"
     local instructions = nav .. ": Navigate | " .. remap .. ": Remap | " .. back .. ": Back"
-    local instructWidth = lg.getFont():getWidth(instructions)
-    lg.print(instructions, self.screenWidth/2 - instructWidth/2, self.screenHeight - 40)
+    local instrColor = highContrast and {1, 1, 1} or {0.5, 0.5, 0.5}
+    uiManager:drawMessage(instructions, self.screenWidth/2, self.screenHeight - 40, instrColor, smallFont)
 end
 
 function OptionsState:controlsKeypressed(key)
