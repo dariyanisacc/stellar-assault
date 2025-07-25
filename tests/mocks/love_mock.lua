@@ -30,20 +30,30 @@ love_mock.graphics = {
 
 -- Mock audio module
 love_mock.audio = {
-    newSource = function(path, type) 
+    newSource = function(path, type)
         return {
             path = path,
             type = type or "stream",
             playing = false,
             volume = 1,
             looping = false,
+            position = {0, 0, 0},
+            relative = false,
+            refDistance = 1,
+            maxDistance = 10000,
             play = function(self) self.playing = true end,
             stop = function(self) self.playing = false end,
             pause = function(self) self.playing = false end,
             setVolume = function(self, v) self.volume = v end,
             setLooping = function(self, l) self.looping = l end,
+            setPosition = function(self, x, y, z) self.position = {x, y, z} end,
+            setRelative = function(self, r) self.relative = r end,
+            setAttenuationDistances = function(self, ref, max)
+                self.refDistance = ref
+                self.maxDistance = max
+            end,
             isPlaying = function(self) return self.playing end,
-            clone = function(self) 
+            clone = function(self)
                 local clone = {}
                 for k, v in pairs(self) do clone[k] = v end
                 return clone

@@ -58,7 +58,7 @@ self.bossManager = BossManager:new()
 self.bossDefeatNotified = false
 
 -- Initialize WaveManager
-self.waveManager = WaveManager:new(player)
+self.waveManager = WaveManager:new(player, self.entityGrid)
 self.waveManager:setWaveCompleteCallback(function(waveNumber, stats)
     -- Handle wave completion
     score = score + 500 * waveNumber
@@ -73,7 +73,7 @@ self.waveManager:setWaveCompleteCallback(function(waveNumber, stats)
     }
 
     -- Start next wave after a delay
-    self.waveStartTimer = 2.0  -- 2 second delay between waves
+    self.waveStartTimer = constants.balance.waveStartDelay  -- delay between waves
 end)
 
 -- Set shoot callback to integrate with existing laser system
@@ -121,11 +121,14 @@ end
 self.laserPool:releaseAll()
 self.explosionPool:releaseAll()
 self.particlePool:releaseAll()
-self.trailPool:releaseAll()
-self.debrisPool:releaseAll()
-if self.laserGrid then
-self.laserGrid:clear()
-end
+    self.trailPool:releaseAll()
+    self.debrisPool:releaseAll()
+    if self.laserGrid then
+        self.laserGrid:clear()
+    end
+    if self.entityGrid then
+        self.entityGrid:clear()
+    end
 end
 
 function PlayingState:initializeGame()
@@ -200,6 +203,8 @@ activePowerups = {}
 
 -- Spatial grid for lasers
 self.laserGrid = SpatialHash:new(100)
+ -- Spatial grid for entities (asteroids, aliens, powerups, etc.)
+ self.entityGrid = SpatialHash:new(100)
 
 -- Boss
 boss = nil
@@ -362,7 +367,7 @@ end
 
 function PlayingState:updateLasers(dt)
 -- Limit laser count for performance
-local maxLasers = 100
+    local maxLasers = constants.balance.maxLasers
 if #lasers > maxLasers then
 -- Remove oldest lasers
 for i = 1, #lasers - maxLasers do
@@ -372,9 +377,9 @@ end
 end
 
 -- Log warning if approaching capacity
-if #lasers > 90 then
-logger.warn("Laser pool near capacity: %d / %d", #lasers, maxLasers)
-end
+    if #lasers > constants.balance.laserWarningThreshold then
+        logger.warn("Laser pool near capacity: %d / %d", #lasers, maxLasers)
+    end
 
 -- Update player lasers
 for i = #lasers, 1, -1 do
@@ -544,6 +549,20 @@ stateManager.current:spawnBoss()
 end
 end
 
+-- Toggle player invulnerability
+_G.toggleGodMode = function()
+    if stateManager.currentName == "playing" and player then
+        player.godMode = not player.godMode
+        if player.godMode then
+            player.shield = 999
+            player.maxShield = 999
+        else
+            player.shield = constants.player.shield
+            player.maxShield = constants.player.maxShield
+        end
+    end
+end
+
 function PlayingState:checkCollisions()
 self:checkPlayerCollisions()
 self:checkLaserCollisions()
@@ -558,29 +577,49 @@ end
 function PlayingState:checkPlayerCollisions()
 if invulnerableTime > 0 then return end
 
--- Player vs Asteroids
-for i = #asteroids, 1, -1 do
-local asteroid = asteroids[i]
-if Collision.checkAABB(player, asteroid) then
-if activePowerups.shield then
-self:handleShieldHit(asteroid, i)
-else
-self:handlePlayerHit(asteroid, i)
-end
-end
-end
-
--- Player vs Aliens
-for i = #aliens, 1, -1 do
-local alien = aliens[i]
-if Collision.checkAABB(player, alien) then
-if activePowerups.shield then
-self:handleShieldHit(alien, i, aliens)
-else
-self:handlePlayerHit(alien, i, aliens)
-end
-end
-end
+    local grid = self.entityGrid
+    for _, entity in ipairs(grid:getNearby(player)) do
+        if entity.tag == "asteroid" then
+            if Collision.checkAABB(player, entity) then
+                local idx = self:findEntityIndex(asteroids, entity)
+                if activePowerups.shield then
+                    self:handleShieldHit(entity, idx or 1)
+                else
+                    self:handlePlayerHit(entity, idx or 1)
+                end
+            end
+        elseif entity.tag == "alien" then
+            if Collision.checkAABB(player, entity) then
+                local idx = self:findEntityIndex(aliens, entity)
+                if activePowerups.shield then
+                    self:handleShieldHit(entity, idx or 1, aliens)
+                else
+                    self:handlePlayerHit(entity, idx or 1, aliens)
+                end
+            end
+        elseif entity.tag == "enemy" and self.waveManager then
+            if Collision.checkAABB(player, entity) then
+                if activePowerups.shield then
+                    local enemySize = math.max(entity.width, entity.height)
+                    self:createExplosion(entity.x + entity.width/2, entity.y + entity.height/2, enemySize)
+                    entity.active = false
+                    self.entityGrid:remove(entity)
+                    local _ = self:findEntityIndex(self.waveManager.enemies, entity)
+                    activePowerups.shield = nil
+                    if shieldBreakSound and playPositionalSound then
+                        playPositionalSound(shieldBreakSound, entity.x + entity.width/2, entity.y + entity.height/2)
+                    end
+                else
+                    self:playerHit()
+                    local enemySize = math.max(entity.width, entity.height)
+                    self:createExplosion(entity.x + entity.width/2, entity.y + entity.height/2, enemySize)
+                    entity.active = false
+                    self.entityGrid:remove(entity)
+                    local _ = self:findEntityIndex(self.waveManager.enemies, entity)
+                end
+            end
+        end
+    end
 
 -- Player vs Alien Lasers
 for i = #alienLasers, 1, -1 do
@@ -626,81 +665,69 @@ end
 end
 
 function PlayingState:checkLaserCollisions()
-local grid = self.laserGrid
+    local entityGrid = self.entityGrid
 
--- Check asteroids against nearby lasers
-for i = #asteroids, 1, -1 do
-local asteroid = asteroids[i]
-for _, laser in ipairs(grid:getNearby(asteroid)) do
-if not laser._remove and Collision.checkAABB(laser, asteroid) then
-self:createHitEffect(laser.x, laser.y)
-self:handleAsteroidDestruction(asteroid, i)
-laser._remove = true
-break
-end
-end
-end
-
--- Check aliens against nearby lasers
-for i = #aliens, 1, -1 do
-local alien = aliens[i]
-for _, laser in ipairs(grid:getNearby(alien)) do
-if not laser._remove and Collision.checkAABB(laser, alien) then
-self:createHitEffect(laser.x, laser.y)
-self:handleAlienDestruction(alien, i)
-laser._remove = true
-break
-end
-end
-end
-
--- Check WaveManager enemies
-if self.waveManager then
-local destroyedEnemy, enemyIndex = self.waveManager:checkCollisionsWithLasers(lasers, grid)
-if destroyedEnemy then
-local enemySize = math.max(destroyedEnemy.width, destroyedEnemy.height)
-self:createExplosion(destroyedEnemy.x + destroyedEnemy.width/2,
-destroyedEnemy.y + destroyedEnemy.height/2, enemySize)
-if explosionSound and playPositionalSound then
-playPositionalSound(explosionSound,
-destroyedEnemy.x + destroyedEnemy.width/2,
-destroyedEnemy.y + destroyedEnemy.height/2)
-end
-local enemyScore = 50 * currentLevel
-score = score + enemyScore
-Persistence.addScore(enemyScore)
-enemiesDefeated = enemiesDefeated + 1
-self.sessionEnemiesDefeated = self.sessionEnemiesDefeated + 1
-
-if score > self.previousHighScore and not self.newHighScore then
-self.newHighScore = true
-self:showNewHighScoreNotification()
-end
-
-if random() < 0.15 then
-self:spawnPowerup(destroyedEnemy.x + destroyedEnemy.width/2,
-destroyedEnemy.y + destroyedEnemy.height/2)
-end
-end
-end
-
--- Remove lasers marked for deletion
-for i = #lasers, 1, -1 do
-local l = lasers[i]
-if l._remove then
-if self.laserGrid then
-self.laserGrid:remove(l)
-end
-self.laserPool:release(l)
-table.remove(lasers, i)
-end
-end
+    for i = #lasers, 1, -1 do
+        local laser = lasers[i]
+        for _, entity in ipairs(entityGrid:getNearby(laser)) do
+            if entity.tag == "asteroid" and not laser._remove and Collision.checkAABB(laser, entity) then
+                self:createHitEffect(laser.x, laser.y)
+                local idx = self:findEntityIndex(asteroids, entity)
+                self:handleAsteroidDestruction(entity, idx or 1)
+                laser._remove = true
+                break
+            elseif entity.tag == "alien" and not laser._remove and Collision.checkAABB(laser, entity) then
+                self:createHitEffect(laser.x, laser.y)
+                local idx = self:findEntityIndex(aliens, entity)
+                self:handleAlienDestruction(entity, idx or 1)
+                laser._remove = true
+                break
+            elseif entity.tag == "enemy" and not laser._remove and Collision.checkAABB(laser, entity) then
+                self:createHitEffect(laser.x, laser.y)
+                entity.health = entity.health - 1
+                laser._remove = true
+                if entity.health <= 0 then
+                    entity.active = false
+                    self.entityGrid:remove(entity)
+                    local idx = self:findEntityIndex(self.waveManager.enemies, entity)
+                    if idx then
+                        local enemySize = math.max(entity.width, entity.height)
+                        self:createExplosion(entity.x + entity.width/2, entity.y + entity.height/2, enemySize)
+                        if explosionSound and playPositionalSound then
+                            playPositionalSound(explosionSound, entity.x + entity.width/2, entity.y + entity.height/2)
+                        end
+                        local enemyScore = 50 * currentLevel
+                        score = score + enemyScore
+                        Persistence.addScore(enemyScore)
+                        enemiesDefeated = enemiesDefeated + 1
+                        self.sessionEnemiesDefeated = self.sessionEnemiesDefeated + 1
+                        if score > self.previousHighScore and not self.newHighScore then
+                            self.newHighScore = true
+                            self:showNewHighScoreNotification()
+                        end
+                        if random() < constants.balance.waveEnemyPowerupChance then
+                            self:spawnPowerup(entity.x + entity.width/2, entity.y + entity.height/2)
+                        end
+                        table.remove(self.waveManager.enemies, idx)
+                    end
+                end
+                break
+            end
+        end
+        if laser._remove then
+            if self.laserGrid then
+                self.laserGrid:remove(laser)
+            end
+            self.laserPool:release(laser)
+            table.remove(lasers, i)
+        end
+    end
 end
 
 function PlayingState:checkPowerupCollisions()
-for i = #powerups, 1, -1 do
-local powerup = powerups[i]
-if Collision.checkAABB(player, powerup) then
+local grid = self.entityGrid
+for _, powerup in ipairs(grid:getNearby(player)) do
+if powerup.tag == "powerup" and Collision.checkAABB(player, powerup) then
 local result = powerup:collect(player)
 
 -- Handle enhanced powerups with roguelike variations
@@ -774,7 +801,10 @@ end
 -- Create floating text
 self:createPowerupText(powerup.description, powerup.x, powerup.y, powerup.color)
 
-table.remove(powerups, i)
+ if self.entityGrid then
+     self.entityGrid:remove(powerup)
+ end
+ local _ = self:findEntityIndex(powerups, powerup)
 end
 end
 end
@@ -807,6 +837,15 @@ end
 end
 end
 
+function PlayingState:findEntityIndex(list, entity)
+    for i = #list, 1, -1 do
+        if list[i] == entity then
+            return i
+        end
+    end
+    return nil
+end
+
 -- Helper functions for collision handling
 function PlayingState:handleShieldHit(entity, index, array)
 activePowerups.shield = nil
@@ -827,7 +866,7 @@ function PlayingState:handleAsteroidDestruction(asteroid, index)
     self.comboTimer = 2.0  -- Reset combo timer
     self.comboMultiplier = 1 + (self.combo - 1) * 0.1  -- 10% bonus per combo
 
-    if self.combo >= 10 and random() < 0.05 then
+    if self.combo >= 10 and random() < constants.balance.comboBonusChance then
         self:spawnPowerup(asteroid.x, asteroid.y, "coolant")
         self:createPowerupText("COMBO BONUS!", asteroid.x, asteroid.y, {0, 0.5, 1})
     end
@@ -875,6 +914,9 @@ end
 end
 
 -- Remove the destroyed asteroid
+if self.entityGrid then
+    self.entityGrid:remove(asteroid)
+end
 table.remove(asteroids, index)
 enemiesDefeated = enemiesDefeated + 1
 self.sessionEnemiesDefeated = self.sessionEnemiesDefeated + 1
@@ -886,7 +928,9 @@ self:showNewHighScoreNotification()
 end
 
 -- Higher chance for smaller asteroids to drop powerups (they're the reward for dealing with splits)
-local powerupChance = asteroid.size <= 25 and 0.15 or 0.05
+    local powerupChance = asteroid.size <= 25 and
+        constants.balance.asteroidSmallPowerupChance or
+        constants.balance.asteroidLargePowerupChance
 if random() < powerupChance then
 self:spawnPowerup(asteroid.x, asteroid.y)
 end
@@ -900,7 +944,7 @@ function PlayingState:handleAlienDestruction(alien, index)
     self.comboTimer = 2.0  -- Reset combo timer
     self.comboMultiplier = 1 + (self.combo - 1) * 0.1  -- 10% bonus per combo
 
-    if self.combo >= 10 and random() < 0.05 then
+    if self.combo >= 10 and random() < constants.balance.comboBonusChance then
         self:spawnPowerup(alien.x, alien.y, "coolant")
         self:createPowerupText("COMBO BONUS!", alien.x, alien.y, {0, 0.5, 1})
     end
@@ -908,6 +952,9 @@ function PlayingState:handleAlienDestruction(alien, index)
 score = score + math.floor(constants.score.alien * self.comboMultiplier)
 Persistence.addScore(math.floor(constants.score.alien * self.comboMultiplier))  -- Add score to persistent storage
 self:createExplosion(alien.x, alien.y, 40)
+if self.entityGrid then
+    self.entityGrid:remove(alien)
+end
 table.remove(aliens, index)
 enemiesDefeated = enemiesDefeated + 1
 self.sessionEnemiesDefeated = self.sessionEnemiesDefeated + 1
@@ -923,8 +970,8 @@ self.newHighScore = true
 self:showNewHighScoreNotification()
 end
 
--- 20% chance to drop powerup (increased from 10%)
-if random() < 0.2 then
+    -- Chance to drop powerup
+    if random() < constants.balance.alienPowerupChance then
 -- Select a random powerup type
 local powerupTypes = {"shield", "rapidFire", "multiShot"}
 if currentLevel >= 2 then
@@ -1208,11 +1255,12 @@ end
 if backgroundMusic then backgroundMusic:stop() end
 
 -- Switch to game over state with new high score flag
-if stateManager then
-stateManager:switch("gameover", self.newHighScore)
-end
-end
-end
+        if stateManager then
+            local elapsed = love.timer.getTime() - self.sessionStartTime
+            stateManager:switch("gameover", self.newHighScore, self.sessionEnemiesDefeated, elapsed)
+        end
+        end
+    end
 
 -- Add screen bomb effect function
 function PlayingState:screenBomb()
@@ -1765,18 +1813,10 @@ lg.setColor(1, 0.7, 0.5, 1)
 lg.print("ENEMIES: " .. enemyCount, panelPadding, 40)
 end
 
--- === CENTER SECTION: Score with animation ===
-lg.push()
-lg.translate(self.screenWidth/2, 15)
-lg.scale(self.scoreAnimScale, self.scoreAnimScale)
-
-lg.setFont(menuFont or lg.newFont(26))
-lg.setColor(1, 1, 1, 1)
-local scoreText = tostring(score)  -- No leading zeros
-local scoreWidth = lg.getFont():getWidth(scoreText)
-lg.print(scoreText, -scoreWidth/2, -13)
-
-lg.pop()
+local scoreText = "Score: " .. tostring(score)
+local scoreFont = uiFont or lg.newFont(18)
+local scoreWidth = scoreFont:getWidth(scoreText)
+uiManager:drawScore(self.screenWidth/2 - scoreWidth/2, 5, score)
 
 -- Compact bars below score
 local barWidth = 150  -- Reduced from 200
@@ -1809,8 +1849,11 @@ local highScoreText = "HIGH: " .. tostring(highScore)
 local highScoreWidth = lg.getFont():getWidth(highScoreText)
 lg.print(highScoreText, self.screenWidth - highScoreWidth - panelPadding, 5)
 
--- Lives (compact icons)
-self:drawLifeIcons(self.screenWidth - 80, 30, lives, 12)
+-- Lives display
+local livesText = "Lives: " .. tostring(lives)
+local livesFont = uiFont or lg.newFont(18)
+local livesWidth = livesFont:getWidth(livesText)
+uiManager:drawLives(self.screenWidth - livesWidth - panelPadding, 30, lives)
 
 -- Bombs (smaller icons)
 if player.bombs and player.bombs > 0 then
@@ -2238,11 +2281,12 @@ end
 if backgroundMusic then backgroundMusic:stop() end
 
 -- Switch to game over state with new high score flag
-if stateManager then
-stateManager:switch("gameover", self.newHighScore)
-end
-end
-end
+        if stateManager then
+            local elapsed = love.timer.getTime() - self.sessionStartTime
+            stateManager:switch("gameover", self.newHighScore, self.sessionEnemiesDefeated, elapsed)
+        end
+        end
+    end
 
 -- New helper functions
 function PlayingState:saveGameStats()
@@ -2264,6 +2308,7 @@ stats.totalDeaths = 1
 end
 
 Persistence.updateStatistics(stats)
+    Persistence.updateLevelStats(currentLevel, score, sessionTime)
 end
 end
 

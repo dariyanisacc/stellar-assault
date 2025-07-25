@@ -6,7 +6,7 @@ local success = true
 -- Test loading each module
 local modules = {
     {"src.constants", "Constants"},
-    {"src.statemanager", "StateManager"},
+    {"src.StateManager", "StateManager"},
     {"src.objectpool", "ObjectPool"},
 }
 

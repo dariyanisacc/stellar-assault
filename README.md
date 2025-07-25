@@ -82,6 +82,7 @@ In the console, type `help` for a complete list of commands.
 
 #### Player
 - `god` &ndash; toggle god mode
+- `toggleGodMode` &ndash; toggle invulnerability
 - `lives <num>` &ndash; set player lives
 - `powerup <type>` &ndash; grant a powerup
 - `give <score|lives|bombs|shield> [amount]` &ndash; grant resources
@@ -90,6 +91,8 @@ In the console, type `help` for a complete list of commands.
 #### Game
 - `state [name]` &ndash; switch game state
 - `score <num>` &ndash; set score
+- `setScore <num>` &ndash; set score directly
+- `unlockLevel <num>` &ndash; unlock a level
 - `level <num>` &ndash; jump to level
 - `timescale <factor>` &ndash; adjust time scale
 - `save [slot]` &ndash; save game
@@ -97,6 +100,7 @@ In the console, type `help` for a complete list of commands.
 
 #### Spawn
 - `spawn <asteroid|alien|boss|powerup> [count]` &ndash; spawn entities
+- `spawnEnemy <type>` &ndash; spawn enemy via state
 - `killall` &ndash; remove all enemies
 
 #### Other

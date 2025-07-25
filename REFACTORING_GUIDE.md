@@ -10,7 +10,7 @@ The game has been refactored from a monolithic 7,500+ line `main.lua` file into 
 ├── main.lua              # Bootstrap and Love2D callbacks
 ├── src/
 │   ├── constants.lua     # All game constants and magic numbers
-│   ├── statemanager.lua  # State machine for game states
+│   ├── StateManager.lua  # State machine for game states
 │   ├── player_control.lua  # Player input and movement
 │   ├── enemy_ai.lua        # Basic enemy behaviors
 │   ├── powerup_handler.lua # Powerup logic

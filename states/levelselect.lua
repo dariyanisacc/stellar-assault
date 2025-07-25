@@ -4,6 +4,13 @@ local constants = require("src.constants")
 local ShopManager = require("src.shop_manager")
 local lg = love.graphics
 
+local function formatTime(t)
+    if not t then return "" end
+    local m = math.floor(t / 60)
+    local s = math.floor(t % 60)
+    return string.format("%d:%02d", m, s)
+end
+
 local LevelSelectState = {}
 
 function LevelSelectState:enter()
@@ -138,6 +145,14 @@ function LevelSelectState:draw()
             -- Level number
             lg.setColor(1, 1, 1, self.fadeIn)
             lg.printf(tostring(button.level), x, y + 20, button.width, "center")
+
+            local stats = Persistence.getLevelStats(button.level)
+            lg.setFont(smallFont)
+            lg.setColor(1, 1, 0, self.fadeIn)
+            lg.printf("S:" .. tostring(stats.bestScore or 0), x, y + button.height - 28, button.width, "center")
+            lg.setColor(0, 1, 1, self.fadeIn)
+            lg.printf(formatTime(stats.bestTime), x, y + button.height - 14, button.width, "center")
+            lg.setFont(menuFont)
             
             -- Boss indicator
             if button.level % constants.levels.bossFrequency == 0 then

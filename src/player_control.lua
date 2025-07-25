@@ -5,10 +5,10 @@ local PlayerControl = {}
 function PlayerControl.update(state, dt)
     -- Thrust direction based on input
     local dx, dy = 0, 0
-    if state.keys.left then dx = dx - 1 end
+    if state.keys.left  then dx = dx - 1 end
     if state.keys.right then dx = dx + 1 end
-    if state.keys.up then dy = dy - 1 end
-    if state.keys.down then dy = dy + 1 end
+    if state.keys.up    then dy = dy - 1 end
+    if state.keys.down  then dy = dy + 1 end
 
     -- Add analog stick input
     local joysticks = love.joystick.getJoysticks()
@@ -19,23 +19,18 @@ function PlayerControl.update(state, dt)
             if math.abs(jx) > 0.2 then dx = dx + jx end
             if math.abs(jy) > 0.2 then dy = dy + jy end
 
-            -- Right trigger for single shot
+            -- Right trigger for continuous shooting
             local triggerValue = joystick:getGamepadAxis("triggerright")
             if triggerValue and triggerValue > 0.5 then
-                if not state.triggerPressed then
-                    PlayerControl.shoot(state)
-                    state.triggerPressed = true
-                end
-            else
-                state.triggerPressed = false
+                PlayerControl.shoot(state)
             end
         end
     end
 
     -- Normalize direction
-    local len = math.sqrt(dx*dx + dy*dy)
+    local len = math.sqrt(dx * dx + dy * dy)
     if len > 0 then
-        dx, dy = dx/len, dy/len
+        dx, dy = dx / len, dy / len
         local thrustMult = 1
         if activePowerups.boost then
             thrustMult = 1.5
@@ -64,19 +59,21 @@ function PlayerControl.update(state, dt)
     player.x = player.x + player.vx * dt
     player.y = player.y + player.vy * dt
 
-    -- Clamp to screen
-    local margin = 5
+    -- Clamp to screen with bounce prevention
     local width, height = love.graphics.getDimensions()
-    player.x = math.max(margin, math.min(width - margin, player.x))
-    player.y = math.max(margin, math.min(height - margin, player.y))
-
-    -- Make sure player doesn't go off-screen
-    if player.x < player.width/2 then
-        player.x = player.width/2
+    if player.x < player.width / 2 then
+        player.x = player.width / 2
         player.vx = math.max(0, player.vx)
-    elseif player.x > state.screenWidth - player.width/2 then
-        player.x = state.screenWidth - player.width/2
+    elseif player.x > width - player.width / 2 then
+        player.x = width - player.width / 2
         player.vx = math.min(0, player.vx)
+    end
+    if player.y < player.height / 2 then
+        player.y = player.height / 2
+        player.vy = math.max(0, player.vy)
+    elseif player.y > height - player.height / 2 then
+        player.y = height - player.height / 2
+        player.vy = math.min(0, player.vy)
     end
 
     -- Always decrement shoot cooldown
@@ -113,7 +110,7 @@ function PlayerControl.update(state, dt)
         end
     end
 
-    -- Update heat visual feedback  
+    -- Update heat visual feedback
     local heatPercent = player.heat / player.maxHeat
     if heatPercent > 0.75 then
         player.color = {1, 1 - (heatPercent - 0.75) * 2, 1 - (heatPercent - 0.75) * 2}
@@ -137,10 +134,12 @@ end
 -- Shoot a laser from the player ship
 function PlayerControl.shoot(state)
     if state.showDebug then
-        print(string.format("Shoot: heat=%.1f, cooldown=%.3f, overheat=%.3f, lasers=%d", 
-            player.heat, state.shootCooldown or 0, player.overheatTimer, #lasers))
+        print(string.format(
+            "Shoot: heat=%.1f, cooldown=%.3f, overheat=%.3f, lasers=%d",
+            player.heat, state.shootCooldown or 0, player.overheatTimer, #lasers
+        ))
     end
-    
+
     if (not state.shootCooldown or state.shootCooldown <= 0) and player.overheatTimer <= 0 then
         if player.heat >= player.maxHeat then
             player.overheatTimer = player.overheatPenalty
@@ -163,10 +162,11 @@ function PlayerControl.shoot(state)
             end
             return
         end
+
         -- Explicitly reset all properties to defaults
         laser.x = player.x
-        laser.y = player.y - player.height/2
-        laser.width = constants.laser.width or 4  -- Add defaults if not in constants
+        laser.y = player.y - player.height / 2
+        laser.width = constants.laser.width or 4
         laser.height = constants.laser.height or 12
         laser.speed = constants.laser.speed
         laser.vx = nil
@@ -180,14 +180,14 @@ function PlayerControl.shoot(state)
 
         if activePowerups.homingMissile then
             missiles = missiles or {}
-            table.insert(missiles, {x = player.x, y = player.y - player.height/2, speed = 200})
+            table.insert(missiles, {x = player.x, y = player.y - player.height / 2, speed = 200})
         end
 
         if spread > 0 then
             local leftLaser = state.laserPool:get()
             if leftLaser then
                 leftLaser.x = player.x
-                leftLaser.y = player.y - player.height/2
+                leftLaser.y = player.y - player.height / 2
                 leftLaser.width = constants.laser.width or 4
                 leftLaser.height = constants.laser.height or 12
                 leftLaser.speed = constants.laser.speed
@@ -204,7 +204,7 @@ function PlayerControl.shoot(state)
             local rightLaser = state.laserPool:get()
             if rightLaser then
                 rightLaser.x = player.x
-                rightLaser.y = player.y - player.height/2
+                rightLaser.y = player.y - player.height / 2
                 rightLaser.width = constants.laser.width or 4
                 rightLaser.height = constants.laser.height or 12
                 rightLaser.speed = constants.laser.speed
@@ -228,7 +228,7 @@ function PlayerControl.shoot(state)
         if laserSound and playPositionalSound then
             playPositionalSound(laserSound, player.x, player.y)
         end
-        
+
         if state.showDebug then
             print(string.format("Laser created! New heat: %.1f, total lasers: %d", player.heat, #lasers))
         end
@@ -247,7 +247,7 @@ function PlayerControl.shoot(state)
             local leftLaser = state.laserPool:get()
             if leftLaser then
                 leftLaser.x = player.x - 15
-                leftLaser.y = player.y - player.height/2
+                leftLaser.y = player.y - player.height / 2
                 leftLaser.width = constants.laser.width or 4
                 leftLaser.height = constants.laser.height or 12
                 leftLaser.speed = constants.laser.speed
@@ -264,7 +264,7 @@ function PlayerControl.shoot(state)
             local rightLaser = state.laserPool:get()
             if rightLaser then
                 rightLaser.x = player.x + 15
-                rightLaser.y = player.y - player.height/2
+                rightLaser.y = player.y - player.height / 2
                 rightLaser.width = constants.laser.width or 4
                 rightLaser.height = constants.laser.height or 12
                 rightLaser.speed = constants.laser.speed
@@ -283,16 +283,11 @@ end
 
 -- Handle key press (mainly for mobile/UI)
 function PlayerControl.handleKeyPress(state, key)
-    if key == "left" then
-        state.keys.left = true
-    elseif key == "right" then
-        state.keys.right = true
-    elseif key == "up" then
-        state.keys.up = true
-    elseif key == "down" then
-        state.keys.down = true
-    elseif key == "space" then
-        state.keys.shoot = true
+    if     key == "left"  then state.keys.left  = true
+    elseif key == "right" then state.keys.right = true
+    elseif key == "up"    then state.keys.up    = true
+    elseif key == "down"  then state.keys.down  = true
+    elseif key == "space" then state.keys.shoot = true
     elseif key == "lshift" or key == "rshift" then
         state.keys.boost = true
     end
@@ -300,22 +295,17 @@ end
 
 -- Handle key release
 function PlayerControl.handleKeyRelease(state, key)
-    if key == "left" then
-        state.keys.left = false
-    elseif key == "right" then
-        state.keys.right = false
-    elseif key == "up" then
-        state.keys.up = false
-    elseif key == "down" then
-        state.keys.down = false
-    elseif key == "space" then
-        state.keys.shoot = false
+    if     key == "left"  then state.keys.left  = false
+    elseif key == "right" then state.keys.right = false
+    elseif key == "up"    then state.keys.up    = false
+    elseif key == "down"  then state.keys.down  = false
+    elseif key == "space" then state.keys.shoot = false
     elseif key == "lshift" or key == "rshift" then
         state.keys.boost = false
     end
 end
 
--- Handle gamepad press  
+-- Handle gamepad press
 function PlayerControl.handleGamepadPress(state, button)
     if button == "rightshoulder" then
         -- Single shot from right shoulder
@@ -332,19 +322,25 @@ function PlayerControl.handleGamepadRelease(state, button)
     end
 end
 
+-- Create a heat particle
 function PlayerControl.createHeatParticle(state)
+    if not state or not state.particlePool then return end
     local particle = state.particlePool:get()
-    particle.x = player.x + math.random(-player.width/4, player.width/4)
-    particle.y = player.y + player.height/2
+    if not particle then return end
+
+    particle.x = player.x + math.random(-player.width / 4, player.width / 4)
+    particle.y = player.y + player.height / 2
     particle.vx = math.random(-20, 20)
     particle.vy = math.random(-80, -120)
     particle.life = math.random(0.8, 1.2)
     particle.maxLife = particle.life
     particle.size = math.random(3, 5)
+
     local heatPercent = player.heat / player.maxHeat
     local r = 1
     local g = 1 - heatPercent * 0.7
     particle.color = {r, g, 0, 0.7}
+
     particle.type = "heat"
     particle.pool = state.particlePool
     table.insert(explosions, particle)

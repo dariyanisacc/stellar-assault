@@ -234,9 +234,10 @@ local waveConfigs = {
     }
 }
 
-function WaveManager:new(player)
+function WaveManager:new(player, entityGrid)
     local self = setmetatable({}, WaveManager)
     self.player = player
+    self.entityGrid = entityGrid
     self.enemies = {}
     self.pool = {}
     self.waveNumber = 0
@@ -348,7 +349,11 @@ function WaveManager:spawnEnemy()
         enemy.behaviorState.inFormation = false
     end
     
+    enemy.tag = "enemy"
     table.insert(self.enemies, enemy)
+    if self.entityGrid then
+        self.entityGrid:insert(enemy)
+    end
     self.enemiesSpawned = self.enemiesSpawned + 1
 end
 
@@ -383,10 +388,17 @@ function WaveManager:update(dt)
                 enemy.shootTimer = enemy.shootInterval
             end
         end
-        
+
+        if self.entityGrid then
+            self.entityGrid:update(enemy)
+        end
+
         -- Remove if off bottom of screen or dead
         if enemy.y > love.graphics.getHeight() + enemy.height or not enemy.active then
             enemy.active = false
+            if self.entityGrid then
+                self.entityGrid:remove(enemy)
+            end
             table.insert(self.pool, enemy)
             table.remove(self.enemies, i)
         end
@@ -480,6 +492,9 @@ function WaveManager:checkCollisionsWithLasers(lasers, grid)
                 laser._remove = true
                 if enemy.health <= 0 then
                     enemy.active = false
+                    if self.entityGrid then
+                        self.entityGrid:remove(enemy)
+                    end
                     return enemy, i
                 end
                 break
