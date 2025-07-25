@@ -2,7 +2,7 @@
 -- A space shooter with modular architecture
 
 -- Core modules
-local StateManager = require("src.StateManager")
+local StateManager = require("src.statemanager")
 local constants = require("src.constants")
 local DebugConsole = require("src.debugconsole")
 local logger = require("src.logger")
@@ -96,22 +96,20 @@ function updateInputType(inputType)
     end
 end
 
-function love.load()
-    -- Window setup
+function initWindow()
     lw.setTitle("Stellar Assault")
-    -- Start with a default window mode that will be updated after loading settings
     lw.setMode(800, 600, {
         fullscreen = false,
         resizable = true,
         minwidth = constants.window.minWidth,
         minheight = constants.window.minHeight
     })
-    
-    -- Graphics setup
+
     lg.setDefaultFilter("nearest", "nearest")
     lg.setBackgroundColor(0.05, 0.05, 0.1)
-    
-    -- Load fonts
+end
+
+function loadFonts()
     titleFont = lg.newFont(48)
     menuFont = lg.newFont(24)
     uiFont = lg.newFont(18)
@@ -123,9 +121,30 @@ function love.load()
     if lf.getInfo("assets/fonts/monospace.ttf") then
         consoleFont = lg.newFont("assets/fonts/monospace.ttf", 14)
     else
-        consoleFont = lg.newFont(14) -- Use default font
+        consoleFont = lg.newFont(14)
     end
-    
+end
+
+function initStates()
+    stateManager = StateManager:new()
+    stateManager:register("menu", require("states.menu"))
+    stateManager:register("intro", require("states.intro"))
+    stateManager:register("playing", require("states.playing"))
+    stateManager:register("pause", require("states.pause"))
+    stateManager:register("gameover", require("states.gameover"))
+    stateManager:register("options", require("states.options"))
+    stateManager:register("levelselect", require("states.levelselect"))
+    stateManager:register("leaderboard", require("states.leaderboard"))
+
+    debugConsole = DebugConsole:new()
+    local debugCommands = require("src.debugcommands")
+    debugCommands.register(debugConsole)
+end
+
+function love.load()
+    initWindow()
+    loadFonts()
+
     -- Load all sprites dynamically and categorize them
     local SpriteManager = require("src.sprite_manager")
     spriteManager = SpriteManager.load("assets/sprites")
@@ -150,7 +169,6 @@ function love.load()
     -- Global sprite scale factor (adjust as needed; 4 makes sprites 4x larger)
     spriteScale = 0.15  -- Adjust this value lower (e.g., 0.1) if still too large, or higher if too small
     
-    -- Load audio
     loadAudio()
     
     -- Apply saved settings
@@ -159,32 +177,13 @@ function love.load()
     -- Apply the loaded window mode
     applyWindowMode()
     
-    -- Initialize persistence system
     Persistence.init()
     local psettings = Persistence.getSettings()
     highContrast = psettings.highContrast or false
     fontScale = psettings.fontScale or 1
     applyFontScale()
-    
-    -- Initialize state manager
-    stateManager = StateManager:new()
-    
-    -- Register all game states
-    stateManager:register("menu", require("states.menu"))
-    stateManager:register("intro", require("states.intro"))
-    stateManager:register("playing", require("states.playing"))
-    stateManager:register("pause", require("states.pause"))
-    stateManager:register("gameover", require("states.gameover"))
-    stateManager:register("options", require("states.options"))
-    stateManager:register("levelselect", require("states.levelselect"))
-    stateManager:register("leaderboard", require("states.leaderboard"))
-    
-    -- Initialize debug systems
-    debugConsole = DebugConsole:new()
-    
-    -- Register additional game-specific commands
-    local debugCommands = require("src.debugcommands")
-    debugCommands.register(debugConsole)
+
+    initStates()
     
     logger.info("Stellar Assault started")
     logger.info("Love2D version: %d.%d.%d", love.getVersion())

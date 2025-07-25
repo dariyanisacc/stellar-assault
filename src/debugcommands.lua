@@ -94,7 +94,7 @@ local function registerGameCommands(console)
         local what = args[2] or "all"
         
         if what == "audio" or what == "all" then
-            loadAudio()
+            loadAudioResources()
             console:log("Audio reloaded")
         end
         
