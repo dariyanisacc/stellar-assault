@@ -121,12 +121,21 @@ end
 ---------------------------------------------------------------------
 local M = {
     SpatialHash    = SpatialHash,
-    new            = function(cellSize) return SpatialHash:new(cellSize) end,
 
     -- Legacy helpers expected by existing game code
     checkCollision = _aabb,
     aabb           = _aabb,
     pointInCircle  = _pointInCircle,
 }
+
+-- Look up SpatialHash methods on the module table
+M.__index = SpatialHash
+
+---Create a new spatial hash grid instance.
+-- @param cellSize number? grid cell size in pixels (defaults to 64)
+-- @return table grid instance
+function M:new(cellSize)
+    return SpatialHash.new(self, cellSize)
+end
 
 return M
