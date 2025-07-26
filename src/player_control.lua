@@ -22,7 +22,7 @@ function PlayerControl.update(state, dt)
             -- Right trigger for continuous shooting
             local triggerValue = joystick:getGamepadAxis("triggerright")
             if triggerValue and triggerValue > 0.5 then
-                PlayerControl.shoot(state)
+                PlayerControl.shoot(state, dt)
             end
         end
     end
@@ -127,12 +127,12 @@ function PlayerControl.update(state, dt)
 
     -- Continuous shooting while key is held
     if state.keys.shoot then
-        PlayerControl.shoot(state)
+        PlayerControl.shoot(state, dt)
     end
 end
 
 -- Shoot a laser from the player ship
-function PlayerControl.shoot(state)
+function PlayerControl.shoot(state, dt)
     if state.showDebug then
         print(string.format(
             "Shoot: heat=%.1f, cooldown=%.3f, overheat=%.3f, lasers=%d",
@@ -221,7 +221,7 @@ function PlayerControl.shoot(state)
 
         local isWeaponPowerupActive = activePowerups.rapid or activePowerups.multiShot or activePowerups.spread
         if not isWeaponPowerupActive then
-            player.heat = math.min(player.maxHeat, player.heat + player.heatRate)
+            player.heat = math.min(player.maxHeat, player.heat + player.heatRate * dt)
         end
 
         -- Play sound after all spawns
@@ -309,7 +309,7 @@ end
 function PlayerControl.handleGamepadPress(state, button)
     if button == "rightshoulder" then
         -- Single shot from right shoulder
-        PlayerControl.shoot(state)
+        PlayerControl.shoot(state, 0)
     elseif button == "x" then
         state.keys.boost = true
     end
