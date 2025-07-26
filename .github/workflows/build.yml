@@ -27,7 +27,7 @@ jobs:
     
     - name: Run luacheck
       run: |
-        luacheck . --exclude-files "Kenney*" --globals love --no-max-line-length
+        luacheck . --globals love --no-max-line-length
 
   test:
     runs-on: ubuntu-latest
