@@ -1,5 +1,6 @@
 -- Menu State for Stellar Assault
 local constants = require("src.constants")
+local Persistence = require("src.persistence")
 local lg = love.graphics
 local la = love.audio
 
@@ -20,6 +21,17 @@ function MenuState:enter()
     -- Analog stick state
     self.analogStates = { up = false, down = false, left = false, right = false }
     self.analogRepeatTimers = { up = 0, down = 0, left = 0, right = 0 }
+
+    -- Show persistence load errors if any
+    local err = Persistence.getLoadError and Persistence.getLoadError()
+    if err then
+        self.loadErrorMessage = err
+        self.loadErrorTimer = 4
+        if Persistence.clearLoadError then Persistence.clearLoadError() end
+    else
+        self.loadErrorMessage = nil
+        self.loadErrorTimer = 0
+    end
 end
 
 function MenuState:leave()
@@ -30,6 +42,13 @@ function MenuState:update(dt)
     -- Update screen dimensions in case of resize
     self.screenWidth = lg.getWidth()
     self.screenHeight = lg.getHeight()
+
+    if self.loadErrorTimer and self.loadErrorTimer > 0 then
+        self.loadErrorTimer = self.loadErrorTimer - dt
+        if self.loadErrorTimer <= 0 then
+            self.loadErrorMessage = nil
+        end
+    end
     
     -- Analog stick navigation
     local joysticks = love.joystick.getJoysticks()
@@ -107,7 +126,7 @@ function MenuState:draw()
     -- Draw title
     local titleColor = highContrast and {1, 1, 1} or {0, 1, 1}
     uiManager:drawMessage("STELLAR ASSAULT", self.screenWidth/2, 100, titleColor, titleFont)
-    
+
     if self.menuState == "main" then
         self:drawMainMenu()
     elseif self.menuState == "saves" then
@@ -116,6 +135,10 @@ function MenuState:draw()
         self:drawLevelSelect()
     elseif self.menuState == "shipselect" then
         self:drawShipSelect()
+    end
+
+    if self.loadErrorMessage then
+        uiManager:drawMessage(self.loadErrorMessage, self.screenWidth/2, 140, {1,0.3,0.3}, smallFont)
     end
 end
 
