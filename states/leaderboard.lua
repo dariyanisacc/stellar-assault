@@ -41,10 +41,8 @@ end
 -- Handle key presses
 function leaderboard:keypressed(key)
     if key == "escape" then
-        -- Switch back to main menu state
-        -- Assuming the menu state is defined in states/menu.lua and named 'menu'
-        local menu = require("states.menu")
-        Gamestate.switch(menu)
+        -- Switch back to the main menu state
+        stateManager:switch("menu")
     end
 end
 

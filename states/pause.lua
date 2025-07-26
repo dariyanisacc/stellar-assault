@@ -22,10 +22,8 @@ end
 -- Handle key presses
 function pause:keypressed(key)
     if key == "p" or key == "escape" then
-        -- Resume the game by switching back to playing state
-        -- Assuming the playing state is defined in states/playing.lua and named 'playing'
-        local playing = require("states.playing")
-        Gamestate.switch(playing)
+        -- Resume the game by switching back to the playing state
+        stateManager:switch("playing")
     end
 end
 

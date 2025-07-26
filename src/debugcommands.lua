@@ -26,8 +26,7 @@ function debugcommands.register()
             -- Skip to next level or something (customize as needed)
             print("Skipping level")
             -- Example: switch to next state
-            local playing = require("states.playing")
-            Gamestate.switch(playing)  -- Assuming Gamestate is global
+            stateManager:switch("playing")
         end
     end
     
