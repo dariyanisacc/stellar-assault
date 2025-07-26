@@ -596,3 +596,25 @@ function love.quit()
     Game.spriteManager:reportUsage()
   end
 end
+
+-- ---------------------------------------------------------------------------
+-- Error handling -------------------------------------------------------------
+-- ---------------------------------------------------------------------------
+
+local _original_love_run = love.run
+
+local function _handle_error(err)
+  local trace = debug.traceback(err, 2)
+  local filename = string.format("crash_%s.log", os.date("%Y%m%d_%H%M%S"))
+  pcall(love.filesystem.write, filename, trace)
+  return trace
+end
+
+function love.run(...)
+  local ok, result = xpcall(_original_love_run, _handle_error, ...)
+  if ok then
+    return result
+  else
+    return result
+  end
+end
