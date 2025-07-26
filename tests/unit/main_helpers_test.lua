@@ -15,8 +15,12 @@ describe("Main helper functions", function()
         assert.is_function(loadFonts)
     end)
 
-    it("exposes loadAudioResources", function()
-        assert.is_function(loadAudioResources)
+    -- The main module exposes a function named `loadAudio` for initializing
+    -- audio assets. Older code referenced this helper as
+    -- `loadAudioResources`, so we simply ensure that the current name is
+    -- available.
+    it("exposes loadAudio", function()
+        assert.is_function(loadAudio)
     end)
 
     it("exposes initStates", function()
