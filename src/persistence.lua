@@ -1,16 +1,18 @@
--- Stellar Assault – Persistence system
+----------------------------------------------------------------------
+-- Stellar Assault – Persistence system
 -- Handles saving / loading game data and validates it with a checksum.
--- Tries to use lunajson for speed, but will fall back to love.data JSON if
--- lunajson isn’t bundled with the project.
-
-----------------------------------------------------------------------
--- JSON SET-UP
+-- Tries to use lunajson for speed, but will fall back to love.data JSON
+-- if lunajson isn’t bundled with the project.
 ----------------------------------------------------------------------
 
-local ok, json = pcall(require, "lunajson") -- system-wide install
+----------------------------------------------------------------------
+-- JSON SET‑UP
+----------------------------------------------------------------------
+
+local ok, json = pcall(require, "lunajson")      -- system‑wide install
 if not ok then
-  ok, json = pcall(require, "src.lunajson")
-end -- local copy
+  ok, json = pcall(require, "src.lunajson")      -- bundled copy
+end
 
 -- Graceful fallback so the game still boots without lunajson
 if not ok then
@@ -29,14 +31,14 @@ end
 -- DEPENDENCIES
 ----------------------------------------------------------------------
 
-local logger = require("src.logger")
+local logger    = require("src.logger")
 local constants = require("src.constants")
 
 ----------------------------------------------------------------------
 -- UTILITY
 ----------------------------------------------------------------------
 
----Simple deep-copy (avoids sharing references to default data).
+---Simple deep‑copy (avoids sharing references to default data).
 local function deepcopy(obj)
   if type(obj) ~= "table" then
     return obj
@@ -52,27 +54,30 @@ end
 -- CONSTANTS
 ----------------------------------------------------------------------
 
-local Persistence = {}
-local SAVE_FILE = "stellar_assault_save.dat"
+local Persistence  = {}
+local SAVE_FILE    = "stellar_assault_save.dat"
 local CHECKSUM_FILE = SAVE_FILE .. ".sum"
+
+-- Increment whenever the on‑disk schema changes.
+local SAVE_VERSION = 2
 
 -- Default control mappings
 local defaultControls = {
   keyboard = {
-    left = "left",
-    right = "right",
-    up = "up",
-    down = "down",
-    shoot = "space",
-    boost = "lshift",
-    bomb = "b",
-    pause = "escape",
+    left   = "left",
+    right  = "right",
+    up     = "up",
+    down   = "down",
+    shoot  = "space",
+    boost  = "lshift",
+    bomb   = "b",
+    pause  = "escape",
   },
   gamepad = {
-    shoot = "rightshoulder",
-    bomb = "a",
-    boost = "x",
-    pause = "start",
+    shoot  = "rightshoulder",
+    bomb   = "a",
+    boost  = "x",
+    pause  = "start",
   },
 }
 
@@ -81,18 +86,18 @@ Persistence.loadError = nil
 
 -- Default structure for new saves or schema upgrades
 local defaultSaveData = {
-  highScore = 0,
-  leaderboard = {},
-  unlockedLevels = { true }, -- Level 1 always unlocked
-  totalBossesDefeated = 0,
+  highScore            = 0,
+  leaderboard          = {},
+  unlockedLevels       = { true }, -- Level 1 always unlocked
+  totalBossesDefeated  = 0,
 
   statistics = {
-    totalPlayTime = 0,
+    totalPlayTime      = 0,
     totalEnemiesDefeated = 0,
-    totalDeaths = 0,
-    favoriteShip = "alpha",
-    bestKillCount = 0,
-    bestSurvivalTime = 0,
+    totalDeaths        = 0,
+    favoriteShip       = "alpha",
+    bestKillCount      = 0,
+    bestSurvivalTime   = 0,
   },
 
   achievements = {},
@@ -100,13 +105,13 @@ local defaultSaveData = {
   controls = deepcopy(defaultControls),
 
   settings = {
-    masterVolume = 1.0,
-    sfxVolume = 1.0,
-    musicVolume = 0.2,
-    selectedShip = "alpha",
-    displayMode = "windowed",
-    highContrast = false,
-    palette = constants.defaultPalette,
+    masterVolume  = 1.0,
+    sfxVolume     = 1.0,
+    musicVolume   = 0.2,
+    selectedShip  = "alpha",
+    displayMode   = "windowed",
+    highContrast  = false,
+    palette       = constants.defaultPalette,  -- added on main
   },
 }
 
@@ -119,12 +124,12 @@ local function checksum(str)
   return love.data.hash("md5", str)
 end
 
----Write the checksum for the given JSON string.
+---Write the checksum for the given **JSON** string (not the header).
 local function writeChecksum(jsonStr)
   love.filesystem.write(CHECKSUM_FILE, checksum(jsonStr))
 end
 
----Verify that the checksum on disk matches the supplied JSON string.
+---Verify that the checksum on disk matches the supplied **JSON** string.
 local function isChecksumValid(jsonStr)
   if not love.filesystem.getInfo(CHECKSUM_FILE) then
     return false
@@ -133,7 +138,7 @@ local function isChecksumValid(jsonStr)
   return stored == checksum(jsonStr)
 end
 
----Deep-merge source into destination, preserving existing keys.
+---Deep‑merge source into destination, preserving existing keys.
 local function mergeDefaults(dst, src)
   for k, v in pairs(src) do
     if type(v) == "table" then
@@ -154,19 +159,33 @@ function Persistence.load()
   -- No save yet – create one with defaults
   if not love.filesystem.getInfo(SAVE_FILE) then
     logger.info("Save file not found – creating new save.")
-    Persistence.save(defaultSaveData)
+    Persistence.save(deepcopy(defaultSaveData))
     return deepcopy(defaultSaveData)
   end
 
-  local jsonStr = love.filesystem.read(SAVE_FILE)
+  --------------------------------------------------------------------
+  -- Handle version header (added in SAVE_VERSION 2)
+  --------------------------------------------------------------------
+  local fileStr   = love.filesystem.read(SAVE_FILE)
+  local version   = 1           -- default to pre‑header saves
+  local first, rest = fileStr:match("^(.-)\n(.*)$")
 
-  -- Integrity check
+  local jsonStr = fileStr
+  if first then
+    local v = first:match("^version%s*=%s*(%d+)$")
+    if v then
+      version  = tonumber(v)
+      jsonStr  = rest
+    end
+  end
+
+  -- Integrity check (uses JSON portion only)
   if not isChecksumValid(jsonStr) then
     Persistence.loadError = "Save data failed checksum – starting fresh."
     logger.warn(Persistence.loadError)
     love.filesystem.remove(SAVE_FILE)
     love.filesystem.remove(CHECKSUM_FILE)
-    Persistence.save(defaultSaveData)
+    Persistence.save(deepcopy(defaultSaveData))
     return deepcopy(defaultSaveData)
   end
 
@@ -177,12 +196,20 @@ function Persistence.load()
     logger.error(Persistence.loadError .. " (" .. tostring(data) .. ")")
     love.filesystem.remove(SAVE_FILE)
     love.filesystem.remove(CHECKSUM_FILE)
-    Persistence.save(defaultSaveData)
+    Persistence.save(deepcopy(defaultSaveData))
     return deepcopy(defaultSaveData)
   end
 
-  -- Upgrade older saves if the schema changed
+  --------------------------------------------------------------------
+  -- Schema migrations ------------------------------------------------
+  --------------------------------------------------------------------
   mergeDefaults(data, defaultSaveData)
+
+  if version < SAVE_VERSION then
+    -- Future migration steps belong here.
+    -- (No actual migrations needed between 1 → 2 beyond mergeDefaults.)
+  end
+
   return data
 end
 
@@ -196,8 +223,11 @@ function Persistence.save(data)
     return false
   end
 
-  love.filesystem.write(SAVE_FILE, jsonStr)
-  writeChecksum(jsonStr)
+  -- Prepend version header so future loaders know the schema
+  local fileStr = string.format("version = %d\n%s", SAVE_VERSION, jsonStr)
+
+  love.filesystem.write(SAVE_FILE, fileStr)
+  writeChecksum(jsonStr)   -- checksum ONLY the JSON payload
   return true
 end
 
@@ -226,7 +256,7 @@ end
 -- Settings and Controls
 -----------------------------------------------------------------------
 
----Return settings table (read-only).
+---Return settings table (read‑only).
 function Persistence.getSettings()
   return deepcopy(Persistence.getSaveData().settings)
 end
