@@ -146,6 +146,7 @@ local function initStates()
   stateManager:register("pause", require("states.pause"))
   stateManager:register("gameover", require("states.gameover"))
   stateManager:register("options", require("states.options"))
+  stateManager:register("options_controls", require("states.options_controls"))
   stateManager:register("levelselect", require("states.levelselect"))
   stateManager:register("leaderboard", require("states.leaderboard"))
 
