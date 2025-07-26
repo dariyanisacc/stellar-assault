@@ -1,5 +1,6 @@
 -- src/debugcommands.lua
 
+local CONFIG = require("src.config")
 local debugcommands = {}
 
 -- Flag for debug mode
@@ -7,6 +8,9 @@ debugcommands.debugMode = false
 
 -- Register debug commands (this function is called from main.lua)
 function debugcommands.register()
+    if not CONFIG.debug then
+        return
+    end
     print("Registering debug commands...")
     
     -- Override love.keypressed to handle debug keys (assuming no nil values)
