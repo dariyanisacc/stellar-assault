@@ -1,5 +1,5 @@
 -- src/spatial.lua
--- Simple spatial hash grid utility for Stellar Assault
+-- Simple spatial‑hash grid utility for Stellar Assault
 -- Provides fast neighbourhood queries and basic collision helpers.
 -- Drop‑in replacement for the missing `src.spatial` module expected by
 -- states/playing.lua and other gameplay code.
@@ -7,41 +7,48 @@
 local SpatialHash = {}
 SpatialHash.__index = SpatialHash
 
--- Create a new spatial hash grid. `cellSize` defaults to 64 pixels.
+---------------------------------------------------------------------
+-- Construction & maintenance ---------------------------------------
+---------------------------------------------------------------------
+
+---Create a new spatial‑hash grid.
+---@param cellSize number?  Grid‑cell size in pixels (defaults to 64)
 function SpatialHash:new(cellSize)
   local o = setmetatable({}, self)
   o.cellSize = cellSize or 64
-  o.cells = {}
+  o.cells    = {}
   return o
 end
 
--- Wipe all stored data
+---Remove everything from the grid.
 function SpatialHash:clear()
   self.cells = {}
 end
 
--- Helper that inserts an `item` whose centre is `item.x,item.y` and whose
--- axis‑aligned bounding box is described by `width/height` or `size`.
+---------------------------------------------------------------------
+-- Insert / remove / update -----------------------------------------
+---------------------------------------------------------------------
+
+---Insert an `item` whose centre is `item.x,item.y`.
+---The item must expose either `width`/`height` or a square `size`.
 function SpatialHash:insert(item)
-  local halfW = (item.width or item.size or 0) * 0.5
+  local halfW = (item.width  or item.size or 0) * 0.5
   local halfH = (item.height or item.size or 0) * 0.5
-  local minX = math.floor((item.x - halfW) / self.cellSize)
-  local maxX = math.floor((item.x + halfW) / self.cellSize)
-  local minY = math.floor((item.y - halfH) / self.cellSize)
-  local maxY = math.floor((item.y + halfH) / self.cellSize)
+  local minX  = math.floor((item.x - halfW) / self.cellSize)
+  local maxX  = math.floor((item.x + halfW) / self.cellSize)
+  local minY  = math.floor((item.y - halfH) / self.cellSize)
+  local maxY  = math.floor((item.y + halfH) / self.cellSize)
 
   for cx = minX, maxX do
     for cy = minY, maxY do
       local key = cx .. "," .. cy
-      if not self.cells[key] then
-        self.cells[key] = {}
-      end
+      self.cells[key] = self.cells[key] or {}
       table.insert(self.cells[key], item)
     end
   end
 end
 
--- Remove an item from every cell it occupies
+---Remove an item from every cell it occupies.
 function SpatialHash:remove(item)
   for key, cell in pairs(self.cells) do
     for i = #cell, 1, -1 do
@@ -55,21 +62,26 @@ function SpatialHash:remove(item)
   end
 end
 
--- Re‑insert an item after it has moved
+---Call after an item has moved.
 function SpatialHash:update(item)
   self:remove(item)
   self:insert(item)
 end
 
--- Collect items whose AABB intersects the rectangle centred on (x,y)
--- with dimensions w×h. Reuses `results` table if supplied.
+---------------------------------------------------------------------
+-- Queries -----------------------------------------------------------
+---------------------------------------------------------------------
+
+---Collect items whose AABB intersects the rectangle centred on (x,y)
+---with dimensions `w × h`.
+---@return table results
 function SpatialHash:queryRange(x, y, w, h, results)
-  results = results or {}
+  results    = results or {}
   local halfW, halfH = w * 0.5, h * 0.5
-  local minX = math.floor((x - halfW) / self.cellSize)
-  local maxX = math.floor((x + halfW) / self.cellSize)
-  local minY = math.floor((y - halfH) / self.cellSize)
-  local maxY = math.floor((y + halfH) / self.cellSize)
+  local minX  = math.floor((x - halfW) / self.cellSize)
+  local maxX  = math.floor((x + halfW) / self.cellSize)
+  local minY  = math.floor((y - halfH) / self.cellSize)
+  local maxY  = math.floor((y + halfH) / self.cellSize)
 
   local visited = {}
   for cx = minX, maxX do
@@ -88,21 +100,23 @@ function SpatialHash:queryRange(x, y, w, h, results)
   return results
 end
 
--- Convenience: query everything that lies within `radius` of point (x,y)
+---Convenience: query everything within `radius` of point (x,y).
 function SpatialHash:queryRadius(x, y, radius, results)
   return self:queryRange(x, y, radius * 2, radius * 2, results)
 end
 
 ---------------------------------------------------------------------
--- Collision helpers (AABB + point‑in‑circle) -----------------------
+-- Collision helpers ------------------------------------------------
 ---------------------------------------------------------------------
+
 local function _aabb(a, b)
-  local aHalfW = (a.width or a.size or 0) * 0.5
+  local aHalfW = (a.width  or a.size or 0) * 0.5
   local aHalfH = (a.height or a.size or 0) * 0.5
-  local bHalfW = (b.width or b.size or 0) * 0.5
+  local bHalfW = (b.width  or b.size or 0) * 0.5
   local bHalfH = (b.height or b.size or 0) * 0.5
 
-  return math.abs(a.x - b.x) < (aHalfW + bHalfW) and math.abs(a.y - b.y) < (aHalfH + bHalfH)
+  return math.abs(a.x - b.x) < (aHalfW + bHalfW)
+     and math.abs(a.y - b.y) < (aHalfH + bHalfH)
 end
 
 local function _pointInCircle(px, py, cx, cy, r)
@@ -111,18 +125,23 @@ local function _pointInCircle(px, py, cx, cy, r)
 end
 
 ---------------------------------------------------------------------
--- Public interface -------------------------------------------------
+-- Public API table -------------------------------------------------
 ---------------------------------------------------------------------
-local M = {
-  SpatialHash = SpatialHash,
-  new = function(cellSize)
-    return SpatialHash:new(cellSize)
-  end,
 
-  -- Legacy helpers expected by existing game code
+local M = {
+  -- Class
+  SpatialHash    = SpatialHash,
+
+  -- Factory helper for legacy code
+  new            = function(cellSize) return SpatialHash:new(cellSize) end,
+
+  -- Legacy collision helpers
   checkCollision = _aabb,
-  aabb = _aabb,
-  pointInCircle = _pointInCircle,
+  aabb           = _aabb,
+  pointInCircle  = _pointInCircle,
 }
+
+-- Let `setmetatable({}, M)` behave like a grid instance
+M.__index = SpatialHash
 
 return M
