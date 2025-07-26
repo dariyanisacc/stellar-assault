@@ -1,5 +1,6 @@
 -- src/debugcommands.lua
 
+local CONFIG = require("src.config")
 local debugcommands = {}
 
 -- Flag for debug mode
@@ -7,6 +8,9 @@ debugcommands.debugMode = false
 
 -- Register debug commands (this function is called from main.lua)
 function debugcommands.register()
+    if not CONFIG.debug then
+        return
+    end
     print("Registering debug commands...")
     
     -- Override love.keypressed to handle debug keys (assuming no nil values)
@@ -26,8 +30,7 @@ function debugcommands.register()
             -- Skip to next level or something (customize as needed)
             print("Skipping level")
             -- Example: switch to next state
-            local playing = require("states.playing")
-            Gamestate.switch(playing)  -- Assuming Gamestate is global
+            stateManager:switch("playing")
         end
     end
     

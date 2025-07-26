@@ -1,5 +1,6 @@
 -- Persistence system for save data
-local json = require("src.json") -- We'll need a simple JSON library
+-- Use lunajson for proper JSON handling
+local json = require("src.lunajson")
 local logger = require("src.logger")
 
 local Persistence = {}
@@ -102,8 +103,8 @@ function Persistence.load()
             local success, loaded = pcall(function()
                 return Persistence.decode(contents)
             end)
-            
-            if success and loaded then
+
+            if success and loaded and Persistence.validate(loaded) then
                 -- Merge with defaults to handle missing fields
                 data = Persistence.merge(defaultSaveData, loaded)
                 local migrated = false
@@ -127,14 +128,43 @@ function Persistence.load()
                 end
                 logger.info("Save data loaded successfully")
             else
+            if success and loaded and Persistence.validate(loaded) then
+                -- Merge with defaults to handle missing fields
+                data = Persistence.merge(defaultSaveData, loaded)
+                local migrated = false
+                -- Migrate old ship unlock flags
+                data.unlockedShips = data.unlockedShips or {alpha = true}
+                if data.upgrades and data.upgrades.unlockBeta and not data.unlockedShips.beta then
+                    data.unlockedShips.beta = true
+                    migrated = true
+                end
+                if data.upgrades and data.upgrades.unlockGamma and not data.unlockedShips.gamma then
+                    data.unlockedShips.gamma = true
+                    migrated = true
+                end
+                -- Ensure level stats table exists
+                if not data.levelStats then
+                    data.levelStats = {}
+                    migrated = true
+                end
+                if migrated then
+                    Persistence.save(data)
+                end
+                logger.info("Save data loaded successfully")
+            else
+                -- Parsing or schema validation failed
                 Persistence.loadError = "Save file corrupted. Progress has been reset."
-                logger.error("Failed to parse save data, backing up corrupt file")
+                logger.error("Failed to parse or validate save data, backing up corrupt file")
                 love.filesystem.write(SAVE_FILE .. ".corrupt", contents)
                 if love.filesystem.getInfo(CHECKSUM_FILE) then
                     local sum = love.filesystem.read(CHECKSUM_FILE)
-                    if sum then love.filesystem.write(CHECKSUM_FILE .. ".corrupt", sum) end
+                    if sum then
+                        love.filesystem.write(CHECKSUM_FILE .. ".corrupt", sum)
+                    end
                 end
-                Persistence.save(data)
+                Persistence.save(data) -- regenerate a clean save + checksum
+            end
+
             end
         end
     else
@@ -148,9 +178,12 @@ end
 function Persistence.save(data)
     data = data or saveData
 
-    local success, encoded = pcall(function()
-        return Persistence.encode(data)
-    end)
+    if not Persistence.validate(data) then
+        logger.error("Invalid save data schema; aborting save")
+        return
+    end
+
+    local success, encoded = pcall(json.encode, data)
 
     if success then
         if love.filesystem.getInfo(SAVE_FILE) then
@@ -174,60 +207,30 @@ function Persistence.save(data)
     end
 end
 
--- Simple JSON encoding/decoding (basic implementation)
+-- JSON encoding/decoding using lunajson
 function Persistence.encode(data)
-    local function serialize(tbl, indent)
-        indent = indent or 0
-        local spacing = string.rep("  ", indent)
-        local result = "{\n"
-        
-        local items = {}
-        for k, v in pairs(tbl) do
-            local key = string.format('"%s"', tostring(k))
-            local value
-            
-            if type(v) == "table" then
-                value = serialize(v, indent + 1)
-            elseif type(v) == "string" then
-                value = string.format('"%s"', v)
-            elseif type(v) == "boolean" then
-                value = tostring(v)
-            else
-                value = tostring(v)
-            end
-            
-            table.insert(items, spacing .. "  " .. key .. ": " .. value)
-        end
-        
-        result = result .. table.concat(items, ",\n") .. "\n" .. spacing .. "}"
-        return result
-    end
-    
-    return serialize(data)
+    return json.encode(data)
 end
 
 function Persistence.decode(str)
-    -- Very basic JSON parser - in production, use a proper JSON library
-    local function parse()
-        -- Remove whitespace and newlines
-        str = str:gsub("[\n\r]", "")
-        
-        -- This is a simplified parser - for production use a real JSON library
-        local success, result = pcall(function()
-            return loadstring("return " .. str:gsub('(".-"):', function(match)
-                return "[" .. match .. "] ="
-            end))()
-        end)
-        
-        if success then
-            return result
-        else
-            -- Fallback to manual parsing
-            return defaultSaveData
+    return json.decode(str)
+end
+
+-- Validate save data against the default schema
+function Persistence.validate(data)
+    local function validate_table(t, template)
+        for k, v in pairs(template) do
+            if type(v) == "table" then
+                if type(t[k]) ~= "table" then return false end
+                if not validate_table(t[k], v) then return false end
+            else
+                if type(t[k]) ~= type(v) then return false end
+            end
         end
+        return true
     end
-    
-    return parse()
+
+    return type(data) == "table" and validate_table(data, defaultSaveData)
 end
 
 function Persistence.merge(default, loaded)

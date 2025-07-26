@@ -43,12 +43,27 @@ jobs:
     - name: Setup LuaRocks
       uses: leafo/gh-actions-luarocks@v4
     
-    - name: Install busted
-      run: luarocks install busted
-    
-    - name: Run tests
+    - name: Install test dependencies
       run: |
-        busted tests/ || echo "Tests need Love2D environment"
+        luarocks install busted
+        luarocks install luacov
+        luarocks install luacov-reporter-lcov
+
+    - name: Run tests with coverage
+      run: |
+        busted -c tests/ || echo "Tests need Love2D environment"
+        luacov
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        files: coverage.lcov
+
+    - name: Check coverage threshold
+      run: |
+        cov=$(awk -F: '/^LF:/ {lf+=$2} /^LH:/ {lh+=$2} END {if(lf==0){print 0}else{print (lh*100)/lf}}' coverage.lcov)
+        echo "Total coverage: $cov%"
+        awk -v cov="$cov" 'BEGIN { if (cov < 80) exit 1 }'
 
   build:
     runs-on: ubuntu-latest

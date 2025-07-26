@@ -39,6 +39,18 @@ function ObjectPool.new(createFunction, resetFunction, initialSize)
         table.insert(self.pool, obj)
     end
 
+    self.release = self.recycle
+
+    function self:releaseAll()
+        for i = #self.active, 1, -1 do
+            table.insert(self.pool, table.remove(self.active, i))
+        end
+    end
+
+    function self:getActiveCount()
+        return #self.active
+    end
+
     function self:update(dt)
         -- Optionally update active objects if needed
         for _, obj in ipairs(self.active) do
@@ -58,6 +70,49 @@ function ObjectPool.new(createFunction, resetFunction, initialSize)
     end
 
     return self
+end
+
+local function clearTable(t)
+    for k in pairs(t) do
+        t[k] = nil
+    end
+end
+
+function ObjectPool.createLaserPool(size)
+    local constants = require("src.constants")
+    local function create()
+        return {width = constants.laser.width, height = constants.laser.height}
+    end
+    local function reset(obj)
+        clearTable(obj)
+        obj.width = constants.laser.width
+        obj.height = constants.laser.height
+    end
+    return ObjectPool.new(create, reset, size or 100)
+end
+
+function ObjectPool.createExplosionPool(size)
+    local function create() return {} end
+    local function reset(obj) clearTable(obj) end
+    return ObjectPool.new(create, reset, size or 50)
+end
+
+function ObjectPool.createParticlePool(size)
+    local function create() return {} end
+    local function reset(obj) clearTable(obj) end
+    return ObjectPool.new(create, reset, size or 200)
+end
+
+function ObjectPool.createTrailPool(size)
+    local function create() return {} end
+    local function reset(obj) clearTable(obj) end
+    return ObjectPool.new(create, reset, size or 100)
+end
+
+function ObjectPool.createDebrisPool(size)
+    local function create() return {} end
+    local function reset(obj) clearTable(obj) end
+    return ObjectPool.new(create, reset, size or 100)
 end
 
 return ObjectPool
