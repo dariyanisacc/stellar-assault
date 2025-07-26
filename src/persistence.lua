@@ -4,6 +4,10 @@ local logger = require("src.logger")
 
 local Persistence = {}
 local SAVE_FILE = "stellar_assault_save.dat"
+local CHECKSUM_FILE = SAVE_FILE .. ".sum"
+
+-- message set when load fails
+Persistence.loadError = nil
 
 -- Default save data structure
 local defaultSaveData = {
@@ -75,10 +79,26 @@ end
 
 function Persistence.load()
     local data = defaultSaveData
-    
+
     if love.filesystem.getInfo(SAVE_FILE) then
         local contents = love.filesystem.read(SAVE_FILE)
         if contents then
+            -- verify checksum if available
+            if love.filesystem.getInfo(CHECKSUM_FILE) then
+                local stored = love.filesystem.read(CHECKSUM_FILE)
+                local actual = love.data and love.data.hash and love.data.hash("sha1", contents)
+                if stored and actual and stored ~= actual then
+                    Persistence.loadError = "Save file corrupted. Progress has been reset."
+                    logger.error("Save checksum mismatch, backing up corrupt file")
+                    love.filesystem.write(SAVE_FILE .. ".corrupt", contents)
+                    if stored then
+                        love.filesystem.write(CHECKSUM_FILE .. ".corrupt", stored)
+                    end
+                    Persistence.save(data)
+                    return data
+                end
+            end
+
             local success, loaded = pcall(function()
                 return Persistence.decode(contents)
             end)
@@ -107,7 +127,14 @@ function Persistence.load()
                 end
                 logger.info("Save data loaded successfully")
             else
-                logger.error("Failed to parse save data, using defaults")
+                Persistence.loadError = "Save file corrupted. Progress has been reset."
+                logger.error("Failed to parse save data, backing up corrupt file")
+                love.filesystem.write(SAVE_FILE .. ".corrupt", contents)
+                if love.filesystem.getInfo(CHECKSUM_FILE) then
+                    local sum = love.filesystem.read(CHECKSUM_FILE)
+                    if sum then love.filesystem.write(CHECKSUM_FILE .. ".corrupt", sum) end
+                end
+                Persistence.save(data)
             end
         end
     else
@@ -134,6 +161,10 @@ function Persistence.save(data)
         end
         local writeSuccess = love.filesystem.write(SAVE_FILE, encoded)
         if writeSuccess then
+            local checksum = love.data and love.data.hash and love.data.hash("sha1", encoded)
+            if checksum then
+                love.filesystem.write(CHECKSUM_FILE, checksum)
+            end
             logger.info("Save data written successfully")
         else
             logger.error("Failed to write save file")
@@ -351,6 +382,14 @@ end
 
 function Persistence.getSaveData()
     return saveData
+end
+
+function Persistence.getLoadError()
+    return Persistence.loadError
+end
+
+function Persistence.clearLoadError()
+    Persistence.loadError = nil
 end
 
 -- Upgrade system functions

@@ -128,6 +128,7 @@ love_mock.filesystem = {
     exists = function(path) return false end,
     read = function(path) return nil, "File not found" end,
     write = function(path, data) return true end,
+    remove = function(path) return true end,
     getInfo = function(path) return nil end,
     getDirectoryItems = function(path)
         local items = love_mock.filesystem.__items and love_mock.filesystem.__items[path]
@@ -136,6 +137,10 @@ love_mock.filesystem = {
     end,
     getSaveDirectory = function() return "/tmp/spacedodger" end,
     setIdentity = function(identity) end,
+}
+
+love_mock.data = {
+    hash = function(_, str) return "hash" .. tostring(#str) end
 }
 
 -- Mock system module  
