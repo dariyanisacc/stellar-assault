@@ -127,7 +127,7 @@ function MenuState:draw()
   end
 
   -- Title
-  local titleColour = Game.highContrast and { 1, 1, 1 } or { 0, 1, 1 }
+  local titleColour = Game.highContrast and { 1, 1, 1 } or Game.palette.ui
   Game.uiManager:drawMessage(
     "STELLAR ASSAULT",
     self.screenWidth / 2,
@@ -270,7 +270,7 @@ function MenuState:drawLevelSelect()
         if lvl == self.selectedLevel then
           lg.setColor(1, 1, 0)
         elseif unlocked then
-          lg.setColor(0, 1, 1)
+          lg.setColor(Game.palette.ui)
         else
           lg.setColor(0.3, 0.3, 0.3)
         end

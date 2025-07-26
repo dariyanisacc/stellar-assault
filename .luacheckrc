@@ -14,6 +14,7 @@ globals = {
   "alienLasers",
   "aliens",
   "applyFontScale",
+  "applyPalette",
   "asteroids",
   "availableShips",
   "backgroundMusic",

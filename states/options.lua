@@ -48,6 +48,18 @@ function OptionsState:enter()
   local settings = Persistence.getSettings()
   local fontValue = settings.fontScale or 1
 
+  self.paletteNames = {
+    constants.palettes.default.name,
+    constants.palettes.deuteranopia.name,
+    constants.palettes.tritanopia.name,
+  }
+  local paletteIndex = 1
+  for i, name in ipairs(self.paletteNames) do
+    if name == constants.palettes[Game.paletteName].name then
+      paletteIndex = i
+    end
+  end
+
   -- Menu items (change Display Mode to list type)
   self.menuItems = {
     { name = "Resolution", type = "list", value = Game.currentResolution or 1 },
@@ -55,6 +67,7 @@ function OptionsState:enter()
     { name = "Master Volume", type = "slider", value = Game.masterVolume or 1.0 },
     { name = "SFX Volume", type = "slider", value = Game.sfxVolume or 1.0 },
     { name = "Music Volume", type = "slider", value = Game.musicVolume or 0.2 },
+    { name = "Palette", type = "list", value = paletteIndex },
     { name = "High Contrast", type = "toggle", value = settings.highContrast or false },
     { name = "Font Size", type = "slider", value = fontValue },
     { name = "Controls", type = "button" },
@@ -172,6 +185,8 @@ function OptionsState:draw()
         text = text .. ": " .. self.resolutions[item.value].name
       elseif item.name == "Display Mode" then
         text = text .. ": " .. self.displayModes[item.value]:gsub("^%l", string.upper)
+      elseif item.name == "Palette" then
+        text = text .. ": " .. self.paletteNames[item.value]
       end
     elseif item.type == "slider" then
       text = text .. ": " .. math.floor(item.value * 100) .. "%"
@@ -308,12 +323,19 @@ function OptionsState:adjustValue(direction)
       maxValue = #self.resolutions
     elseif item.name == "Display Mode" then
       maxValue = #self.displayModes
+    elseif item.name == "Palette" then
+      maxValue = #self.paletteNames
     end
     if item.value < 1 then
       item.value = maxValue
     end
     if item.value > maxValue then
       item.value = 1
+    end
+    if item.name == "Palette" then
+      Game.paletteName = self.paletteNames[item.value]:lower()
+      applyPalette()
+      Persistence.updateSettings({ palette = Game.paletteName })
     end
     if menuSelectSound then
       menuSelectSound:play()
@@ -410,17 +432,22 @@ function OptionsState:applySettings()
     initStarfield()
   end
 
-  local hcItem = self.menuItems[6]
-  local fsItem = self.menuItems[7]
+  local paletteItem = self.menuItems[6]
+  local hcItem = self.menuItems[7]
+  local fsItem = self.menuItems[8]
   Game.highContrast = hcItem.value
   Game.fontScale = fsItem.value
   applyFontScale()
+
+  Game.paletteName = self.paletteNames[paletteItem.value]:lower()
+  applyPalette()
 
   -- Save settings
   saveSettings()
   Persistence.updateSettings({
     highContrast = Game.highContrast,
     fontScale = Game.fontScale,
+    palette = Game.paletteName,
   })
 end
 
