@@ -40,6 +40,7 @@ local PlayerControl = require("src.player_control")
 local EnemyAI = require("src.enemy_ai")
 local PowerupHandler = require("src.powerup_handler")
 local BossManager = require("src.bossmanager")
+local Scene = require("src.scene")
 local lg = love.graphics
 local lm = love.math or math
 
@@ -62,8 +63,19 @@ function PlayingState:enter(params)
     return -- Skip initialization
   end
 
+  -- Create scene to hold entities and systems
+  self.scene = Scene.new()
+
   -- Initialize game objects (only on fresh start)
   self:initializeGame()
+  -- Local references for convenience
+  self.laserPool = self.scene.laserPool
+  self.explosionPool = self.scene.explosionPool
+  self.particlePool = self.scene.particlePool
+  self.trailPool = self.scene.trailPool
+  self.debrisPool = self.scene.debrisPool
+  self.laserGrid = self.scene.laserGrid
+  self.entityGrid = self.scene.entityGrid
 
   -- Load control bindings
   self.keyBindings = Persistence.getControls().keyboard
@@ -72,13 +84,6 @@ function PlayingState:enter(params)
   -- Create camera
   local Camera = require("src.camera")
   self.camera = Camera:new()
-
-  -- Create object pools
-  self.laserPool = ObjectPool.createLaserPool()
-  self.explosionPool = ObjectPool.createExplosionPool()
-  self.particlePool = ObjectPool.createParticlePool()
-  self.trailPool = ObjectPool.createTrailPool()
-  self.debrisPool = ObjectPool.createDebrisPool()
 
   -- Boss manager handles boss lifecycle
   self.bossManager = BossManager:new()
@@ -105,8 +110,7 @@ function PlayingState:enter(params)
 
   -- Set shoot callback to integrate with existing laser system
   self.waveManager:setShootCallback(function(laser)
-    -- Add enemy laser to the alienLasers array
-    table.insert(alienLasers, laser)
+    table.insert(self.scene.alienLasers, laser)
   end)
 
   -- Start first wave
@@ -145,16 +149,8 @@ function PlayingState:leave()
   end
 
   -- Release all pooled objects
-  self.laserPool:releaseAll()
-  self.explosionPool:releaseAll()
-  self.particlePool:releaseAll()
-  self.trailPool:releaseAll()
-  self.debrisPool:releaseAll()
-  if self.laserGrid then
-    self.laserGrid:clear()
-  end
-  if self.entityGrid then
-    self.entityGrid:clear()
+  if self.scene then
+    self.scene:clear()
   end
 end
 
@@ -219,20 +215,19 @@ function PlayingState:initializeGame()
     currentLevel = 1
   end
 
-  -- Entity arrays
-  asteroids = {}
-  aliens = {}
-  lasers = {}
-  alienLasers = {}
-  explosions = {}
-  powerups = {}
-  powerupTexts = {}
-  activePowerups = {}
+  -- Entity arrays owned by scene
+  self.scene.asteroids = {}
+  self.scene.aliens = {}
+  self.scene.lasers = {}
+  self.scene.alienLasers = {}
+  self.scene.explosions = {}
+  self.scene.powerups = {}
+  self.scene.powerupTexts = {}
+  self.scene.activePowerups = {}
 
-  -- Spatial grid for lasers
-  self.laserGrid = SpatialHash:new(100)
-  -- Spatial grid for entities (asteroids, aliens, powerups, etc.)
-  self.entityGrid = SpatialHash:new(100)
+  -- Reset spatial grids
+  self.scene.laserGrid:clear()
+  self.scene.entityGrid:clear()
 
   -- Boss
   boss = nil
@@ -400,22 +395,22 @@ end
 function PlayingState:updateLasers(dt)
   -- Limit laser count for performance
   local maxLasers = constants.balance.maxLasers
-  if #lasers > maxLasers then
-    -- Remove oldest lasers
-    for i = 1, #lasers - maxLasers do
-      self.laserPool:release(lasers[1])
-      table.remove(lasers, 1)
+  if #self.scene.lasers > maxLasers then
+    -- Remove oldest self.scene.lasers
+    for i = 1, #self.scene.lasers - maxLasers do
+      self.laserPool:release(self.scene.lasers[1])
+      table.remove(self.scene.lasers, 1)
     end
   end
 
   -- Log warning if approaching capacity
-  if #lasers > constants.balance.laserWarningThreshold then
-    logger.warn("Laser pool near capacity: %d / %d", #lasers, maxLasers)
+  if #self.scene.lasers > constants.balance.laserWarningThreshold then
+    logger.warn("Laser pool near capacity: %d / %d", #self.scene.lasers, maxLasers)
   end
 
-  -- Update player lasers
-  for i = #lasers, 1, -1 do
-    local laser = lasers[i]
+  -- Update player self.scene.lasers
+  for i = #self.scene.lasers, 1, -1 do
+    local laser = self.scene.lasers[i]
 
     -- Update position based on velocity if it exists (for spread shots)
     if laser.vx and laser.vy then
@@ -426,7 +421,7 @@ function PlayingState:updateLasers(dt)
       laser.y = laser.y - constants.laser.speed * dt
     end
 
-    -- Screen wrapping for lasers (horizontal only)
+    -- Screen wrapping for self.scene.lasers (horizontal only)
     if laser.x < -laser.width then
       laser.x = self.screenWidth + laser.width
     elseif laser.x > self.screenWidth + laser.width then
@@ -443,15 +438,15 @@ function PlayingState:updateLasers(dt)
         self.laserGrid:remove(laser)
       end
       self.laserPool:release(laser)
-      table.remove(lasers, i)
+      table.remove(self.scene.lasers, i)
     end
   end
 
-  -- Update alien lasers
-  for i = #alienLasers, 1, -1 do
-    local laser = alienLasers[i]
+  -- Update alien self.scene.lasers
+  for i = #self.scene.alienLasers, 1, -1 do
+    local laser = self.scene.alienLasers[i]
 
-    -- Update position based on velocity if it exists (for boss lasers)
+    -- Update position based on velocity if it exists (for boss self.scene.lasers)
     if laser.vx and laser.vy then
       laser.x = laser.x + laser.vx * dt
       laser.y = laser.y + laser.vy * dt
@@ -468,7 +463,7 @@ function PlayingState:updateLasers(dt)
       or laser.x > self.screenWidth + laser.width
     then
       self.laserPool:release(laser)
-      table.remove(alienLasers, i)
+      table.remove(self.scene.alienLasers, i)
     end
   end
 end
@@ -476,16 +471,16 @@ end
 function PlayingState:updateExplosions(dt)
   -- Limit explosion/particle count for performance
   local maxExplosions = 200
-  if #explosions > maxExplosions then
-    -- Remove oldest explosions/particles
-    for i = 1, #explosions - maxExplosions do
-      local e = table.remove(explosions, 1)
+  if #self.scene.explosions > maxExplosions then
+    -- Remove oldest self.scene.explosions/particles
+    for i = 1, #self.scene.explosions - maxExplosions do
+      local e = table.remove(self.scene.explosions, 1)
       e.pool:release(e)
     end
   end
 
-  for i = #explosions, 1, -1 do
-    local explosion = explosions[i]
+  for i = #self.scene.explosions, 1, -1 do
+    local explosion = self.scene.explosions[i]
 
     -- Check if it's a particle or explosion
     if explosion.vx then
@@ -511,7 +506,7 @@ function PlayingState:updateExplosions(dt)
 
       if explosion.life <= 0 then
         explosion.pool:release(explosion)
-        table.remove(explosions, i)
+        table.remove(self.scene.explosions, i)
       end
     else
       -- It's a regular explosion
@@ -520,7 +515,7 @@ function PlayingState:updateExplosions(dt)
 
       if explosion.alpha <= 0 then
         explosion.pool:release(explosion)
-        table.remove(explosions, i)
+        table.remove(self.scene.explosions, i)
       end
     end
   end
@@ -617,8 +612,8 @@ function PlayingState:checkPlayerCollisions()
   for _, entity in ipairs(grid:getNearby(player)) do
     if entity.tag == "asteroid" then
       if Collision.checkAABB(player, entity) then
-        local idx = self:findEntityIndex(asteroids, entity)
-        if activePowerups.shield then
+        local idx = self:findEntityIndex(self.scene.asteroids, entity)
+        if self.scene.activePowerups.shield then
           self:handleShieldHit(entity, idx or 1)
         else
           self:handlePlayerHit(entity, idx or 1)
@@ -626,22 +621,22 @@ function PlayingState:checkPlayerCollisions()
       end
     elseif entity.tag == "alien" then
       if Collision.checkAABB(player, entity) then
-        local idx = self:findEntityIndex(aliens, entity)
-        if activePowerups.shield then
-          self:handleShieldHit(entity, idx or 1, aliens)
+        local idx = self:findEntityIndex(self.scene.aliens, entity)
+        if self.scene.activePowerups.shield then
+          self:handleShieldHit(entity, idx or 1, self.scene.aliens)
         else
-          self:handlePlayerHit(entity, idx or 1, aliens)
+          self:handlePlayerHit(entity, idx or 1, self.scene.aliens)
         end
       end
     elseif entity.tag == "enemy" and self.waveManager then
       if Collision.checkAABB(player, entity) then
-        if activePowerups.shield then
+        if self.scene.activePowerups.shield then
           local enemySize = math.max(entity.width, entity.height)
           self:createExplosion(entity.x + entity.width / 2, entity.y + entity.height / 2, enemySize)
           entity.active = false
           self.entityGrid:remove(entity)
           local _ = self:findEntityIndex(self.waveManager.enemies, entity)
-          activePowerups.shield = nil
+          self.scene.activePowerups.shield = nil
           if shieldBreakSound and playPositionalSound then
             playPositionalSound(
               shieldBreakSound,
@@ -662,14 +657,14 @@ function PlayingState:checkPlayerCollisions()
   end
 
   -- Player vs Alien Lasers
-  for i = #alienLasers, 1, -1 do
-    local laser = alienLasers[i]
+  for i = #self.scene.alienLasers, 1, -1 do
+    local laser = self.scene.alienLasers[i]
     if Collision.checkAABB(player, laser) then
-      if not activePowerups.shield then
+      if not self.scene.activePowerups.shield then
         self:playerHit()
       end
       self.laserPool:release(laser)
-      table.remove(alienLasers, i)
+      table.remove(self.scene.alienLasers, i)
     end
   end
 
@@ -678,13 +673,13 @@ function PlayingState:checkPlayerCollisions()
     for i = #self.waveManager.enemies, 1, -1 do
       local enemy = self.waveManager.enemies[i]
       if Collision.checkAABB(player, enemy) then
-        if activePowerups.shield then
+        if self.scene.activePowerups.shield then
           -- Destroy enemy and break shield
           local enemySize = math.max(enemy.width, enemy.height)
           self:createExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, enemySize)
           enemy.active = false
           table.remove(self.waveManager.enemies, i)
-          activePowerups.shield = nil
+          self.scene.activePowerups.shield = nil
           if shieldBreakSound and playPositionalSound then
             playPositionalSound(
               shieldBreakSound,
@@ -709,18 +704,18 @@ end
 function PlayingState:checkLaserCollisions()
   local entityGrid = self.entityGrid
 
-  for i = #lasers, 1, -1 do
-    local laser = lasers[i]
+  for i = #self.scene.lasers, 1, -1 do
+    local laser = self.scene.lasers[i]
     for _, entity in ipairs(entityGrid:getNearby(laser)) do
       if entity.tag == "asteroid" and not laser._remove and Collision.checkAABB(laser, entity) then
         self:createHitEffect(laser.x, laser.y)
-        local idx = self:findEntityIndex(asteroids, entity)
+        local idx = self:findEntityIndex(self.scene.asteroids, entity)
         self:handleAsteroidDestruction(entity, idx or 1)
         laser._remove = true
         break
       elseif entity.tag == "alien" and not laser._remove and Collision.checkAABB(laser, entity) then
         self:createHitEffect(laser.x, laser.y)
-        local idx = self:findEntityIndex(aliens, entity)
+        local idx = self:findEntityIndex(self.scene.aliens, entity)
         self:handleAlienDestruction(entity, idx or 1)
         laser._remove = true
         break
@@ -769,7 +764,7 @@ function PlayingState:checkLaserCollisions()
         self.laserGrid:remove(laser)
       end
       self.laserPool:release(laser)
-      table.remove(lasers, i)
+      table.remove(self.scene.lasers, i)
     end
   end
 end
@@ -780,7 +775,7 @@ function PlayingState:checkPowerupCollisions()
     if powerup.tag == "powerup" and Collision.checkAABB(player, powerup) then
       local result = powerup:collect(player)
 
-      -- Handle enhanced powerups with roguelike variations
+      -- Handle enhanced self.scene.powerups with roguelike variations
       local enhancementMultiplier = powerup.enhanced and 2 or 1
 
       -- Handle the result
@@ -793,7 +788,7 @@ function PlayingState:checkPowerupCollisions()
       elseif type(result) == "table" then
         -- Timed powerup with enhanced duration
         local duration = result.duration * enhancementMultiplier
-        activePowerups[result.type] = duration
+        self.scene.activePowerups[result.type] = duration
 
         -- Apply immediate effects
         if result.type == "rapid" then
@@ -803,7 +798,7 @@ function PlayingState:checkPowerupCollisions()
           end
         elseif result.type == "spread" then
           -- Spread shot will be handled in shootLaser
-          activePowerups.multiShot = duration -- Map to existing multiShot
+          self.scene.activePowerups.multiShot = duration -- Map to existing multiShot
           if powerup.enhanced then
             self:createPowerupText("MEGA SPREAD!", powerup.x, powerup.y, { 1, 0.5, 0 })
           end
@@ -854,7 +849,7 @@ function PlayingState:checkPowerupCollisions()
       if self.entityGrid then
         self.entityGrid:remove(powerup)
       end
-      local _ = self:findEntityIndex(powerups, powerup)
+      local _ = self:findEntityIndex(self.scene.powerups, powerup)
     end
   end
 end
@@ -872,19 +867,19 @@ function PlayingState:checkBossCollisions()
 
   -- Boss vs Player
   if Collision.checkAABB(player, bossEntity) and invulnerableTime <= 0 then
-    if not activePowerups.shield then
+    if not self.scene.activePowerups.shield then
       self:playerHit()
     end
   end
 
   -- Boss vs Player Lasers
-  for i = #lasers, 1, -1 do
-    local laser = lasers[i]
+  for i = #self.scene.lasers, 1, -1 do
+    local laser = self.scene.lasers[i]
     if Collision.checkAABB(laser, bossEntity) then
       self:createHitEffect(laser.x, laser.y) -- Add hit spark effect
       self:handleBossHit(laser)
       self.laserPool:release(laser)
-      table.remove(lasers, i)
+      table.remove(self.scene.lasers, i)
     end
   end
 end
@@ -900,9 +895,9 @@ end
 
 -- Helper functions for collision handling
 function PlayingState:handleShieldHit(entity, index, array)
-  activePowerups.shield = nil
+  self.scene.activePowerups.shield = nil
   self:createExplosion(entity.x, entity.y, entity.size or 40)
-  table.remove(array or asteroids, index)
+  table.remove(array or self.scene.asteroids, index)
   if shieldBreakSound then
     shieldBreakSound:play()
   end
@@ -911,7 +906,7 @@ end
 function PlayingState:handlePlayerHit(entity, index, array)
   self:playerHit()
   self:createExplosion(entity.x, entity.y, entity.size or 40)
-  table.remove(array or asteroids, index)
+  table.remove(array or self.scene.asteroids, index)
 end
 
 function PlayingState:handleAsteroidDestruction(asteroid, index)
@@ -925,7 +920,7 @@ function PlayingState:handleAsteroidDestruction(asteroid, index)
     self:createPowerupText("COMBO BONUS!", asteroid.x, asteroid.y, { 0, 0.5, 1 })
   end
 
-  -- Award more points for smaller asteroids (they're harder to hit)
+  -- Award more points for smaller self.scene.asteroids (they're harder to hit)
   local sizeMultiplier = asteroid.size <= 25 and 2 or 1
   score = score + math.floor(constants.score.asteroid * self.comboMultiplier * sizeMultiplier)
   Persistence.addScore(math.floor(constants.score.asteroid * self.comboMultiplier * sizeMultiplier))
@@ -933,9 +928,9 @@ function PlayingState:handleAsteroidDestruction(asteroid, index)
   -- Create explosion
   self:createExplosion(asteroid.x, asteroid.y, asteroid.size)
 
-  -- Split larger asteroids into smaller ones
-  if asteroid.size > 30 then -- Only split medium and large asteroids
-    local fragments = asteroid.size > 40 and 3 or 2 -- Large asteroids split into 3, medium into 2
+  -- Split larger self.scene.asteroids into smaller ones
+  if asteroid.size > 30 then -- Only split medium and large self.scene.asteroids
+    local fragments = asteroid.size > 40 and 3 or 2 -- Large self.scene.asteroids split into 3, medium into 2
 
     for i = 1, fragments do
       local angle = (2 * math.pi / fragments) * i + random() * 0.5
@@ -953,7 +948,7 @@ function PlayingState:handleAsteroidDestruction(asteroid, index)
         vy = math.sin(angle) * speed,
         isFragment = true, -- Mark as fragment for special handling
       }
-      table.insert(asteroids, fragment)
+      table.insert(self.scene.asteroids, fragment)
     end
 
     -- Extra screen shake for splitting
@@ -961,7 +956,7 @@ function PlayingState:handleAsteroidDestruction(asteroid, index)
       self.camera:shake(0.15, 3)
     end
   else
-    -- Small asteroids get normal shake
+    -- Small self.scene.asteroids get normal shake
     if self.camera then
       self.camera:shake(0.1, 2)
     end
@@ -971,7 +966,7 @@ function PlayingState:handleAsteroidDestruction(asteroid, index)
   if self.entityGrid then
     self.entityGrid:remove(asteroid)
   end
-  table.remove(asteroids, index)
+  table.remove(self.scene.asteroids, index)
   enemiesDefeated = enemiesDefeated + 1
   self.sessionEnemiesDefeated = self.sessionEnemiesDefeated + 1
 
@@ -981,7 +976,7 @@ function PlayingState:handleAsteroidDestruction(asteroid, index)
     self:showNewHighScoreNotification()
   end
 
-  -- Higher chance for smaller asteroids to drop powerups (they're the reward for dealing with splits)
+  -- Higher chance for smaller self.scene.asteroids to drop self.scene.powerups (they're the reward for dealing with splits)
   local powerupChance = asteroid.size <= 25 and constants.balance.asteroidSmallPowerupChance
     or constants.balance.asteroidLargePowerupChance
   if random() < powerupChance then
@@ -1008,7 +1003,7 @@ function PlayingState:handleAlienDestruction(alien, index)
   if self.entityGrid then
     self.entityGrid:remove(alien)
   end
-  table.remove(aliens, index)
+  table.remove(self.scene.aliens, index)
   enemiesDefeated = enemiesDefeated + 1
   self.sessionEnemiesDefeated = self.sessionEnemiesDefeated + 1
 
@@ -1051,7 +1046,7 @@ function PlayingState:handleAlienDestruction(alien, index)
     local newType = typeMapping[oldType] or oldType
 
     local powerup = Powerup.new(alien.x, alien.y, newType)
-    table.insert(powerups, powerup)
+    table.insert(self.scene.powerups, powerup)
 
     logger.debug("Powerup spawned: %s at (%d, %d)", powerup.type, powerup.x, powerup.y)
   end
@@ -1108,7 +1103,7 @@ function PlayingState:handleBossDefeat()
       logger.info("Unlocked level %d", currentLevel + 1)
 
       -- Show level unlock notification
-      table.insert(powerupTexts, {
+      table.insert(self.scene.powerupTexts, {
         text = "LEVEL " .. (currentLevel + 1) .. " UNLOCKED!",
         x = self.screenWidth / 2,
         y = 300,
@@ -1148,7 +1143,7 @@ function PlayingState:onBossDefeated()
     if currentLevel < 20 then
       Persistence.unlockLevel(currentLevel + 1)
       logger.info("Unlocked level %d", currentLevel + 1)
-      table.insert(powerupTexts, {
+      table.insert(self.scene.powerupTexts, {
         text = "LEVEL " .. (currentLevel + 1) .. " UNLOCKED!",
         x = self.screenWidth / 2,
         y = 300,
@@ -1182,7 +1177,7 @@ function PlayingState:createExplosion(x, y, size)
   explosion.pool = self.explosionPool
   explosion.debrisSpawned = 0
 
-  table.insert(explosions, explosion)
+  table.insert(self.scene.explosions, explosion)
 
   -- Create explosion ring particles with a maximum cap
   local maxCount = math.min(10, math.floor(size / 8))
@@ -1206,7 +1201,7 @@ function PlayingState:createExplosion(x, y, size)
       1,
     }
     particle.pool = self.particlePool
-    table.insert(explosions, particle)
+    table.insert(self.scene.explosions, particle)
   end
 
   -- Add debris particles (rock fragments) with a maximum cap
@@ -1232,7 +1227,7 @@ function PlayingState:createExplosion(x, y, size)
       1,
     }
     particle.pool = self.debrisPool
-    table.insert(explosions, particle)
+    table.insert(self.scene.explosions, particle)
     explosion.debrisSpawned = explosion.debrisSpawned + 1
   end
 
@@ -1257,7 +1252,7 @@ function PlayingState:createExplosion(x, y, size)
       1,
     }
     particle.pool = self.particlePool
-    table.insert(explosions, particle)
+    table.insert(self.scene.explosions, particle)
   end
 
   if explosionSound and playPositionalSound then
@@ -1276,7 +1271,7 @@ function PlayingState:createHitEffect(x, y)
   explosion.alpha = 0.8
   explosion.pool = self.explosionPool
 
-  table.insert(explosions, explosion)
+  table.insert(self.scene.explosions, explosion)
 end
 
 function PlayingState:createHeatParticle()
@@ -1320,15 +1315,15 @@ end
 -- Add screen bomb effect function
 function PlayingState:screenBomb()
   -- Count enemies before clearing
-  local enemiesCleared = #asteroids + #aliens
+  local enemiesCleared = #self.scene.asteroids + #self.scene.aliens
 
-  -- Create explosions for all enemies
-  for _, asteroid in ipairs(asteroids) do
+  -- Create self.scene.explosions for all enemies
+  for _, asteroid in ipairs(self.scene.asteroids) do
     self:createExplosion(asteroid.x, asteroid.y, asteroid.size)
     score = score + constants.score.asteroid
   end
 
-  for _, alien in ipairs(aliens) do
+  for _, alien in ipairs(self.scene.aliens) do
     self:createExplosion(alien.x, alien.y, 40)
     score = score + constants.score.alien
   end
@@ -1343,9 +1338,9 @@ function PlayingState:screenBomb()
   end
 
   -- Clear all enemies and enemy projectiles
-  asteroids = {}
-  aliens = {}
-  alienLasers = {}
+  self.scene.asteroids = {}
+  self.scene.aliens = {}
+  self.scene.alienLasers = {}
 
   -- Don't affect boss
   if boss then
@@ -1598,15 +1593,15 @@ function PlayingState:drawDebugOverlay()
   y = y + lineHeight
 
   -- Entity counts
-  lg.print("Lasers: " .. #lasers .. " / 100", 10, y)
+  lg.print("Lasers: " .. #self.scene.lasers .. " / 100", 10, y)
   y = y + lineHeight
-  lg.print("Aliens: " .. #aliens, 10, y)
+  lg.print("Aliens: " .. #self.scene.aliens, 10, y)
   y = y + lineHeight
-  lg.print("Asteroids: " .. #asteroids, 10, y)
+  lg.print("Asteroids: " .. #self.scene.asteroids, 10, y)
   y = y + lineHeight
-  lg.print("Explosions: " .. #explosions .. " / 200", 10, y)
+  lg.print("Explosions: " .. #self.scene.explosions .. " / 200", 10, y)
   y = y + lineHeight
-  lg.print("Powerups: " .. #powerups, 10, y)
+  lg.print("Powerups: " .. #self.scene.powerups, 10, y)
   y = y + lineHeight
 
   -- Wave info
@@ -1620,12 +1615,12 @@ function PlayingState:drawDebugOverlay()
   y = y + lineHeight
 
   -- Pool capacity warnings
-  if #lasers > 80 then
+  if #self.scene.lasers > 80 then
     lg.setColor(1, 1, 0, 1) -- Yellow warning
     lg.print("! LASER POOL HIGH !", 10, y)
     y = y + lineHeight
   end
-  if #explosions > 150 then
+  if #self.scene.explosions > 150 then
     lg.setColor(1, 0.5, 0, 1) -- Orange warning
     lg.print("! PARTICLE POOL HIGH !", 10, y)
   end
@@ -1667,7 +1662,7 @@ function PlayingState:drawPlayer()
   end
 
   -- Draw shield if active
-  if activePowerups.shield then
+  if self.scene.activePowerups.shield then
     lg.setColor(0, 1, 1, 0.3)
     lg.circle("line", player.x, player.y, player.width)
   end
@@ -1675,7 +1670,7 @@ end
 
 function PlayingState:drawAsteroids()
   lg.setColor(0.7, 0.5, 0.3)
-  for _, asteroid in ipairs(asteroids) do
+  for _, asteroid in ipairs(self.scene.asteroids) do
     lg.push()
     lg.translate(asteroid.x, asteroid.y)
     lg.rotate(asteroid.rotation)
@@ -1685,7 +1680,7 @@ function PlayingState:drawAsteroids()
 end
 
 function PlayingState:drawAliens()
-  for _, alien in ipairs(aliens) do
+  for _, alien in ipairs(self.scene.aliens) do
     local sprite = enemyShips and enemyShips[alien.type or "basic"]
     if sprite then
       lg.setColor(1, 1, 1, 1)
@@ -1713,7 +1708,7 @@ function PlayingState:drawAliens()
 end
 
 function PlayingState:drawLasers()
-  for _, laser in ipairs(lasers) do
+  for _, laser in ipairs(self.scene.lasers) do
     if laser.isAlien then
       lg.setColor(constants.laser.alienColor)
     else
@@ -1739,10 +1734,10 @@ function PlayingState:drawLasers()
     t.color = { 1, 1, 1, 1 }
     t.isTrail = true
     t.pool = self.trailPool
-    table.insert(explosions, t)
+    table.insert(self.scene.explosions, t)
   end
 
-  for _, laser in ipairs(alienLasers) do
+  for _, laser in ipairs(self.scene.alienLasers) do
     lg.setColor(constants.laser.alienColor)
     lg.rectangle(
       "fill",
@@ -1752,7 +1747,7 @@ function PlayingState:drawLasers()
       laser.height
     )
 
-    -- Emit trail particle for alien lasers
+    -- Emit trail particle for alien self.scene.lasers
     local t = self.trailPool:get()
     t.x = laser.x
     t.y = laser.y - laser.height / 2
@@ -1764,12 +1759,12 @@ function PlayingState:drawLasers()
     t.color = { 1, 0, 0, 1 }
     t.isTrail = true
     t.pool = self.trailPool
-    table.insert(explosions, t)
+    table.insert(self.scene.explosions, t)
   end
 end
 
 function PlayingState:drawExplosions()
-  for _, explosion in ipairs(explosions) do
+  for _, explosion in ipairs(self.scene.explosions) do
     if explosion.vx then
       -- It's a particle
       local alpha = explosion.color and explosion.color[4] or (explosion.life / explosion.maxLife)
@@ -1827,7 +1822,7 @@ function PlayingState:drawExplosions()
         d.isDebris = true
         d.color = { 1, random(0.5, 1), 0 }
         d.pool = self.debrisPool
-        table.insert(explosions, d)
+        table.insert(self.scene.explosions, d)
         explosion.debrisSpawned = explosion.debrisSpawned + 1
       end
     end
@@ -1835,13 +1830,13 @@ function PlayingState:drawExplosions()
 end
 
 function PlayingState:drawPowerups()
-  for _, powerup in ipairs(powerups) do
+  for _, powerup in ipairs(self.scene.powerups) do
     powerup:draw()
   end
 end
 
 function PlayingState:drawPowerupTexts()
-  for _, text in ipairs(powerupTexts) do
+  for _, text in ipairs(self.scene.powerupTexts) do
     lg.push()
 
     -- Apply scale if present
@@ -1946,7 +1941,7 @@ function PlayingState:drawUI()
 
   -- === ACTIVE POWERUPS PANEL (Left side, fade when empty) ===
   local activePowerupCount = 0
-  for _ in pairs(activePowerups) do
+  for _ in pairs(self.scene.activePowerups) do
     activePowerupCount = activePowerupCount + 1
   end
 
@@ -1962,7 +1957,7 @@ function PlayingState:drawUI()
     local powerupY = powerupPanelY + 5
     lg.setFont(Game.smallFont or lg.newFont(12))
 
-    for powerup, timer in pairs(activePowerups) do
+    for powerup, timer in pairs(self.scene.activePowerups) do
       local colors = {
         shield = { 0, 1, 1 },
         rapid = { 1, 1, 0 },
@@ -2056,9 +2051,9 @@ function PlayingState:spawnBoss()
   end
 
   -- Clear remaining enemies
-  asteroids = {}
-  aliens = {}
-  alienLasers = {}
+  self.scene.asteroids = {}
+  self.scene.aliens = {}
+  self.scene.alienLasers = {}
 
   -- Determine boss type based on level
   local bossType
@@ -2297,8 +2292,8 @@ function PlayingState:createBossLaser(x, y, angle, isBeam)
   laser.isBoss = true
   laser.damage = isBeam and 2 or 1
 
-  -- Add to alienLasers array
-  table.insert(alienLasers, laser)
+  -- Add to self.scene.alienLasers array
+  table.insert(self.scene.alienLasers, laser)
 end
 
 function PlayingState:updateBossPhase()
@@ -2425,7 +2420,7 @@ end
 
 function PlayingState:showNewHighScoreNotification()
   -- Create a special notification for new high score
-  table.insert(powerupTexts, {
+  table.insert(self.scene.powerupTexts, {
     text = "NEW HIGH SCORE!",
     x = self.screenWidth / 2,
     y = 200,

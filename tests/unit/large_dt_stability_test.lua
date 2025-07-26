@@ -4,6 +4,7 @@ love.filesystem.append = function() end
 
 local PlayerControl = require("src.player_control")
 local ObjectPool = require("src.objectpool")
+local Scene = require("src.scene")
 
 describe("Large dt stability", function()
   local state
@@ -26,17 +27,16 @@ describe("Large dt stability", function()
       overheatTimer = 0,
       overheatPenalty = 1,
     }
-    _G.activePowerups = {}
+    local scene = Scene.new()
     _G.selectedShip = "alpha"
-    _G.lasers = {}
 
     state = {
       keys = { right = true, shoot = true },
-      laserPool = ObjectPool.new(function()
-        return {}
-      end),
+      laserPool = scene.laserPool,
       shootCooldown = 0,
+      scene = scene,
     }
+    state.scene.activePowerups = {}
   end)
 
   it("scales heat with dt", function()
