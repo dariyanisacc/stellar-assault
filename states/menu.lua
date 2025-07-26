@@ -2,6 +2,7 @@
 local constants = require("src.constants")
 local lg = love.graphics
 local la = love.audio
+local Game = require("src.game")
 
 local MenuState = {}
 
@@ -105,8 +106,8 @@ function MenuState:draw()
     end
     
     -- Draw title
-    local titleColor = highContrast and {1, 1, 1} or {0, 1, 1}
-    uiManager:drawMessage("STELLAR ASSAULT", self.screenWidth/2, 100, titleColor, titleFont)
+    local titleColor = Game.highContrast and {1, 1, 1} or {0, 1, 1}
+    uiManager:drawMessage("STELLAR ASSAULT", self.screenWidth/2, 100, titleColor, Game.titleFont)
     
     if self.menuState == "main" then
         self:drawMainMenu()
@@ -120,18 +121,18 @@ function MenuState:draw()
 end
 
 function MenuState:drawMainMenu()
-    lg.setFont(menuFont or lg.newFont(24))
+    lg.setFont(Game.menuFont or lg.newFont(24))
     local options = {"Start Game", "Level Select", "Select Ship", "Leaderboard", "Options", "Quit"}
     
     for i, option in ipairs(options) do
         if i == self.selection then
-            if highContrast then
+            if Game.highContrast then
                 lg.setColor(1, 0, 0)
             else
                 lg.setColor(1, 1, 0)
             end
         else
-            if highContrast then
+            if Game.highContrast then
                 lg.setColor(1, 1, 1)
             else
                 lg.setColor(1, 1, 1)
@@ -143,16 +144,16 @@ function MenuState:drawMainMenu()
     end
     
     -- Draw instructions
-    local nav = inputHints[lastInputType].navigate or "Arrow Keys/D-Pad"
-    local select = inputHints[lastInputType].select or "Enter/A"
-    local back = inputHints[lastInputType].back or "Escape/B"
+    local nav = Game.inputHints[Game.lastInputType].navigate or "Arrow Keys/D-Pad"
+    local select = Game.inputHints[Game.lastInputType].select or "Enter/A"
+    local back = Game.inputHints[Game.lastInputType].back or "Escape/B"
     local instructions = nav .. ": Navigate | " .. select .. ": Select | " .. back .. ": Back"
-    local instrColor = highContrast and {1, 1, 1} or {0.7, 0.7, 0.7}
-    uiManager:drawMessage(instructions, self.screenWidth/2, self.screenHeight - 30, instrColor, smallFont)
+    local instrColor = Game.highContrast and {1, 1, 1} or {0.7, 0.7, 0.7}
+    uiManager:drawMessage(instructions, self.screenWidth/2, self.screenHeight - 30, instrColor, Game.smallFont)
 end
 
 function MenuState:drawSaveMenu()
-    lg.setFont(menuFont or lg.newFont(24))
+    lg.setFont(Game.menuFont or lg.newFont(24))
     lg.setColor(1, 1, 1)
     local title = "Select Save Slot"
     local titleWidth = lg.getFont():getWidth(title)
@@ -189,7 +190,7 @@ function MenuState:drawSaveMenu()
 end
 
 function MenuState:drawLevelSelect()
-    lg.setFont(menuFont or lg.newFont(24))
+    lg.setFont(Game.menuFont or lg.newFont(24))
     lg.setColor(1, 1, 1)
     local title = "Select Level"
     local titleWidth = lg.getFont():getWidth(title)
@@ -232,7 +233,7 @@ function MenuState:drawLevelSelect()
                 lg.rectangle("line", x, y, boxSize, boxSize)
                 
                 -- Draw level number
-                lg.setFont(smallFont or lg.newFont(18))
+                lg.setFont(Game.smallFont or lg.newFont(18))
                 local levelText = tostring(level)
                 local textWidth = lg.getFont():getWidth(levelText)
                 local textHeight = lg.getFont():getHeight()
@@ -243,7 +244,7 @@ function MenuState:drawLevelSelect()
     end
     
     -- Back option
-    lg.setFont(menuFont or lg.newFont(24))
+    lg.setFont(Game.menuFont or lg.newFont(24))
     if self.selectedLevel == 16 then
         lg.setColor(1, 1, 0)
     else
@@ -446,7 +447,7 @@ function MenuState:loadSaves()
 end
 
 function MenuState:drawShipSelect()
-    lg.setFont(menuFont or lg.newFont(24))
+    lg.setFont(Game.menuFont or lg.newFont(24))
     lg.setColor(1, 1, 1)
     local title = "Select Your Ship"
     local titleWidth = lg.getFont():getWidth(title)
@@ -485,7 +486,7 @@ function MenuState:drawShipSelect()
         end
         
         -- Draw ship name
-        lg.setFont(smallFont or lg.newFont(18))
+        lg.setFont(Game.smallFont or lg.newFont(18))
         if i == self.selectedShipIndex then
             lg.setColor(1, 1, 0)
         else
@@ -496,7 +497,7 @@ function MenuState:drawShipSelect()
     end
     
     -- Draw ship stats
-    lg.setFont(smallFont or lg.newFont(16))
+    lg.setFont(Game.smallFont or lg.newFont(16))
     lg.setColor(0.8, 0.8, 0.8)
     local statsY = 380
     local stats = {
@@ -510,11 +511,11 @@ function MenuState:drawShipSelect()
     lg.print(statText, self.screenWidth/2 - statWidth/2, statsY)
     
     -- Instructions
-    local nav = lastInputType == "gamepad" and "D-Pad" or "Left/Right"
-    local confirm = inputHints[lastInputType].confirm or "Enter"
-    local back = inputHints[lastInputType].back or "Escape"
+    local nav = Game.lastInputType == "gamepad" and "D-Pad" or "Left/Right"
+    local confirm = Game.inputHints[Game.lastInputType].confirm or "Enter"
+    local back = Game.inputHints[Game.lastInputType].back or "Escape"
     local instructions = nav .. ": Select | " .. confirm .. ": Confirm | " .. back .. ": Back"
-    uiManager:drawMessage(instructions, self.screenWidth/2, self.screenHeight - 30, {0.7, 0.7, 0.7}, smallFont)
+    uiManager:drawMessage(instructions, self.screenWidth/2, self.screenHeight - 30, {0.7, 0.7, 0.7}, Game.smallFont)
 end
 
 function MenuState:handleShipSelectInput(key)

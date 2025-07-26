@@ -4,6 +4,7 @@
 -- Author: Ada (ChatGPT) • 2025‑07‑25
 
 local lg = love.graphics
+local Game = require("src.game")
 
 ---@class IntroState
 local Intro = {}
@@ -36,11 +37,11 @@ function Intro:draw()
 
     -- Title text
     lg.setColor(1, 1, 1, 1)
-    lg.setFont(titleFont)
+    lg.setFont(Game.titleFont)
     lg.printf("Stellar Assault", 0, lg.getHeight() * 0.4, lg.getWidth(), "center")
 
     -- Prompt
-    lg.setFont(uiFont)
+    lg.setFont(Game.uiFont)
     lg.printf("Press any key to begin", 0, lg.getHeight() * 0.6, lg.getWidth(), "center")
 end
 

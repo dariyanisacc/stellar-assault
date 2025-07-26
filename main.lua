@@ -8,6 +8,7 @@ local DebugConsole = require("src.debugconsole")
 local logger = require("src.logger")
 local Persistence = require("src.persistence")
 local UIManager = require("src.uimanager")
+local Game = require("src.game")
 
 -- Performance optimizations: cache Love2D modules
 local lg = love.graphics
@@ -18,35 +19,35 @@ local lf = love.filesystem
 local le = love.event
 
 -- Global state manager
-stateManager = nil
+Game.stateManager = nil
 
 -- Debug systems
-debugConsole = nil
-consoleFont = nil
+Game.debugConsole = nil
+Game.consoleFont = nil
 
 -- Global resources (loaded once, shared across states)
-titleFont = nil
-menuFont = nil
-uiFont = nil
-smallFont = nil
-mediumFont = nil
-uiManager = nil
+Game.titleFont = nil
+Game.menuFont = nil
+Game.uiFont = nil
+Game.smallFont = nil
+Game.mediumFont = nil
+Game.uiManager = nil
 
 -- Audio resources
-laserSound = nil
-explosionSound = nil
-powerupSound = nil
-shieldBreakSound = nil
-gameOverSound = nil
-menuSelectSound = nil
-menuConfirmSound = nil
-backgroundMusic = nil
-bossMusic = nil
-victorySound = nil
+Game.laserSound = nil
+Game.explosionSound = nil
+Game.powerupSound = nil
+Game.shieldBreakSound = nil
+Game.gameOverSound = nil
+Game.menuSelectSound = nil
+Game.menuConfirmSound = nil
+Game.backgroundMusic = nil
+Game.bossMusic = nil
+Game.victorySound = nil
 
 -- Preloaded laser sound clones for concurrent playback
-laserClones = nil
-laserCloneIndex = 1
+Game.laserClones = nil
+Game.laserCloneIndex = 1
 
 -- Positional audio settings
 local soundReferenceDistance = 50
@@ -57,17 +58,17 @@ local sfxSources = {}
 local musicSources = {}
 
 -- Settings (persist across states)
-masterVolume = constants.audio.defaultMasterVolume
-sfxVolume = constants.audio.defaultSFXVolume
-musicVolume = constants.audio.defaultMusicVolume
-displayMode = "borderless"
-currentResolution = 1
-highContrast = false
-fontScale = 1
+Game.masterVolume = constants.audio.defaultMasterVolume
+Game.sfxVolume = constants.audio.defaultSFXVolume
+Game.musicVolume = constants.audio.defaultMusicVolume
+Game.displayMode = "borderless"
+Game.currentResolution = 1
+Game.highContrast = false
+Game.fontScale = 1
 
 -- Input tracking
-lastInputType = "keyboard"  -- Default to keyboard/mouse
-inputHints = {
+Game.lastInputType = "keyboard"  -- Default to keyboard/mouse
+Game.inputHints = {
     keyboard = {
         select = "Enter",
         back = "ESC",
@@ -90,8 +91,8 @@ inputHints = {
 
 -- Function to update last input type
 function updateInputType(inputType)
-    if lastInputType ~= inputType then
-        lastInputType = inputType
+    if Game.lastInputType ~= inputType then
+        Game.lastInputType = inputType
         logger.debug("Input type changed to: %s", inputType)
     end
 end
@@ -110,18 +111,18 @@ function initWindow()
 end
 
 function loadFonts()
-    titleFont = lg.newFont(48)
-    menuFont = lg.newFont(24)
-    uiFont = lg.newFont(18)
-    smallFont = lg.newFont(14)
-    mediumFont = lg.newFont(20)
-    uiManager = UIManager:new()
+    Game.titleFont = lg.newFont(48)
+    Game.menuFont = lg.newFont(24)
+    Game.uiFont = lg.newFont(18)
+    Game.smallFont = lg.newFont(14)
+    Game.mediumFont = lg.newFont(20)
+    Game.uiManager = UIManager:new()
     
     -- Try to load monospace font, fall back to default
     if lf.getInfo("assets/fonts/monospace.ttf") then
-        consoleFont = lg.newFont("assets/fonts/monospace.ttf", 14)
+        Game.consoleFont = lg.newFont("assets/fonts/monospace.ttf", 14)
     else
-        consoleFont = lg.newFont(14)
+        Game.consoleFont = lg.newFont(14)
     end
 end
 
@@ -136,9 +137,9 @@ function initStates()
     stateManager:register("levelselect", require("states.levelselect"))
     stateManager:register("leaderboard", require("states.leaderboard"))
 
-    debugConsole = DebugConsole:new()
+    Game.debugConsole = DebugConsole:new()
     local debugCommands = require("src.debugcommands")
-    debugCommands.register(debugConsole)
+    debugCommands.register(Game.debugConsole)
 end
 
 function love.load()
@@ -147,27 +148,27 @@ function love.load()
 
     -- Load all sprites dynamically and categorize them
     local SpriteManager = require("src.sprite_manager")
-    spriteManager = SpriteManager.load("assets/sprites")
+    Game.spriteManager = SpriteManager.load("assets/sprites")
 
     -- Categories are determined by filename patterns
-    playerShips = spriteManager:getCategory("player")
-    enemyShips  = spriteManager:getCategory("enemy")
+    Game.playerShips = Game.spriteManager:getCategory("player")
+    Game.enemyShips  = Game.spriteManager:getCategory("enemy")
 
-    bossSprites = {}
-    local bossCategory = spriteManager:getCategory("boss")
+    Game.bossSprites = {}
+    local bossCategory = Game.spriteManager:getCategory("boss")
     for name, sprite in pairs(bossCategory) do
-        local idx = tonumber(name:match("%d+")) or (#bossSprites + 1)
-        bossSprites[idx] = sprite
+        local idx = tonumber(name:match("%d+")) or (#Game.bossSprites + 1)
+        Game.bossSprites[idx] = sprite
     end
-    bossSprite = bossSprites[1]
-    boss2Sprite = bossSprites[2]
+    Game.bossSprite = Game.bossSprites[1]
+    Game.boss2Sprite = Game.bossSprites[2]
     
     -- Game configuration
-    availableShips = { "alpha", "beta", "gamma" }
-    selectedShip = "alpha"
+    Game.availableShips = { "alpha", "beta", "gamma" }
+    Game.selectedShip = "alpha"
     
     -- Global sprite scale factor (adjust as needed; 4 makes sprites 4x larger)
-    spriteScale = 0.15  -- Adjust this value lower (e.g., 0.1) if still too large, or higher if too small
+    Game.spriteScale = 0.15  -- Adjust this value lower (e.g., 0.1) if still too large, or higher if too small
     
     loadAudio()
     
@@ -197,93 +198,93 @@ function loadAudio()
     la.setDistanceModel("inverseclamped")
     -- Sound effects
     if lf.getInfo("laser.wav") then
-        laserSound = la.newSource("laser.wav", "static")
-        laserSound.baseVolume = 0.5
-        laserSound:setVolume(laserSound.baseVolume * sfxVolume * masterVolume)
-        table.insert(sfxSources, laserSound)
+        Game.laserSound = la.newSource("laser.wav", "static")
+        Game.laserSound.baseVolume = 0.5
+        Game.laserSound:setVolume(Game.laserSound.baseVolume * Game.sfxVolume * Game.masterVolume)
+        table.insert(sfxSources, Game.laserSound)
 
         -- Preload clones for rapid firing
-        laserClones = {}
+        Game.laserClones = {}
         for i = 1, 5 do
-            local c = laserSound:clone()
-            c.baseVolume = laserSound.baseVolume
-            c:setVolume(c.baseVolume * sfxVolume * masterVolume)
-            table.insert(laserClones, c)
+            local c = Game.laserSound:clone()
+            c.baseVolume = Game.laserSound.baseVolume
+            c:setVolume(c.baseVolume * Game.sfxVolume * Game.masterVolume)
+            table.insert(Game.laserClones, c)
             table.insert(sfxSources, c)  -- Add clones to sfxSources for volume updates
         end
-        laserCloneIndex = 1
+        Game.laserCloneIndex = 1
     end
     
     if lf.getInfo("explosion.wav") then
-        explosionSound = la.newSource("explosion.wav", "static")
-        explosionSound.baseVolume = 0.7
-        explosionSound:setVolume(explosionSound.baseVolume * sfxVolume * masterVolume)
-        table.insert(sfxSources, explosionSound)
+        Game.explosionSound = la.newSource("explosion.wav", "static")
+        Game.explosionSound.baseVolume = 0.7
+        Game.explosionSound:setVolume(Game.explosionSound.baseVolume * Game.sfxVolume * Game.masterVolume)
+        table.insert(sfxSources, Game.explosionSound)
     end
 
     if lf.getInfo("powerup.wav") then
-        powerupSound = la.newSource("powerup.wav", "static")
-        powerupSound.baseVolume = 0.6
-        powerupSound:setVolume(powerupSound.baseVolume * sfxVolume * masterVolume)
-        table.insert(sfxSources, powerupSound)
+        Game.powerupSound = la.newSource("powerup.wav", "static")
+        Game.powerupSound.baseVolume = 0.6
+        Game.powerupSound:setVolume(Game.powerupSound.baseVolume * Game.sfxVolume * Game.masterVolume)
+        table.insert(sfxSources, Game.powerupSound)
     end
 
     if lf.getInfo("shield_break.wav") then
-        shieldBreakSound = la.newSource("shield_break.wav", "static")
-        shieldBreakSound.baseVolume = 0.7
-        shieldBreakSound:setVolume(shieldBreakSound.baseVolume * sfxVolume * masterVolume)
-        table.insert(sfxSources, shieldBreakSound)
+        Game.shieldBreakSound = la.newSource("shield_break.wav", "static")
+        Game.shieldBreakSound.baseVolume = 0.7
+        Game.shieldBreakSound:setVolume(Game.shieldBreakSound.baseVolume * Game.sfxVolume * Game.masterVolume)
+        table.insert(sfxSources, Game.shieldBreakSound)
     end
 
     if lf.getInfo("gameover.ogg") then
-        gameOverSound = la.newSource("gameover.ogg", "static")
-        gameOverSound.baseVolume = 0.8
-        gameOverSound:setVolume(gameOverSound.baseVolume * sfxVolume * masterVolume)
-        table.insert(sfxSources, gameOverSound)
+        Game.gameOverSound = la.newSource("gameover.ogg", "static")
+        Game.gameOverSound.baseVolume = 0.8
+        Game.gameOverSound:setVolume(Game.gameOverSound.baseVolume * Game.sfxVolume * Game.masterVolume)
+        table.insert(sfxSources, Game.gameOverSound)
     end
 
     if lf.getInfo("menu.flac") then
-        menuSelectSound = la.newSource("menu.flac", "static")
-        menuSelectSound.baseVolume = 0.4
-        menuSelectSound:setVolume(menuSelectSound.baseVolume * sfxVolume * masterVolume)
-        table.insert(sfxSources, menuSelectSound)
-        menuConfirmSound = menuSelectSound:clone()
-        menuConfirmSound.baseVolume = menuSelectSound.baseVolume
-        menuConfirmSound:setVolume(menuConfirmSound.baseVolume * sfxVolume * masterVolume)
-        table.insert(sfxSources, menuConfirmSound)
+        Game.menuSelectSound = la.newSource("menu.flac", "static")
+        Game.menuSelectSound.baseVolume = 0.4
+        Game.menuSelectSound:setVolume(Game.menuSelectSound.baseVolume * Game.sfxVolume * Game.masterVolume)
+        table.insert(sfxSources, Game.menuSelectSound)
+        Game.menuConfirmSound = Game.menuSelectSound:clone()
+        Game.menuConfirmSound.baseVolume = Game.menuSelectSound.baseVolume
+        Game.menuConfirmSound:setVolume(Game.menuConfirmSound.baseVolume * Game.sfxVolume * Game.masterVolume)
+        table.insert(sfxSources, Game.menuConfirmSound)
     end
     
     -- Background music
     if lf.getInfo("background.mp3") then
-        backgroundMusic = la.newSource("background.mp3", "stream")
-        backgroundMusic.baseVolume = 1.0
-        backgroundMusic:setLooping(true)
-        backgroundMusic:setVolume(backgroundMusic.baseVolume * musicVolume * masterVolume)
-        table.insert(musicSources, backgroundMusic)
+        Game.backgroundMusic = la.newSource("background.mp3", "stream")
+        Game.backgroundMusic.baseVolume = 1.0
+        Game.backgroundMusic:setLooping(true)
+        Game.backgroundMusic:setVolume(Game.backgroundMusic.baseVolume * Game.musicVolume * Game.masterVolume)
+        table.insert(musicSources, Game.backgroundMusic)
     end
 
     if lf.getInfo("boss.mp3") then
-        bossMusic = la.newSource("boss.mp3", "stream")
-        bossMusic.baseVolume = 0.8
-        bossMusic:setLooping(true)
-        bossMusic:setVolume(bossMusic.baseVolume * musicVolume * masterVolume)
-        table.insert(musicSources, bossMusic)
+        Game.bossMusic = la.newSource("boss.mp3", "stream")
+        Game.bossMusic.baseVolume = 0.8
+        Game.bossMusic:setLooping(true)
+        Game.bossMusic:setVolume(Game.bossMusic.baseVolume * Game.musicVolume * Game.masterVolume)
+        table.insert(musicSources, Game.bossMusic)
     end
 
     if lf.getInfo("victory.ogg") then
-        victorySound = la.newSource("victory.ogg", "static")
-        victorySound.baseVolume = 0.8
-        victorySound:setVolume(victorySound.baseVolume * sfxVolume * masterVolume)
-        table.insert(sfxSources, victorySound)
+        Game.victorySound = la.newSource("victory.ogg", "static")
+        Game.victorySound.baseVolume = 0.8
+        Game.victorySound:setVolume(Game.victorySound.baseVolume * Game.sfxVolume * Game.masterVolume)
+        table.insert(sfxSources, Game.victorySound)
     end
 end
 
 function applyFontScale()
-    titleFont = lg.newFont(48 * fontScale)
-    menuFont = lg.newFont(24 * fontScale)
-    uiFont = lg.newFont(18 * fontScale)
-    smallFont = lg.newFont(14 * fontScale)
-    mediumFont = lg.newFont(20 * fontScale)
+    Game.titleFont = lg.newFont(48 * Game.fontScale)
+    Game.menuFont = lg.newFont(24 * Game.fontScale)
+    Game.uiFont = lg.newFont(18 * Game.fontScale)
+    Game.smallFont = lg.newFont(14 * Game.fontScale)
+    Game.mediumFont = lg.newFont(20 * Game.fontScale)
 end
 
 function loadSettings()
@@ -295,33 +296,33 @@ function loadSettings()
         end
         
         if #lines >= 5 then
-            currentResolution = tonumber(lines[1]) or 1
-            displayMode = lines[2] or "windowed"
-            masterVolume = tonumber(lines[3]) or 1.0
-            sfxVolume = tonumber(lines[4]) or 1.0
-            musicVolume = tonumber(lines[5]) or 0.2
+            Game.currentResolution = tonumber(lines[1]) or 1
+            Game.displayMode = lines[2] or "windowed"
+            Game.masterVolume = tonumber(lines[3]) or 1.0
+            Game.sfxVolume = tonumber(lines[4]) or 1.0
+            Game.musicVolume = tonumber(lines[5]) or 0.2
             
             -- Load selected ship if available
             if #lines >= 6 and lines[6] then
-                selectedShip = lines[6]
+                Game.selectedShip = lines[6]
                 -- Validate ship selection
                 local validShip = false
-                for _, ship in ipairs(availableShips) do
-                    if ship == selectedShip then
+                for _, ship in ipairs(Game.availableShips) do
+                    if ship == Game.selectedShip then
                         validShip = true
                         break
                     end
                 end
                 if not validShip then
-                    selectedShip = "alpha"
+                    Game.selectedShip = "alpha"
                 end
             end
             
             if #lines >= 7 then
-                highContrast = lines[7] == "true"
+                Game.highContrast = lines[7] == "true"
             end
             if #lines >= 8 then
-                fontScale = tonumber(lines[8]) or 1
+                Game.fontScale = tonumber(lines[8]) or 1
             end
 
             -- Apply audio settings
@@ -332,25 +333,25 @@ function loadSettings()
 end
 
 function saveSettings()
-    local data = currentResolution .. "\n" ..
-                displayMode .. "\n" ..
-                masterVolume .. "\n" ..
-                sfxVolume .. "\n" ..
-                musicVolume .. "\n" ..
-                selectedShip .. "\n" ..
-                tostring(highContrast) .. "\n" ..
-                fontScale
+    local data = Game.currentResolution .. "\n" ..
+                Game.displayMode .. "\n" ..
+                Game.masterVolume .. "\n" ..
+                Game.sfxVolume .. "\n" ..
+                Game.musicVolume .. "\n" ..
+                Game.selectedShip .. "\n" ..
+                tostring(Game.highContrast) .. "\n" ..
+                Game.fontScale
 
     lf.write("settings.dat", data)
 
     Persistence.updateSettings({
-        masterVolume = masterVolume,
-        sfxVolume = sfxVolume,
-        musicVolume = musicVolume,
-        selectedShip = selectedShip,
-        displayMode = displayMode,
-        highContrast = highContrast,
-        fontScale = fontScale
+        masterVolume = Game.masterVolume,
+        sfxVolume = Game.sfxVolume,
+        musicVolume = Game.musicVolume,
+        selectedShip = Game.selectedShip,
+        displayMode = Game.displayMode,
+        highContrast = Game.highContrast,
+        fontScale = Game.fontScale
     })
 end
 
@@ -372,23 +373,23 @@ function applyWindowMode()
     }
     
     -- Apply window settings based on display mode
-    if displayMode == "borderless" then
+    if Game.displayMode == "borderless" then
         -- Borderless fullscreen (desktop mode)
         flags.fullscreen = true
         flags.fullscreentype = "desktop"
         flags.resizable = false
         lw.setMode(0, 0, flags)  -- 0,0 uses desktop dimensions automatically
         
-    elseif displayMode == "fullscreen" then
+    elseif Game.displayMode == "fullscreen" then
         -- Exclusive fullscreen
-        local resolution = resolutions[currentResolution] or resolutions[1]
+        local resolution = resolutions[Game.currentResolution] or resolutions[1]
         flags.fullscreen = true
         flags.fullscreentype = "exclusive"
         flags.resizable = false
         lw.setMode(resolution.width, resolution.height, flags)
         
     else  -- windowed
-        local resolution = resolutions[currentResolution] or resolutions[1]
+        local resolution = resolutions[Game.currentResolution] or resolutions[1]
         flags.fullscreen = false
         flags.borderless = false
         flags.resizable = true
@@ -404,7 +405,7 @@ function updateAudioVolumes()
     for _, source in ipairs(sfxSources) do
         if source then
             local base = source.baseVolume or 1
-            source:setVolume(base * sfxVolume * masterVolume)
+            source:setVolume(base * Game.sfxVolume * Game.masterVolume)
         end
     end
 
@@ -412,7 +413,7 @@ function updateAudioVolumes()
     for _, source in ipairs(musicSources) do
         if source then
             local base = source.baseVolume or 1
-            source:setVolume(base * musicVolume * masterVolume)
+            source:setVolume(base * Game.musicVolume * Game.masterVolume)
         end
     end
 end
@@ -423,9 +424,9 @@ function playPositionalSound(source, x, y)
     local clone
 
     -- Use preloaded clones for laser to allow overlapping sounds
-    if source == laserSound and laserClones then
-        clone = laserClones[laserCloneIndex]
-        laserCloneIndex = (laserCloneIndex % #laserClones) + 1
+    if source == Game.laserSound and Game.laserClones then
+        clone = Game.laserClones[Game.laserCloneIndex]
+        Game.laserCloneIndex = (Game.laserCloneIndex % #Game.laserClones) + 1
     else
         clone = source:clone()
         clone.baseVolume = source.baseVolume
@@ -438,7 +439,7 @@ function playPositionalSound(source, x, y)
         clone:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
     end
     local base = clone.baseVolume or source.baseVolume or 1
-    clone:setVolume(base * sfxVolume * masterVolume)
+    clone:setVolume(base * Game.sfxVolume * Game.masterVolume)
     clone:play()
 end
 
@@ -529,7 +530,7 @@ function love.draw()
     -- Config reload notification
     if _G.configReloadNotification then
         local notif = _G.configReloadNotification
-        lg.setFont(menuFont)
+        lg.setFont(Game.menuFont)
         lg.setColor(notif.color[1], notif.color[2], notif.color[3], notif.timer)
         lg.printf(notif.text, 0, lg.getHeight() / 2 - 50, lg.getWidth(), "center")
         lg.setColor(1, 1, 1, 1)
@@ -648,7 +649,7 @@ frameTimeHistory = {}
 maxFrameTimeHistory = 60
 
 function drawDebugInfo()
-    lg.setFont(smallFont)
+    lg.setFont(Game.smallFont)
     lg.setColor(1, 1, 1, 0.8)
     
     -- Track frame time history
@@ -684,7 +685,7 @@ function drawDebugInfo()
 end
 
 function drawDebugOverlay()
-    lg.setFont(smallFont)
+    lg.setFont(Game.smallFont)
     
     -- Semi-transparent background
     lg.setColor(0, 0, 0, 0.7)

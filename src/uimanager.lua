@@ -1,12 +1,13 @@
 -- UI Manager for Stellar Assault
 local constants = require("src.constants")
 local lg = love.graphics
+local Game = require("src.game")
 
 local function setColorContrast(normal, contrast)
     local c = normal
-    if highContrast and contrast then
+    if Game.highContrast and contrast then
         c = contrast
-    elseif not highContrast then
+    elseif not Game.highContrast then
         c = normal
     end
     lg.setColor(c[1], c[2], c[3], c[4] or 1)
@@ -28,7 +29,7 @@ function UIManager:drawScore(x, y, score)
     y = y or self.margin
     
     setColorContrast({0, 1, 1}, {1, 1, 1})
-    lg.setFont(uiFont or lg.newFont(18))
+    lg.setFont(Game.uiFont or lg.newFont(18))
     lg.print("Score: " .. (score or 0), x, y)
 end
 
@@ -37,7 +38,7 @@ function UIManager:drawLives(x, y, lives)
     y = y or self.margin + 25
     
     setColorContrast({0, 1, 1}, {1, 1, 1})
-    lg.setFont(uiFont or lg.newFont(18))
+    lg.setFont(Game.uiFont or lg.newFont(18))
     lg.print("Lives: " .. (lives or 0), x, y)
 end
 
@@ -46,7 +47,7 @@ function UIManager:drawLevel(x, y, level)
     y = y or self.margin + 50
     
     setColorContrast({0, 1, 1}, {1, 1, 1})
-    lg.setFont(uiFont or lg.newFont(18))
+    lg.setFont(Game.uiFont or lg.newFont(18))
     lg.print("Level: " .. (level or 1), x, y)
 end
 
@@ -73,7 +74,7 @@ function UIManager:drawHealthBar(x, y, current, max, width, height, label)
     
     -- Label
     if label then
-        lg.setFont(smallFont or lg.newFont(14))
+        lg.setFont(Game.smallFont or lg.newFont(14))
         setColorContrast({0, 1, 1}, {1, 1, 1})
         lg.print(label, x + 2, y - 16)
     end
@@ -84,7 +85,7 @@ function UIManager:drawPowerupBar(x, y, width, current, max, color)
     height = constants.ui.powerupBarHeight
     
     -- Background
-    lg.setColor(0.2, 0.2, 0.2, highContrast and 1 or 0.8)
+    lg.setColor(0.2, 0.2, 0.2, Game.highContrast and 1 or 0.8)
     lg.rectangle("fill", x, y, width, height)
     
     -- Fill
@@ -103,7 +104,7 @@ function UIManager:drawActivePowerups(x, y, powerups)
     x = x or self.margin
     y = y or self.margin + 110
     
-    lg.setFont(smallFont or lg.newFont(14))
+    lg.setFont(Game.smallFont or lg.newFont(14))
     
     local colors = {
         shield = {0, 1, 1},
@@ -141,7 +142,7 @@ function UIManager:drawBossHealth(boss)
     local y = 50
     
     -- Boss name
-    lg.setFont(menuFont or lg.newFont(24))
+    lg.setFont(Game.menuFont or lg.newFont(24))
     setColorContrast({1, 0, 0}, {1, 1, 1})
     local name = boss.name or "BOSS"
     local nameWidth = lg.getFont():getWidth(name)
@@ -163,7 +164,7 @@ function UIManager:drawMessage(text, x, y, color, font)
     x = x or lg.getWidth() / 2
     y = y or lg.getHeight() / 2
     color = color or {1, 1, 1}
-    font = font or titleFont or lg.newFont(48)
+    font = font or Game.titleFont or lg.newFont(48)
     
     lg.setFont(font)
     setColorContrast(color, {1, 1, 1})
@@ -188,7 +189,7 @@ function UIManager:drawCombo(combo, x, y)
     x = x or lg.getWidth() - 150
     y = y or 100
     
-    lg.setFont(menuFont or lg.newFont(24))
+    lg.setFont(Game.menuFont or lg.newFont(24))
     
     -- Pulse effect based on combo
     local pulse = math.sin(love.timer.getTime() * 5) * 0.2 + 0.8
@@ -217,8 +218,8 @@ function UIManager:drawWarning(text, severity)
     local color = colors[severity] or colors.normal
     local pulse = math.sin(love.timer.getTime() * 10) * 0.5 + 0.5
     
-    lg.setFont(menuFont or lg.newFont(24))
-    local c = highContrast and {1, 1, 1, pulse} or {color[1], color[2], color[3], pulse}
+    lg.setFont(Game.menuFont or lg.newFont(24))
+    local c = Game.highContrast and {1, 1, 1, pulse} or {color[1], color[2], color[3], pulse}
     lg.setColor(c)
     
     local width = lg.getFont():getWidth(text)
@@ -234,7 +235,7 @@ function UIManager:drawMinimap(x, y, width, height, entities, viewRange)
     viewRange = viewRange or 2000
     
     -- Background
-    lg.setColor(0, 0, 0, highContrast and 0.8 or 0.5)
+    lg.setColor(0, 0, 0, Game.highContrast and 0.8 or 0.5)
     lg.rectangle("fill", x, y, width, height)
     
     -- Border

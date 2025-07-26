@@ -1,5 +1,6 @@
 -- Game Over State for Stellar Assault
 local lg = love.graphics
+local Game = require("src.game")
 
 local GameOverState = {}
 
@@ -52,7 +53,7 @@ function GameOverState:draw()
     lg.rectangle("fill", 0, 0, self.screenWidth, self.screenHeight)
     
     -- Game Over title
-    lg.setFont(titleFont or lg.newFont(48))
+    lg.setFont(Game.titleFont or lg.newFont(48))
     lg.setColor(1, 0, 0, self.textAlpha)
     local title = gameComplete and "VICTORY!" or "GAME OVER"
     local titleWidth = lg.getFont():getWidth(title)
@@ -60,7 +61,7 @@ function GameOverState:draw()
     
     -- New High Score notification
     if self.isNewHighScore then
-        lg.setFont(menuFont or lg.newFont(24))
+        lg.setFont(Game.menuFont or lg.newFont(24))
         local pulse = math.sin(self.animationTimer * 5) * 0.3 + 0.7
         lg.setColor(1, 1, 0, self.textAlpha * pulse)
         local highScoreText = "NEW HIGH SCORE!"
@@ -69,7 +70,7 @@ function GameOverState:draw()
     end
     
     -- Stats
-    lg.setFont(menuFont or lg.newFont(24))
+    lg.setFont(Game.menuFont or lg.newFont(24))
 
     local killText = "Enemies Defeated: " .. tostring(self.killCount)
     local minutes = math.floor(self.playTime / 60)
