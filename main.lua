@@ -22,6 +22,7 @@ local CONFIG = require("src.config")
 local logger = require("src.logger")
 local Persistence = require("src.persistence")
 local UIManager = require("src.uimanager")
+local AudioPool = require("src.audiopool")
 local Game = require("src.game")
 
 -- Cache Love2D modules for speed
@@ -52,12 +53,13 @@ Game.backgroundMusic = nil
 Game.bossMusic = nil
 Game.victorySound = nil
 
-Game.laserClones = nil
-Game.laserCloneIndex = 1
+Game.audioPool = nil
 
 Game.helpers = Helpers
 
 local soundReferenceDistance, soundMaxDistance = 50, 800
+Game.soundReferenceDistance = soundReferenceDistance
+Game.soundMaxDistance = soundMaxDistance
 local sfxSources, musicSources = {}, {}
 
 Game.masterVolume = constants.audio.defaultMasterVolume
@@ -211,17 +213,15 @@ local function loadAudio()
     table.insert(sfxSources, Game.menuConfirmSound)
   end
 
-  if Game.laserSound then
-    Game.laserClones = {}
-    for i = 1, 5 do
-      local c = Game.laserSound:clone()
-      c.baseVolume = Game.laserSound.baseVolume
-      c:setVolume(c.baseVolume * Game.sfxVolume * Game.masterVolume)
-      table.insert(Game.laserClones, c)
-      table.insert(sfxSources, c)
-    end
-    Game.laserCloneIndex = 1
-  end
+  Game.audioPool = AudioPool:new(8, sfxSources)
+  Game.audioPool:register("laser", Game.laserSound)
+  Game.audioPool:register("explosion", Game.explosionSound)
+  Game.audioPool:register("powerup", Game.powerupSound)
+  Game.audioPool:register("shield_break", Game.shieldBreakSound)
+  Game.audioPool:register("gameover", Game.gameOverSound)
+  Game.audioPool:register("menu_select", Game.menuSelectSound)
+  Game.audioPool:register("menu_confirm", Game.menuConfirmSound)
+  Game.audioPool:register("victory", Game.victorySound)
 
   Game.backgroundMusic = registerMusic("background.mp3", 1.0, true)
   Game.bossMusic = registerMusic("boss.mp3", 0.8, true)
@@ -330,25 +330,33 @@ end
 
 -- Positional SFX ------------------------------------------------------------
 function playPositionalSound(src, x, y)
-  if not src or not player then
+  if not src or not player or not Game.audioPool then
     return
   end
-  local c
-  if src == Game.laserSound and Game.laserClones then
-    c = Game.laserClones[Game.laserCloneIndex]
-    Game.laserCloneIndex = (Game.laserCloneIndex % #Game.laserClones) + 1
+  local name
+  if src == Game.laserSound then
+    name = "laser"
+  elseif src == Game.explosionSound then
+    name = "explosion"
+  elseif src == Game.powerupSound then
+    name = "powerup"
+  elseif src == Game.shieldBreakSound then
+    name = "shield_break"
+  elseif src == Game.gameOverSound then
+    name = "gameover"
+  elseif src == Game.menuSelectSound then
+    name = "menu_select"
+  elseif src == Game.menuConfirmSound then
+    name = "menu_confirm"
+  elseif src == Game.victorySound then
+    name = "victory"
+  end
+  if name then
+    Game.audioPool:play(name, x, y)
   else
-    c = src:clone()
-    c.baseVolume = src.baseVolume
+    src:setVolume((src.baseVolume or 1) * Game.sfxVolume * Game.masterVolume)
+    src:play()
   end
-  local dx, dy = x - player.x, y - player.y
-  if c:getChannelCount() == 1 then
-    c:setRelative(true)
-    c:setPosition(dx, dy, 0)
-    c:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
-  end
-  c:setVolume((c.baseVolume or 1) * Game.sfxVolume * Game.masterVolume)
-  c:play()
 end
 
 -- Starfield -----------------------------------------------------------------
@@ -383,6 +391,10 @@ function drawStarfield()
 end
 _G.initStarfield, _G.updateStarfield, _G.drawStarfield =
   initStarfield, updateStarfield, drawStarfield
+_G.initWindow = initWindow
+_G.loadFonts = loadFonts
+_G.loadAudio = loadAudio
+_G.initStates = initStates
 
 -- ---------------------------------------------------------------------------
 -- Love2D callbacks

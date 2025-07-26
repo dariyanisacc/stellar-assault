@@ -16,7 +16,7 @@ SpatialHash.__index = SpatialHash
 function SpatialHash:new(cellSize)
   local o = setmetatable({}, self)
   o.cellSize = cellSize or 64
-  o.cells    = {}
+  o.cells = {}
   return o
 end
 
@@ -32,12 +32,12 @@ end
 ---Insert an `item` whose centre is `item.x,item.y`.
 ---The item must expose either `width`/`height` or a square `size`.
 function SpatialHash:insert(item)
-  local halfW = (item.width  or item.size or 0) * 0.5
+  local halfW = (item.width or item.size or 0) * 0.5
   local halfH = (item.height or item.size or 0) * 0.5
-  local minX  = math.floor((item.x - halfW) / self.cellSize)
-  local maxX  = math.floor((item.x + halfW) / self.cellSize)
-  local minY  = math.floor((item.y - halfH) / self.cellSize)
-  local maxY  = math.floor((item.y + halfH) / self.cellSize)
+  local minX = math.floor((item.x - halfW) / self.cellSize)
+  local maxX = math.floor((item.x + halfW) / self.cellSize)
+  local minY = math.floor((item.y - halfH) / self.cellSize)
+  local maxY = math.floor((item.y + halfH) / self.cellSize)
 
   for cx = minX, maxX do
     for cy = minY, maxY do
@@ -76,12 +76,12 @@ end
 ---with dimensions `w × h`.
 ---@return table results
 function SpatialHash:queryRange(x, y, w, h, results)
-  results    = results or {}
+  results = results or {}
   local halfW, halfH = w * 0.5, h * 0.5
-  local minX  = math.floor((x - halfW) / self.cellSize)
-  local maxX  = math.floor((x + halfW) / self.cellSize)
-  local minY  = math.floor((y - halfH) / self.cellSize)
-  local maxY  = math.floor((y + halfH) / self.cellSize)
+  local minX = math.floor((x - halfW) / self.cellSize)
+  local maxX = math.floor((x + halfW) / self.cellSize)
+  local minY = math.floor((y - halfH) / self.cellSize)
+  local maxY = math.floor((y + halfH) / self.cellSize)
 
   local visited = {}
   for cx = minX, maxX do
@@ -105,18 +105,23 @@ function SpatialHash:queryRadius(x, y, radius, results)
   return self:queryRange(x, y, radius * 2, radius * 2, results)
 end
 
+function SpatialHash:getNearby(item)
+  local w = (item.width or item.size or 0)
+  local h = (item.height or item.size or 0)
+  return self:queryRange(item.x, item.y, w, h)
+end
+
 ---------------------------------------------------------------------
 -- Collision helpers ------------------------------------------------
 ---------------------------------------------------------------------
 
 local function _aabb(a, b)
-  local aHalfW = (a.width  or a.size or 0) * 0.5
+  local aHalfW = (a.width or a.size or 0) * 0.5
   local aHalfH = (a.height or a.size or 0) * 0.5
-  local bHalfW = (b.width  or b.size or 0) * 0.5
+  local bHalfW = (b.width or b.size or 0) * 0.5
   local bHalfH = (b.height or b.size or 0) * 0.5
 
-  return math.abs(a.x - b.x) < (aHalfW + bHalfW)
-     and math.abs(a.y - b.y) < (aHalfH + bHalfH)
+  return math.abs(a.x - b.x) < (aHalfW + bHalfW) and math.abs(a.y - b.y) < (aHalfH + bHalfH)
 end
 
 local function _pointInCircle(px, py, cx, cy, r)
@@ -130,15 +135,17 @@ end
 
 local M = {
   -- Class
-  SpatialHash    = SpatialHash,
+  SpatialHash = SpatialHash,
 
   -- Factory helper for legacy code
-  new            = function(cellSize) return SpatialHash:new(cellSize) end,
+  new = function(self, cellSize)
+    return SpatialHash:new(cellSize)
+  end,
 
   -- Legacy collision helpers
   checkCollision = _aabb,
-  aabb           = _aabb,
-  pointInCircle  = _pointInCircle,
+  aabb = _aabb,
+  pointInCircle = _pointInCircle,
 }
 
 -- Let `setmetatable({}, M)` behave like a grid instance
