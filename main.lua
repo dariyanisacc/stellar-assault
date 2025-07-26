@@ -390,14 +390,24 @@ function love.load()
   loadAudio()
   loadSettings()
   applyWindowMode()
-  local SpriteManager = require("src.sprite_manager")
-  Game.spriteManager = SpriteManager.load("assets/sprites")
-  Game.playerShips = Game.spriteManager:getCategory("player")
-  Game.enemyShips = Game.spriteManager:getCategory("enemy")
-  Game.bossSprites = {}
-  for n, s in pairs(Game.spriteManager:getCategory("boss")) do
-    Game.bossSprites[tonumber(n:match("%d+")) or (#Game.bossSprites + 1)] = s
-  end
+  local AssetLoader = require("src.core.asset_loader")
+  Game.assetLoader = AssetLoader
+  Game.playerShips = {
+    alpha = AssetLoader.getImage("assets/ships/ship_alpha@1024x1024.png"),
+    beta = AssetLoader.getImage("assets/ships/ship_beta@112x75.png"),
+    gamma = AssetLoader.getImage("assets/ships/ship_gamma@98x75.png"),
+  }
+  Game.enemyShips = {
+    basic = AssetLoader.getImage("assets/enemies/enemy_basic_1.png"),
+    homing = AssetLoader.getImage("assets/enemies/enemy_homing_1.png"),
+    dive = AssetLoader.getImage("assets/enemies/enemy_dive_1.png"),
+    zigzag = AssetLoader.getImage("assets/enemies/enemy_zigzag_1.png"),
+    formation = AssetLoader.getImage("assets/enemies/enemy_formation_1.png"),
+  }
+  Game.bossSprites = {
+    AssetLoader.getImage("assets/bosses/boss_01@97x84.png"),
+    AssetLoader.getImage("assets/bosses/boss_02@97x84.png"),
+  }
   Game.bossSprite, Game.boss2Sprite = Game.bossSprites[1], Game.bossSprites[2]
   Game.availableShips, Game.selectedShip, Game.spriteScale =
     { "alpha", "beta", "gamma" }, "alpha", 0.15
