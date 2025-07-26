@@ -1,554 +1,168 @@
--- Persistence system for save data
--- Use lunajson for proper JSON handling
-local json = require("src.lunajson")
-local logger = require("src.logger")
+-- Stellar Assault – Persistence system
+-- Handles saving / loading game data and validates it with a checksum.
+-- Tries to use lunajson for speed, but will fall back to love.data JSON if
+-- lunajson isn’t bundled with the project.
 
-local Persistence = {}
-local SAVE_FILE = "stellar_assault_save.dat"
-local CHECKSUM_FILE = SAVE_FILE .. ".sum"
+----------------------------------------------------------------------
+-- JSON SET-UP
+----------------------------------------------------------------------
 
--- message set when load fails
-Persistence.loadError = nil
+local ok, json = pcall(require, "lunajson")          -- system-wide install
+if not ok then ok, json = pcall(require, "src.lunajson") end  -- local copy
 
--- Default save data structure
-local defaultSaveData = {
-    highScore = 0,
-    leaderboard = {},
-    unlockedLevels = {true}, -- Level 1 always unlocked
-    totalBossesDefeated = 0,
-    statistics = {
-        totalPlayTime = 0,
-        totalEnemiesDefeated = 0,
-        totalDeaths = 0,
-        favoriteShip = "alpha",
-        bestKillCount = 0,
-        bestSurvivalTime = 0
-    },
-    achievements = {},
-    settings = {
-        masterVolume = 1.0,
-        sfxVolume = 1.0,
-        musicVolume = 0.2,
-        selectedShip = "alpha",
-        displayMode = "windowed",
-        highContrast = false,
-        fontScale = 1
-    },
-    controls = {
-        -- Default keyboard bindings
-        keyboard = {
-            left = "a",
-            right = "d",
-            up = "w",
-            down = "s",
-            shoot = "space",
-            boost = "lshift",
-            bomb = "b",
-            pause = "escape"
-        },
-        -- Default gamepad bindings
-        gamepad = {
-            shoot = "a",
-            bomb = "b",
-            boost = "x",
-            pause = "start"
-        }
-    },
-    upgrades = {
-        -- Incremental upgrades
-        maxShield = 0,
-        speedMultiplier = 0,
-        fireRateMultiplier = 0,
-        extraLives = 0,
-        bombCapacity = 0,
-        -- Unlock upgrades
-        unlockBeta = false,
-        unlockGamma = false
-    },
-    currentScore = 0,  -- Store the player's current score for the shop
-    -- New persistent data
-    levelStats = {},  -- Per-level best score and time
-    unlockedShips = {alpha = true}
-}
-
--- Current save data
-local saveData = nil
-
-function Persistence.init()
-    saveData = Persistence.load()
+-- Graceful fallback so the game still boots without lunajson
+if not ok then
+    print("[Persistence] lunajson not found – falling back to love.data JSON.")
+    json = {
+        encode = function(tbl) return love.data.encode("string", "json", tbl) end,
+        decode = function(str)  return love.data.decode("string", "json", str)  end
+    }
 end
 
-function Persistence.load()
-    local data = defaultSaveData
+----------------------------------------------------------------------
+-- DEPENDENCIES
+----------------------------------------------------------------------
 
-    if love.filesystem.getInfo(SAVE_FILE) then
-        local contents = love.filesystem.read(SAVE_FILE)
-        if contents then
-            -- verify checksum if available
-            if love.filesystem.getInfo(CHECKSUM_FILE) then
-                local stored = love.filesystem.read(CHECKSUM_FILE)
-                local actual = love.data and love.data.hash and love.data.hash("sha1", contents)
-                if stored and actual and stored ~= actual then
-                    Persistence.loadError = "Save file corrupted. Progress has been reset."
-                    logger.error("Save checksum mismatch, backing up corrupt file")
-                    love.filesystem.write(SAVE_FILE .. ".corrupt", contents)
-                    if stored then
-                        love.filesystem.write(CHECKSUM_FILE .. ".corrupt", stored)
-                    end
-                    Persistence.save(data)
-                    return data
-                end
-            end
+local logger = require("src.logger")
 
-            local success, loaded = pcall(function()
-                return Persistence.decode(contents)
-            end)
+----------------------------------------------------------------------
+-- CONSTANTS
+----------------------------------------------------------------------
 
-            if success and loaded and Persistence.validate(loaded) then
-                -- Merge with defaults to handle missing fields
-                data = Persistence.merge(defaultSaveData, loaded)
-                local migrated = false
-                -- Migrate old ship unlock flags
-                data.unlockedShips = data.unlockedShips or {alpha = true}
-                if data.upgrades and data.upgrades.unlockBeta and not data.unlockedShips.beta then
-                    data.unlockedShips.beta = true
-                    migrated = true
-                end
-                if data.upgrades and data.upgrades.unlockGamma and not data.unlockedShips.gamma then
-                    data.unlockedShips.gamma = true
-                    migrated = true
-                end
-                -- Ensure level stats table exists
-                if not data.levelStats then
-                    data.levelStats = {}
-                    migrated = true
-                end
-                if migrated then
-                    Persistence.save(data)
-                end
-                logger.info("Save data loaded successfully")
-            else
-            if success and loaded and Persistence.validate(loaded) then
-                -- Merge with defaults to handle missing fields
-                data = Persistence.merge(defaultSaveData, loaded)
-                local migrated = false
-                -- Migrate old ship unlock flags
-                data.unlockedShips = data.unlockedShips or {alpha = true}
-                if data.upgrades and data.upgrades.unlockBeta and not data.unlockedShips.beta then
-                    data.unlockedShips.beta = true
-                    migrated = true
-                end
-                if data.upgrades and data.upgrades.unlockGamma and not data.unlockedShips.gamma then
-                    data.unlockedShips.gamma = true
-                    migrated = true
-                end
-                -- Ensure level stats table exists
-                if not data.levelStats then
-                    data.levelStats = {}
-                    migrated = true
-                end
-                if migrated then
-                    Persistence.save(data)
-                end
-                logger.info("Save data loaded successfully")
-            else
-                -- Parsing or schema validation failed
-                Persistence.loadError = "Save file corrupted. Progress has been reset."
-                logger.error("Failed to parse or validate save data, backing up corrupt file")
-                love.filesystem.write(SAVE_FILE .. ".corrupt", contents)
-                if love.filesystem.getInfo(CHECKSUM_FILE) then
-                    local sum = love.filesystem.read(CHECKSUM_FILE)
-                    if sum then
-                        love.filesystem.write(CHECKSUM_FILE .. ".corrupt", sum)
-                    end
-                end
-                Persistence.save(data) -- regenerate a clean save + checksum
-            end
+local Persistence   = {}
+local SAVE_FILE     = "stellar_assault_save.dat"
+local CHECKSUM_FILE = SAVE_FILE .. ".sum"
 
-            end
+-- Set when a load fails so calling code can react
+Persistence.loadError = nil
+
+-- Default structure for new saves or schema upgrades
+local defaultSaveData = {
+    highScore           = 0,
+    leaderboard         = {},
+    unlockedLevels      = { true },  -- Level 1 always unlocked
+    totalBossesDefeated = 0,
+
+    statistics = {
+        totalPlayTime        = 0,
+        totalEnemiesDefeated = 0,
+        totalDeaths          = 0,
+        favoriteShip         = "alpha",
+        bestKillCount        = 0,
+        bestSurvivalTime     = 0
+    },
+
+    achievements = {},
+
+    settings = {
+        masterVolume = 1.0,
+        sfxVolume    = 1.0,
+        musicVolume  = 0.2,
+        selectedShip = "alpha",
+        displayMode  = "windowed",
+        highContrast = false
+    }
+}
+
+----------------------------------------------------------------------
+-- INTERNAL HELPERS
+----------------------------------------------------------------------
+
+---Returns an MD5 checksum for a string.
+local function checksum(str)
+    return love.data.hash("md5", str)
+end
+
+---Write the checksum for the given JSON string.
+local function writeChecksum(jsonStr)
+    love.filesystem.write(CHECKSUM_FILE, checksum(jsonStr))
+end
+
+---Verify that the checksum on disk matches the supplied JSON string.
+local function isChecksumValid(jsonStr)
+    if not love.filesystem.getInfo(CHECKSUM_FILE) then return false end
+    local stored = love.filesystem.read(CHECKSUM_FILE)
+    return stored == checksum(jsonStr)
+end
+
+---Deep-merge source into destination, preserving existing keys.
+local function mergeDefaults(dst, src)
+    for k, v in pairs(src) do
+        if type(v) == "table" then
+            dst[k] = dst[k] or {}
+            mergeDefaults(dst[k], v)
+        elseif dst[k] == nil then
+            dst[k] = v
         end
-    else
-        logger.info("No save file found, creating new one")
-        Persistence.save(data)
     end
-    
+end
+
+----------------------------------------------------------------------
+-- PUBLIC API
+----------------------------------------------------------------------
+
+---Load the save file (creating a new one if necessary).
+function Persistence.load()
+    -- No save yet – create one with defaults
+    if not love.filesystem.getInfo(SAVE_FILE) then
+        logger.info("Save file not found – creating new save.")
+        Persistence.save(defaultSaveData)
+        return deepcopy(defaultSaveData)
+    end
+
+    local jsonStr = love.filesystem.read(SAVE_FILE)
+
+    -- Integrity check
+    if not isChecksumValid(jsonStr) then
+        Persistence.loadError = "Save data failed checksum – starting fresh."
+        logger.warn(Persistence.loadError)
+        love.filesystem.remove(SAVE_FILE)
+        love.filesystem.remove(CHECKSUM_FILE)
+        Persistence.save(defaultSaveData)
+        return deepcopy(defaultSaveData)
+    end
+
+    -- Decode JSON safely
+    local okDecode, data = pcall(json.decode, jsonStr)
+    if not okDecode or type(data) ~= "table" then
+        Persistence.loadError = "Save data corrupt – starting fresh."
+        logger.error(Persistence.loadError .. " (" .. tostring(data) .. ")")
+        love.filesystem.remove(SAVE_FILE)
+        love.filesystem.remove(CHECKSUM_FILE)
+        Persistence.save(defaultSaveData)
+        return deepcopy(defaultSaveData)
+    end
+
+    -- Upgrade older saves if the schema changed
+    mergeDefaults(data, defaultSaveData)
     return data
 end
 
+---Write the supplied table to disk.
 function Persistence.save(data)
-    data = data or saveData
+    assert(type(data) == "table", "Persistence.save expects a table")
 
-    if not Persistence.validate(data) then
-        logger.error("Invalid save data schema; aborting save")
-        return
+    local okEncode, jsonStr = pcall(json.encode, data)
+    if not okEncode then
+        logger.error("Could not encode save data: " .. tostring(jsonStr))
+        return false
     end
 
-    local success, encoded = pcall(json.encode, data)
-
-    if success then
-        if love.filesystem.getInfo(SAVE_FILE) then
-            local existing = love.filesystem.read(SAVE_FILE)
-            if existing then
-                love.filesystem.write(SAVE_FILE .. ".bak", existing)
-            end
-        end
-        local writeSuccess = love.filesystem.write(SAVE_FILE, encoded)
-        if writeSuccess then
-            local checksum = love.data and love.data.hash and love.data.hash("sha1", encoded)
-            if checksum then
-                love.filesystem.write(CHECKSUM_FILE, checksum)
-            end
-            logger.info("Save data written successfully")
-        else
-            logger.error("Failed to write save file")
-        end
-    else
-        logger.error("Failed to encode save data")
-    end
+    love.filesystem.write(SAVE_FILE, jsonStr)
+    writeChecksum(jsonStr)
+    return true
 end
 
--- JSON encoding/decoding using lunajson
-function Persistence.encode(data)
-    return json.encode(data)
-end
+----------------------------------------------------------------------
+-- UTILITY
+----------------------------------------------------------------------
 
-function Persistence.decode(str)
-    return json.decode(str)
-end
-
--- Validate save data against the default schema
-function Persistence.validate(data)
-    local function validate_table(t, template)
-        for k, v in pairs(template) do
-            if type(v) == "table" then
-                if type(t[k]) ~= "table" then return false end
-                if not validate_table(t[k], v) then return false end
-            else
-                if type(t[k]) ~= type(v) then return false end
-            end
-        end
-        return true
-    end
-
-    return type(data) == "table" and validate_table(data, defaultSaveData)
-end
-
-function Persistence.merge(default, loaded)
-    local result = {}
-    
-    for k, v in pairs(default) do
-        if type(v) == "table" and loaded[k] and type(loaded[k]) == "table" then
-            result[k] = Persistence.merge(v, loaded[k])
-        elseif loaded[k] ~= nil then
-            result[k] = loaded[k]
-        else
-            result[k] = v
-        end
-    end
-    
-    return result
-end
-
--- Public API functions
-function Persistence.getHighScore()
-    if saveData.leaderboard and #saveData.leaderboard > 0 then
-        return saveData.leaderboard[1].score
-    end
-    return saveData.highScore or 0
-end
-
-function Persistence.getLeaderboard()
-    return saveData.leaderboard or {}
-end
-
-function Persistence.setHighScore(score, name)
-    name = name or "Player"
-
-    if not saveData.leaderboard then
-        saveData.leaderboard = {}
-    end
-
-    -- Insert new entry
-    table.insert(saveData.leaderboard, {name = name, score = score})
-
-    -- Sort descending by score
-    table.sort(saveData.leaderboard, function(a, b)
-        return a.score > b.score
-    end)
-
-    -- Trim to top 10
-    while #saveData.leaderboard > 10 do
-        table.remove(saveData.leaderboard)
-    end
-
-    -- Update legacy highScore field
-    saveData.highScore = saveData.leaderboard[1].score
-
-    Persistence.save()
-
-    return score == saveData.highScore
-end
-
-function Persistence.unlockLevel(level)
-    saveData.unlockedLevels[level] = true
-    Persistence.save()
-end
-
-function Persistence.isLevelUnlocked(level)
-    return saveData.unlockedLevels[level] == true
-end
-
-function Persistence.getUnlockedLevels()
-    local count = 0
-    for i = 1, 20 do
-        if saveData.unlockedLevels[i] then
-            count = count + 1
-        else
-            break
-        end
-    end
-    return count
-end
-
-function Persistence.incrementBossesDefeated()
-    saveData.totalBossesDefeated = (saveData.totalBossesDefeated or 0) + 1
-    Persistence.save()
-end
-
-function Persistence.getBestKillCount()
-    return saveData.statistics.bestKillCount or 0
-end
-
-function Persistence.getBestSurvivalTime()
-    return saveData.statistics.bestSurvivalTime or 0
-end
-
-function Persistence.updateBestKillCount(kills)
-    if kills > (saveData.statistics.bestKillCount or 0) then
-        saveData.statistics.bestKillCount = kills
-        Persistence.save()
-        return true
-    end
-    return false
-end
-
-function Persistence.updateBestSurvivalTime(time)
-    if time > (saveData.statistics.bestSurvivalTime or 0) then
-        saveData.statistics.bestSurvivalTime = time
-        Persistence.save()
-        return true
-    end
-    return false
-end
-
-function Persistence.updateStatistics(stats)
-    for k, v in pairs(stats) do
-        if saveData.statistics[k] then
-            if type(v) == "number" then
-                saveData.statistics[k] = saveData.statistics[k] + v
-            else
-                saveData.statistics[k] = v
-            end
-        end
-    end
-    Persistence.save()
-end
-
-function Persistence.getSettings()
-    return saveData.settings
-end
-
-function Persistence.updateSettings(settings)
-    for k, v in pairs(settings) do
-        saveData.settings[k] = v
-    end
-    Persistence.save()
-end
-
-function Persistence.getHighContrast()
-    return saveData.settings.highContrast or false
-end
-
-function Persistence.setHighContrast(value)
-    saveData.settings.highContrast = value
-    Persistence.save()
-end
-
-function Persistence.getFontScale()
-    return saveData.settings.fontScale or 1
-end
-
-function Persistence.setFontScale(scale)
-    saveData.settings.fontScale = scale
-    Persistence.save()
-end
-
-function Persistence.getSaveData()
-    return saveData
-end
-
-function Persistence.getLoadError()
-    return Persistence.loadError
-end
-
-function Persistence.clearLoadError()
-    Persistence.loadError = nil
-end
-
--- Upgrade system functions
-function Persistence.applyUpgrade(key, value, upgradeType)
-    if not saveData.upgrades then
-        saveData.upgrades = {}
-    end
-    
-    if upgradeType == "incremental" then
-        -- Add to existing value
-        saveData.upgrades[key] = (saveData.upgrades[key] or 0) + value
-    else
-        -- Set value directly (for unlocks)
-        saveData.upgrades[key] = value
-        if key == "unlockBeta" then
-            Persistence.unlockShip("beta")
-        elseif key == "unlockGamma" then
-            Persistence.unlockShip("gamma")
-        end
-    end
-    
-    Persistence.save()
-    logger.info("Applied upgrade: " .. key .. " = " .. tostring(saveData.upgrades[key]))
-end
-
-function Persistence.getUpgrade(key)
-    if not saveData.upgrades then
-        return nil
-    end
-    return saveData.upgrades[key]
-end
-
-function Persistence.getUpgradeLevel(key)
-    if not saveData.upgrades then
-        return 0
-    end
-    return saveData.upgrades[key] or 0
-end
-
-function Persistence.getCurrentScore()
-    return saveData.currentScore or 0
-end
-
-function Persistence.setCurrentScore(score)
-    saveData.currentScore = score
-    Persistence.save()
-end
-
-function Persistence.deductScore(amount)
-    saveData.currentScore = math.max(0, (saveData.currentScore or 0) - amount)
-    Persistence.save()
-end
-
-function Persistence.addScore(amount)
-    saveData.currentScore = (saveData.currentScore or 0) + amount
-    Persistence.save()
-end
-
--- Update per-level best stats
-function Persistence.updateLevelStats(level, score, time)
-    saveData.levelStats = saveData.levelStats or {}
-    local stats = saveData.levelStats[level] or {}
-    if not stats.bestScore or score > stats.bestScore then
-        stats.bestScore = score
-    end
-    if time and (not stats.bestTime or time < stats.bestTime) then
-        stats.bestTime = time
-    end
-    saveData.levelStats[level] = stats
-    Persistence.save()
-end
-
-function Persistence.getLevelStats(level)
-    if saveData.levelStats and saveData.levelStats[level] then
-        return saveData.levelStats[level]
-    end
-    return {bestScore = 0}
-end
-
-function Persistence.unlockShip(name)
-    saveData.unlockedShips = saveData.unlockedShips or {alpha = true}
-    if not saveData.unlockedShips[name] then
-        saveData.unlockedShips[name] = true
-        Persistence.save()
-    end
-end
-
-function Persistence.getUnlockedShips()
-    local ships = {}
-    for name in pairs(saveData.unlockedShips or {alpha = true}) do
-        table.insert(ships, name)
-    end
-    return ships
-end
-
--- Check if a ship is unlocked
-function Persistence.isShipUnlocked(shipName)
-    if shipName == "alpha" then
-        return true
-    end
-    if saveData.unlockedShips and saveData.unlockedShips[shipName] then
-        return true
-    end
-    -- Fallback to old upgrade flags
-    if shipName == "beta" then
-        return saveData.upgrades and saveData.upgrades.unlockBeta == true
-    elseif shipName == "gamma" then
-        return saveData.upgrades and saveData.upgrades.unlockGamma == true
-    end
-    return false
-end
-
--- Control binding functions
-function Persistence.getKeyBinding(action)
-    if not saveData.controls or not saveData.controls.keyboard then
-        return defaultSaveData.controls.keyboard[action]
-    end
-    return saveData.controls.keyboard[action] or defaultSaveData.controls.keyboard[action]
-end
-
-function Persistence.setKeyBinding(action, key)
-    if not saveData.controls then
-        saveData.controls = defaultSaveData.controls
-    end
-    if not saveData.controls.keyboard then
-        saveData.controls.keyboard = defaultSaveData.controls.keyboard
-    end
-    saveData.controls.keyboard[action] = key
-    Persistence.save()
-end
-
-function Persistence.getGamepadBinding(action)
-    if not saveData.controls or not saveData.controls.gamepad then
-        return defaultSaveData.controls.gamepad[action]
-    end
-    return saveData.controls.gamepad[action] or defaultSaveData.controls.gamepad[action]
-end
-
-function Persistence.setGamepadBinding(action, button)
-    if not saveData.controls then
-        saveData.controls = defaultSaveData.controls
-    end
-    if not saveData.controls.gamepad then
-        saveData.controls.gamepad = defaultSaveData.controls.gamepad
-    end
-    saveData.controls.gamepad[action] = button
-    Persistence.save()
-end
-
-function Persistence.getControls()
-    return saveData.controls or defaultSaveData.controls
-end
-
-function Persistence.resetControls()
-    saveData.controls = defaultSaveData.controls
-    Persistence.save()
+---Simple deep-copy (avoids sharing references to default data).
+function deepcopy(obj)
+    if type(obj) ~= "table" then return obj end
+    local res = {}
+    for k, v in pairs(obj) do res[deepcopy(k)] = deepcopy(v) end
+    return res
 end
 
 return Persistence

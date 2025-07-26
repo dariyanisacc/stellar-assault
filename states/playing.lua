@@ -6,6 +6,35 @@ local SpatialHash = require("src.spatial")
 local logger = require("src.logger")
 local Powerup = require("src.entities.powerup")
 local Persistence = require("src.persistence")
+
+------------------------------------------------------------------
+-- 🔧 BACKWARD-COMPATIBILITY PATCH
+-- Some older save-files – or forks that haven’t merged the
+-- upgrade-shop work yet – do not contain Persistence.getUpgradeLevel.
+-- Define a safe fallback so game logic never breaks.
+------------------------------------------------------------------
+if not Persistence.getUpgradeLevel then
+    ---Return the player’s upgrade level for a given key (defaults to 0)
+    ---@param key string
+    ---@return integer
+    function Persistence.getUpgradeLevel(key)
+        -- try the newest accessor first, then fall back to cached data
+        local data
+        if type(Persistence.getSaveData) == "function" then
+            data = Persistence.getSaveData()
+        elseif type(Persistence.saveData) == "table" then
+            data = Persistence.saveData
+        elseif type(Persistence.load) == "function" then
+            data = Persistence.load()
+        end
+
+        if type(data) == "table" and type(data.upgrades) == "table" then
+            return data.upgrades[key] or 0
+        end
+        return 0  -- sane default when nothing is stored yet
+    end
+end
+------------------------------------------------------------------
 local WaveManager = require("src.wave_manager")
 local PlayerControl = require("src.player_control")
 local EnemyAI = require("src.enemy_ai")

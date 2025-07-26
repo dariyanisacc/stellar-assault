@@ -1,4 +1,3 @@
-```lua
 -- Menu State for Stellar Assault
 local constants    = require("src.constants")
 local Persistence  = require("src.persistence")
@@ -7,8 +6,21 @@ local Game         = require("src.game")
 
 local MenuState = {}
 
+----------------------------------------------------------------------
+--  NEW: simple helper for persisting settings
+----------------------------------------------------------------------
+local function saveSettings()
+    -- Load (or create) current save-data table
+    local data = Persistence.load()
+    data.settings = data.settings or {}
+    data.settings.selectedShip = Game.selectedShip or "alpha"
+    -- Write it back
+    Persistence.save(data)
+end
+----------------------------------------------------------------------
+
 -- ---------------------------------------------------------------------------
--- State lifecycle                                                           
+-- State lifecycle
 -- ---------------------------------------------------------------------------
 function MenuState:enter()
     self.selection         = 1
@@ -41,7 +53,7 @@ end
 function MenuState:leave() end
 
 -- ---------------------------------------------------------------------------
--- Update / Input                                                            
+-- Update / Input
 -- ---------------------------------------------------------------------------
 function MenuState:update(dt)
     -- Handle window resize
@@ -95,7 +107,7 @@ function MenuState:_analogPress(dir, dt)
 end
 
 -- ---------------------------------------------------------------------------
--- Drawing                                                                   
+-- Drawing
 -- ---------------------------------------------------------------------------
 function MenuState:draw()
     -- Starfield background
@@ -131,7 +143,7 @@ function MenuState:draw()
 end
 
 -- ---------------------------------------------------------------------------
--- Main menu                                                                 
+-- Main menu
 -- ---------------------------------------------------------------------------
 function MenuState:drawMainMenu()
     lg.setFont(Game.menuFont)
@@ -164,7 +176,7 @@ function MenuState:drawMainMenu()
 end
 
 -- ---------------------------------------------------------------------------
--- Save-slot menu                                                            
+-- Save-slot menu
 -- ---------------------------------------------------------------------------
 function MenuState:drawSaveMenu()
     lg.setFont(Game.menuFont)
@@ -197,7 +209,7 @@ function MenuState:drawSaveMenu()
 end
 
 -- ---------------------------------------------------------------------------
--- Level-select                                                              
+-- Level-select
 -- ---------------------------------------------------------------------------
 function MenuState:drawLevelSelect()
     lg.setFont(Game.menuFont)
@@ -249,7 +261,7 @@ function MenuState:drawLevelSelect()
 end
 
 -- ---------------------------------------------------------------------------
--- Ship-select                                                               
+-- Ship-select
 -- ---------------------------------------------------------------------------
 function MenuState:drawShipSelect()
     lg.setFont(Game.menuFont)
@@ -311,7 +323,7 @@ function MenuState:drawShipSelect()
 end
 
 -- ---------------------------------------------------------------------------
--- Input dispatchers                                                         
+-- Input dispatchers
 -- ---------------------------------------------------------------------------
 function MenuState:keypressed(key)
     if     self.menuState == "main"        then self:handleMainMenuInput(key)
@@ -331,7 +343,7 @@ function MenuState:gamepadpressed(_, button)
 end
 
 -- ---------------------------------------------------------------------------
--- Handlers: main menu                                                       
+-- Handlers: main menu
 -- ---------------------------------------------------------------------------
 function MenuState:handleMainMenuInput(key)
     if key=="up" then
@@ -359,7 +371,7 @@ function MenuState:handleMainMenuInput(key)
 end
 
 -- ---------------------------------------------------------------------------
--- Handlers: save menu                                                       
+-- Handlers: save menu
 -- ---------------------------------------------------------------------------
 function MenuState:handleSaveMenuInput(key)
     if key=="up" then
@@ -390,7 +402,7 @@ function MenuState:handleSaveMenuInput(key)
 end
 
 -- ---------------------------------------------------------------------------
--- Handlers: level select                                                    
+-- Handlers: level select
 -- ---------------------------------------------------------------------------
 function MenuState:handleLevelSelectInput(key)
     local cols, maxLvl = 5, 15
@@ -433,7 +445,7 @@ function MenuState:handleLevelSelectInput(key)
 end
 
 -- ---------------------------------------------------------------------------
--- Handlers: ship select                                                     
+-- Handlers: ship select
 -- ---------------------------------------------------------------------------
 function MenuState:handleShipSelectInput(key)
     if key=="left" then
@@ -444,7 +456,7 @@ function MenuState:handleShipSelectInput(key)
         if Game.menuSelectSound then Game.menuSelectSound:play() end
     elseif key=="return" or key=="space" then
         Game.selectedShip = Game.availableShips[self.selectedShipIndex]
-        saveSettings()
+        saveSettings()  -- persist new ship choice
         self.menuState="main"
         if Game.menuConfirmSound then Game.menuConfirmSound:play() end
     elseif key=="escape" then
@@ -454,7 +466,7 @@ function MenuState:handleShipSelectInput(key)
 end
 
 -- ---------------------------------------------------------------------------
--- Save-game loader                                                          
+-- Save-game loader
 -- ---------------------------------------------------------------------------
 function MenuState:loadSaves()
     local saves = {}
@@ -474,4 +486,3 @@ function MenuState:loadSaves()
 end
 
 return MenuState
-```
