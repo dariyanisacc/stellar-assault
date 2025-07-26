@@ -27,6 +27,10 @@ local Game = require("src.game")
 -- Cache Love2D modules for speed
 local lg, la, lw, lt, lf = love.graphics, love.audio, love.window, love.timer, love.filesystem
 
+-- Fixed time-step variables for deterministic updates
+local FIXED_DT = 1 / 60
+local accumulator = 0
+
 -- ---------------------------------------------------------------------------
 -- Globals stored on Game table
 -- ---------------------------------------------------------------------------
@@ -424,16 +428,21 @@ function love.update(dt)
   if _G.timeScale then
     dt = dt * _G.timeScale
   end
-  updateStarfield(dt)
-  debugConsole:update(dt)
-  if _G.configReloadNotification then
-    local n = _G.configReloadNotification
-    n.timer = n.timer - dt
-    if n.timer <= 0 then
-      _G.configReloadNotification = nil
+
+  accumulator = accumulator + dt
+  while accumulator >= FIXED_DT do
+    updateStarfield(FIXED_DT)
+    debugConsole:update(FIXED_DT)
+    if _G.configReloadNotification then
+      local n = _G.configReloadNotification
+      n.timer = n.timer - FIXED_DT
+      if n.timer <= 0 then
+        _G.configReloadNotification = nil
+      end
     end
+    stateManager:update(FIXED_DT)
+    accumulator = accumulator - FIXED_DT
   end
-  stateManager:update(dt)
 end
 
 local drawDebugInfo, drawDebugOverlay
