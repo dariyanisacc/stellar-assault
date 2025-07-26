@@ -5,8 +5,7 @@
 -- drop‑in replacement for the original missing file referenced from
 -- states/playing.lua.
 
-local lg    = love.graphics
-local timer = love.timer
+local lg = love.graphics
 
 local Powerup = {}
 
@@ -22,18 +21,20 @@ local function _tryLoadImage(name, fallbackColor)
     return { kind = name, img = img, w = img:getWidth(), h = img:getHeight() }
   else
     -- Use a dummy coloured circle if the sprite is missing
-    return { kind = name, color = fallbackColor or {1, 1, 1}, w = 32, h = 32 }
+    return { kind = name, color = fallbackColor or { 1, 1, 1 }, w = 32, h = 32 }
   end
 end
 
 local function _ensureLoaded()
-  if _loaded then return end
+  if _loaded then
+    return
+  end
   _loaded = true
   -- Preload the common power‑up sprites (or fallbacks)
-  _images["health"] = _tryLoadImage("health", {0.1, 1.0, 0.1})
-  _images["shield"] = _tryLoadImage("shield", {0.1, 0.6, 1.0})
-  _images["weapon"] = _tryLoadImage("weapon", {1.0, 0.6, 0.1})
-  _images["score"]  = _tryLoadImage("score",  {1.0, 0.9, 0.1})
+  _images["health"] = _tryLoadImage("health", { 0.1, 1.0, 0.1 })
+  _images["shield"] = _tryLoadImage("shield", { 0.1, 0.6, 1.0 })
+  _images["weapon"] = _tryLoadImage("weapon", { 1.0, 0.6, 0.1 })
+  _images["score"] = _tryLoadImage("score", { 1.0, 0.9, 0.1 })
 end
 
 -- ========================================================================= --
@@ -46,20 +47,22 @@ function PU:new(kind, x, y)
   _ensureLoaded()
   local sprite = _images[kind] or _images["score"]
   local o = {
-    kind   = kind,
-    x      = x,
-    y      = y,
-    r      = 0,        -- rotation for visual flair
+    kind = kind,
+    x = x,
+    y = y,
+    r = 0, -- rotation for visual flair
     radius = math.max(sprite.w, sprite.h) * 0.5,
     sprite = sprite,
-    ttl    = 15,       -- despawn after N seconds if unpicked
-    active = true
+    ttl = 15, -- despawn after N seconds if unpicked
+    active = true,
   }
   return setmetatable(o, self)
 end
 
 function PU:update(dt)
-  if not self.active then return end
+  if not self.active then
+    return
+  end
   self.r = (self.r + dt) % (math.pi * 2)
   self.ttl = self.ttl - dt
   if self.ttl <= 0 then
@@ -68,10 +71,11 @@ function PU:update(dt)
 end
 
 function PU:draw()
-  if not self.active then return end
+  if not self.active then
+    return
+  end
   if self.sprite.img then
-    lg.draw(self.sprite.img, self.x, self.y, self.r, 1, 1,
-             self.sprite.w * 0.5, self.sprite.h * 0.5)
+    lg.draw(self.sprite.img, self.x, self.y, self.r, 1, 1, self.sprite.w * 0.5, self.sprite.h * 0.5)
   else
     lg.push()
     lg.translate(self.x, self.y)
