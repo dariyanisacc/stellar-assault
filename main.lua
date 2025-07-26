@@ -5,6 +5,7 @@
 local StateManager = require("src.statemanager")
 local constants = require("src.constants")
 local DebugConsole = require("src.debugconsole")
+local CONFIG = require("src.config")
 local logger = require("src.logger")
 local Persistence = require("src.persistence")
 local UIManager = require("src.uimanager")
@@ -136,9 +137,18 @@ function initStates()
     stateManager:register("levelselect", require("states.levelselect"))
     stateManager:register("leaderboard", require("states.leaderboard"))
 
-    debugConsole = DebugConsole:new()
-    local debugCommands = require("src.debugcommands")
-    debugCommands.register(debugConsole)
+    if CONFIG.debug then
+        debugConsole = DebugConsole:new()
+        local debugCommands = require("src.debugcommands")
+        debugCommands.register(debugConsole)
+    else
+        debugConsole = {
+            update = function() end,
+            draw = function() end,
+            keypressed = function() return false end,
+            textinput = function() return false end,
+        }
+    end
 end
 
 function love.load()
