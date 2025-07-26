@@ -2,7 +2,7 @@ local love_mock = require("tests.mocks.love_mock")
 _G.love = love_mock
 love.filesystem.append = function() end
 
-local StateManager = require("src.statemanager")
+local StateManager = require("src.StateManager")
 
 describe("StateManager transitions", function()
     local manager
