@@ -1355,7 +1355,7 @@ self:drawUI()
 
 -- Draw combo counter
 if self.combo > 1 then
-lg.setFont(menuFont or lg.newFont(28))
+lg.setFont(Game.menuFont or lg.newFont(28))
 local pulse = sin(love.timer.getTime() * 5) * 0.2 + 0.8
 
 -- Color based on combo level
@@ -1387,7 +1387,7 @@ end
      lg.setColor(0, 0, 0, 0.6 * alpha)
      lg.rectangle("fill", x, y, w, h, 4)
      lg.setColor(1, 1, 1, alpha)
-     lg.setFont(smallFont or lg.newFont(12))
+    lg.setFont(Game.smallFont or lg.newFont(12))
      lg.print(string.format("Kill Rate: %.1f/s", self.waveOverlay.killRate), x + 10, y + 8)
      lg.print("Max Combo: " .. self.waveOverlay.maxCombo, x + 10, y + 22)
      lg.print("Enemies: " .. self.waveOverlay.enemiesDefeated, x + 10, y + 36)
@@ -1411,7 +1411,7 @@ end
 -- Draw overheat warning
 if heatPercent > 0.8 then
 local flash = sin(love.timer.getTime() * 10) * 0.5 + 0.5
-lg.setFont(menuFont or lg.newFont(24))
+lg.setFont(Game.menuFont or lg.newFont(24))
 lg.setColor(1, 0, 0, flash)
 local warningText = "WARNING: OVERHEAT!"
 local warningWidth = lg.getFont():getWidth(warningText)
@@ -1473,7 +1473,7 @@ lg.rectangle("line", x, y, w, h, 2)
 
 -- Label
 if label then
-lg.setFont(smallFont or lg.newFont(12))
+    lg.setFont(Game.smallFont or lg.newFont(12))
 lg.setColor(0.8, 0.8, 0.8, 1)
 local labelWidth = lg.getFont():getWidth(label)
 lg.print(label, x + w/2 - labelWidth/2, y - 14)
@@ -1531,7 +1531,7 @@ end
 end
 
 function PlayingState:drawDebugOverlay()
-lg.setFont(smallFont or lg.newFont(12))
+lg.setFont(Game.smallFont or lg.newFont(12))
 lg.setColor(0, 0, 0, 0.7)
 lg.rectangle("fill", 5, 100, 200, 150)
 
@@ -1775,7 +1775,7 @@ alpha = alpha * (sin(love.timer.getTime() * 10) * 0.2 + 0.8)
 end
 
 lg.setColor(text.color[1], text.color[2], text.color[3], alpha)
-lg.setFont(smallFont or lg.newFont(14))
+lg.setFont(Game.smallFont or lg.newFont(14))
 local w = lg.getFont():getWidth(text.text)
 lg.print(text.text, text.x - w/2, text.y)
 
@@ -1804,7 +1804,7 @@ lg.setColor(0.8, 0.8, 1, 1)
 lg.print("LEVEL " .. currentLevel, panelPadding, 5)
 
 if self.waveManager then
-lg.setFont(smallFont or lg.newFont(12))
+lg.setFont(Game.smallFont or lg.newFont(12))
 lg.setColor(0.7, 1, 0.7, 1)
 lg.print("WAVE " .. self.waveManager.waveNumber, panelPadding, 25)
 
@@ -1876,7 +1876,7 @@ lg.rectangle("fill", 0, powerupPanelY, 180, powerupPanelHeight, 4)
 
 -- Powerup list with mini bars
 local powerupY = powerupPanelY + 5
-lg.setFont(smallFont or lg.newFont(12))
+lg.setFont(Game.smallFont or lg.newFont(12))
 
 for powerup, timer in pairs(activePowerups) do
 local colors = {
@@ -1910,7 +1910,7 @@ end
 
 -- === CONTROLS HINT (Bottom, fades out) ===
 if self.showControlsHint then
-lg.setFont(smallFont or lg.newFont(12))
+lg.setFont(Game.smallFont or lg.newFont(12))
 lg.setColor(0.4, 0.4, 0.4, self.controlsHintAlpha * 0.6)
 
 local controlsY = self.screenHeight - 60

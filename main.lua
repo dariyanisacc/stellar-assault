@@ -2,13 +2,14 @@
 -- A space shooter with modular architecture
 
 -- Core modules
-local StateManager = require("src.StateManager")
-local constants = require("src.constants")
-local DebugConsole = require("src.debugconsole")
-local CONFIG = require("src.config")
-local logger = require("src.logger")
-local Persistence = require("src.persistence")
-local UIManager = require("src.uimanager")
+local StateManager   = require("src.StateManager")
+local constants      = require("src.constants")
+local DebugConsole   = require("src.debugconsole")
+local CONFIG         = require("src.config")
+local logger         = require("src.logger")
+local Persistence    = require("src.persistence")
+local UIManager      = require("src.uimanager")
+local Game           = require("src.game")
 
 -- Performance optimizations: cache Love2D modules
 local lg = love.graphics
@@ -19,426 +20,358 @@ local lf = love.filesystem
 local le = love.event
 
 -- Global state manager
-stateManager = nil
+Game.stateManager = nil
 
 -- Debug systems
-debugConsole = nil
-consoleFont = nil
+Game.debugConsole = nil      -- Alias stored on Game table
+-- `debugConsole` is the variable used throughout the codebase;
+-- we initialise/alias it in `initStates` so it’s always defined.
+debugConsole = nil           -- Intentionally global for callbacks
 
 -- Global resources (loaded once, shared across states)
-titleFont = nil
-menuFont = nil
-uiFont = nil
-smallFont = nil
-mediumFont = nil
-uiManager = nil
+Game.titleFont   = nil
+Game.menuFont    = nil
+Game.uiFont      = nil
+Game.smallFont   = nil
+Game.mediumFont  = nil
+Game.uiManager   = nil
 
 -- Audio resources
-laserSound = nil
-explosionSound = nil
-powerupSound = nil
-shieldBreakSound = nil
-gameOverSound = nil
-menuSelectSound = nil
-menuConfirmSound = nil
-backgroundMusic = nil
-bossMusic = nil
-victorySound = nil
+Game.laserSound        = nil
+Game.explosionSound    = nil
+Game.powerupSound      = nil
+Game.shieldBreakSound  = nil
+Game.gameOverSound     = nil
+Game.menuSelectSound   = nil
+Game.menuConfirmSound  = nil
+Game.backgroundMusic   = nil
+Game.bossMusic         = nil
+Game.victorySound      = nil
 
--- Preloaded laser sound clones for concurrent playback
-laserClones = nil
-laserCloneIndex = 1
+-- Pre‑allocated laser sound clones for concurrent playback
+Game.laserClones     = nil
+Game.laserCloneIndex = 1
 
 -- Positional audio settings
 local soundReferenceDistance = 50
-local soundMaxDistance = 800
+local soundMaxDistance       = 800
 
 -- Audio lists for volume updates
-local sfxSources = {}
+local sfxSources   = {}
 local musicSources = {}
 
--- Settings (persist across states)
-masterVolume = constants.audio.defaultMasterVolume
-sfxVolume = constants.audio.defaultSFXVolume
-musicVolume = constants.audio.defaultMusicVolume
-displayMode = "borderless"
-currentResolution = 1
-highContrast = false
-fontScale = 1
+-- Settings (persist across sessions)
+Game.masterVolume     = constants.audio.defaultMasterVolume
+Game.sfxVolume        = constants.audio.defaultSFXVolume
+Game.musicVolume      = constants.audio.defaultMusicVolume
+Game.displayMode      = "borderless"
+Game.currentResolution = 1
+Game.highContrast     = false
+Game.fontScale        = 1
 
 -- Input tracking
-lastInputType = "keyboard"  -- Default to keyboard/mouse
-inputHints = {
+Game.lastInputType = "keyboard"  -- Default to keyboard/mouse
+Game.inputHints = {
     keyboard = {
-        select = "Enter",
-        back = "ESC",
+        select   = "Enter",
+        back     = "ESC",
         navigate = "Arrow Keys",
-        skip = "SPACE",
-        confirm = "Enter",
-        cancel = "ESC",
-        action = "Space"
+        skip     = "SPACE",
+        confirm  = "Enter",
+        cancel   = "ESC",
+        action   = "Space"
     },
     gamepad = {
-        select = "A",
-        back = "B",
-        navigate = "D-Pad",
-        skip = "A",
-        confirm = "A",
-        cancel = "B",
-        action = "X"
+        select   = "A",
+        back     = "B",
+        navigate = "D‑Pad",
+        skip     = "A",
+        confirm  = "A",
+        cancel   = "B",
+        action   = "X"
     }
 }
 
 -- Function to update last input type
 function updateInputType(inputType)
-    if lastInputType ~= inputType then
-        lastInputType = inputType
+    if Game.lastInputType ~= inputType then
+        Game.lastInputType = inputType
         logger.debug("Input type changed to: %s", inputType)
     end
 end
 
-function initWindow()
+-- Window initialisation -----------------------------------------------------
+
+local function initWindow()
     lw.setTitle("Stellar Assault")
     lw.setMode(800, 600, {
         fullscreen = false,
-        resizable = true,
-        minwidth = constants.window.minWidth,
-        minheight = constants.window.minHeight
+        resizable  = true,
+        minwidth   = constants.window.minWidth,
+        minheight  = constants.window.minHeight
     })
 
     lg.setDefaultFilter("nearest", "nearest")
-    lg.setBackgroundColor(0.05, 0.05, 0.1)
+    lg.setBackgroundColor(0.05, 0.05, 0.10)
 end
 
-function loadFonts()
-    titleFont = lg.newFont(48)
-    menuFont = lg.newFont(24)
-    uiFont = lg.newFont(18)
-    smallFont = lg.newFont(14)
-    mediumFont = lg.newFont(20)
-    uiManager = UIManager:new()
-    
+-- Font loading --------------------------------------------------------------
+
+local function loadFonts()
+    Game.titleFont  = lg.newFont(48)
+    Game.menuFont   = lg.newFont(24)
+    Game.uiFont     = lg.newFont(18)
+    Game.smallFont  = lg.newFont(14)
+    Game.mediumFont = lg.newFont(20)
+    Game.uiManager  = UIManager:new()
+
     -- Try to load monospace font, fall back to default
     if lf.getInfo("assets/fonts/monospace.ttf") then
-        consoleFont = lg.newFont("assets/fonts/monospace.ttf", 14)
+        Game.consoleFont = lg.newFont("assets/fonts/monospace.ttf", 14)
     else
-        consoleFont = lg.newFont(14)
+        Game.consoleFont = lg.newFont(14)
     end
 end
 
-function initStates()
-    stateManager = StateManager:new()
-    stateManager:register("menu", require("states.menu"))
-    stateManager:register("intro", require("states.intro"))
-    stateManager:register("playing", require("states.playing"))
-    stateManager:register("pause", require("states.pause"))
-    stateManager:register("gameover", require("states.gameover"))
-    stateManager:register("options", require("states.options"))
+-- Game state registration ---------------------------------------------------
+
+local function initStates()
+    -- Global state manager
+    stateManager              = StateManager:new()  -- Intentional global for callbacks
+    Game.stateManager         = stateManager
+
+    stateManager:register("menu",        require("states.menu"))
+    stateManager:register("intro",       require("states.intro"))
+    stateManager:register("playing",     require("states.playing"))
+    stateManager:register("pause",       require("states.pause"))
+    stateManager:register("gameover",    require("states.gameover"))
+    stateManager:register("options",     require("states.options"))
     stateManager:register("levelselect", require("states.levelselect"))
     stateManager:register("leaderboard", require("states.leaderboard"))
 
+    -- Debug console setup (always define `debugConsole`)
     if CONFIG.debug then
         debugConsole = DebugConsole:new()
         local debugCommands = require("src.debugcommands")
         debugCommands.register(debugConsole)
     else
         debugConsole = {
-            update = function() end,
-            draw = function() end,
+            update     = function() end,
+            draw       = function() end,
             keypressed = function() return false end,
-            textinput = function() return false end,
+            textinput  = function() return false end,
         }
     end
+    Game.debugConsole = debugConsole  -- Alias for convenience
 end
 
-function love.load()
-    initWindow()
-    loadFonts()
+-- Audio ---------------------------------------------------------------------
 
-    -- Load all sprites dynamically and categorize them
-    local SpriteManager = require("src.sprite_manager")
-    spriteManager = SpriteManager.load("assets/sprites")
-
-    -- Categories are determined by filename patterns
-    playerShips = spriteManager:getCategory("player")
-    enemyShips  = spriteManager:getCategory("enemy")
-
-    bossSprites = {}
-    local bossCategory = spriteManager:getCategory("boss")
-    for name, sprite in pairs(bossCategory) do
-        local idx = tonumber(name:match("%d+")) or (#bossSprites + 1)
-        bossSprites[idx] = sprite
-    end
-    bossSprite = bossSprites[1]
-    boss2Sprite = bossSprites[2]
-    
-    -- Game configuration
-    availableShips = { "alpha", "beta", "gamma" }
-    selectedShip = "alpha"
-    
-    -- Global sprite scale factor (adjust as needed; 4 makes sprites 4x larger)
-    spriteScale = 0.15  -- Adjust this value lower (e.g., 0.1) if still too large, or higher if too small
-    
-    loadAudio()
-    
-    -- Apply saved settings
-    loadSettings()
-    
-    -- Apply the loaded window mode
-    applyWindowMode()
-    
-    Persistence.init()
-    local psettings = Persistence.getSettings()
-    highContrast = psettings.highContrast or false
-    fontScale = psettings.fontScale or 1
-    applyFontScale()
-
-    initStates()
-    
-    logger.info("Stellar Assault started")
-    logger.info("Love2D version: %d.%d.%d", love.getVersion())
-    logger.info("Resolution: %dx%d", lg.getWidth(), lg.getHeight())
-    
-    -- Start with menu
-    stateManager:switch("menu")
-end
-
-function loadAudio()
+local function loadAudio()
     la.setDistanceModel("inverseclamped")
+
+    -- Helper to register SFX
+    local function registerSfx(path, baseVolume)
+        if not lf.getInfo(path) then return nil end
+        local src = la.newSource(path, "static")
+        src.baseVolume = baseVolume
+        src:setVolume(src.baseVolume * Game.sfxVolume * Game.masterVolume)
+        table.insert(sfxSources, src)
+        return src
+    end
+
+    -- Helper to register Music
+    local function registerMusic(path, baseVolume, looping)
+        if not lf.getInfo(path) then return nil end
+        local src = la.newSource(path, "stream")
+        src.baseVolume = baseVolume
+        src:setLooping(looping or false)
+        src:setVolume(src.baseVolume * Game.musicVolume * Game.masterVolume)
+        table.insert(musicSources, src)
+        return src
+    end
+
     -- Sound effects
-    if lf.getInfo("laser.wav") then
-        laserSound = la.newSource("laser.wav", "static")
-        laserSound.baseVolume = 0.5
-        laserSound:setVolume(laserSound.baseVolume * sfxVolume * masterVolume)
-        table.insert(sfxSources, laserSound)
+    Game.laserSound       = registerSfx("laser.wav",        0.5)
+    Game.explosionSound   = registerSfx("explosion.wav",    0.7)
+    Game.powerupSound     = registerSfx("powerup.wav",      0.6)
+    Game.shieldBreakSound = registerSfx("shield_break.wav", 0.7)
+    Game.gameOverSound    = registerSfx("gameover.ogg",     0.8)
+    Game.menuSelectSound  = registerSfx("menu.flac",        0.4)
 
-        -- Preload clones for rapid firing
-        laserClones = {}
+    if Game.menuSelectSound then
+        Game.menuConfirmSound            = Game.menuSelectSound:clone()
+        Game.menuConfirmSound.baseVolume = Game.menuSelectSound.baseVolume
+        Game.menuConfirmSound:setVolume(
+            Game.menuConfirmSound.baseVolume * Game.sfxVolume * Game.masterVolume
+        )
+        table.insert(sfxSources, Game.menuConfirmSound)
+    end
+
+    -- Pre‑load laser clones for rapid firing
+    if Game.laserSound then
+        Game.laserClones = {}
         for i = 1, 5 do
-            local c = laserSound:clone()
-            c.baseVolume = laserSound.baseVolume
-            c:setVolume(c.baseVolume * sfxVolume * masterVolume)
-            table.insert(laserClones, c)
-            table.insert(sfxSources, c)  -- Add clones to sfxSources for volume updates
+            local c = Game.laserSound:clone()
+            c.baseVolume = Game.laserSound.baseVolume
+            c:setVolume(c.baseVolume * Game.sfxVolume * Game.masterVolume)
+            table.insert(Game.laserClones, c)
+            table.insert(sfxSources, c) -- include clones in volume updates
         end
-        laserCloneIndex = 1
-    end
-    
-    if lf.getInfo("explosion.wav") then
-        explosionSound = la.newSource("explosion.wav", "static")
-        explosionSound.baseVolume = 0.7
-        explosionSound:setVolume(explosionSound.baseVolume * sfxVolume * masterVolume)
-        table.insert(sfxSources, explosionSound)
+        Game.laserCloneIndex = 1
     end
 
-    if lf.getInfo("powerup.wav") then
-        powerupSound = la.newSource("powerup.wav", "static")
-        powerupSound.baseVolume = 0.6
-        powerupSound:setVolume(powerupSound.baseVolume * sfxVolume * masterVolume)
-        table.insert(sfxSources, powerupSound)
-    end
-
-    if lf.getInfo("shield_break.wav") then
-        shieldBreakSound = la.newSource("shield_break.wav", "static")
-        shieldBreakSound.baseVolume = 0.7
-        shieldBreakSound:setVolume(shieldBreakSound.baseVolume * sfxVolume * masterVolume)
-        table.insert(sfxSources, shieldBreakSound)
-    end
-
-    if lf.getInfo("gameover.ogg") then
-        gameOverSound = la.newSource("gameover.ogg", "static")
-        gameOverSound.baseVolume = 0.8
-        gameOverSound:setVolume(gameOverSound.baseVolume * sfxVolume * masterVolume)
-        table.insert(sfxSources, gameOverSound)
-    end
-
-    if lf.getInfo("menu.flac") then
-        menuSelectSound = la.newSource("menu.flac", "static")
-        menuSelectSound.baseVolume = 0.4
-        menuSelectSound:setVolume(menuSelectSound.baseVolume * sfxVolume * masterVolume)
-        table.insert(sfxSources, menuSelectSound)
-        menuConfirmSound = menuSelectSound:clone()
-        menuConfirmSound.baseVolume = menuSelectSound.baseVolume
-        menuConfirmSound:setVolume(menuConfirmSound.baseVolume * sfxVolume * masterVolume)
-        table.insert(sfxSources, menuConfirmSound)
-    end
-    
-    -- Background music
-    if lf.getInfo("background.mp3") then
-        backgroundMusic = la.newSource("background.mp3", "stream")
-        backgroundMusic.baseVolume = 1.0
-        backgroundMusic:setLooping(true)
-        backgroundMusic:setVolume(backgroundMusic.baseVolume * musicVolume * masterVolume)
-        table.insert(musicSources, backgroundMusic)
-    end
-
-    if lf.getInfo("boss.mp3") then
-        bossMusic = la.newSource("boss.mp3", "stream")
-        bossMusic.baseVolume = 0.8
-        bossMusic:setLooping(true)
-        bossMusic:setVolume(bossMusic.baseVolume * musicVolume * masterVolume)
-        table.insert(musicSources, bossMusic)
-    end
-
-    if lf.getInfo("victory.ogg") then
-        victorySound = la.newSource("victory.ogg", "static")
-        victorySound.baseVolume = 0.8
-        victorySound:setVolume(victorySound.baseVolume * sfxVolume * masterVolume)
-        table.insert(sfxSources, victorySound)
-    end
+    -- Music
+    Game.backgroundMusic = registerMusic("background.mp3", 1.0, true)
+    Game.bossMusic       = registerMusic("boss.mp3",       0.8, true)
+    Game.victorySound    = registerSfx  ("victory.ogg",    0.8) -- victory is SFX
 end
 
-function applyFontScale()
-    titleFont = lg.newFont(48 * fontScale)
-    menuFont = lg.newFont(24 * fontScale)
-    uiFont = lg.newFont(18 * fontScale)
-    smallFont = lg.newFont(14 * fontScale)
-    mediumFont = lg.newFont(20 * fontScale)
+-- Font scaling --------------------------------------------------------------
+
+local function applyFontScale()
+    Game.titleFont  = lg.newFont(48 * Game.fontScale)
+    Game.menuFont   = lg.newFont(24 * Game.fontScale)
+    Game.uiFont     = lg.newFont(18 * Game.fontScale)
+    Game.smallFont  = lg.newFont(14 * Game.fontScale)
+    Game.mediumFont = lg.newFont(20 * Game.fontScale)
 end
 
-function loadSettings()
-    if lf.getInfo("settings.dat") then
-        local data = lf.read("settings.dat")
-        local lines = {}
-        for line in data:gmatch("[^\n]+") do
-            table.insert(lines, line)
-        end
-        
-        if #lines >= 5 then
-            currentResolution = tonumber(lines[1]) or 1
-            displayMode = lines[2] or "windowed"
-            masterVolume = tonumber(lines[3]) or 1.0
-            sfxVolume = tonumber(lines[4]) or 1.0
-            musicVolume = tonumber(lines[5]) or 0.2
-            
-            -- Load selected ship if available
-            if #lines >= 6 and lines[6] then
-                selectedShip = lines[6]
-                -- Validate ship selection
-                local validShip = false
-                for _, ship in ipairs(availableShips) do
-                    if ship == selectedShip then
-                        validShip = true
-                        break
-                    end
-                end
-                if not validShip then
-                    selectedShip = "alpha"
-                end
-            end
-            
-            if #lines >= 7 then
-                highContrast = lines[7] == "true"
-            end
-            if #lines >= 8 then
-                fontScale = tonumber(lines[8]) or 1
-            end
+-- Settings I/O --------------------------------------------------------------
 
-            -- Apply audio settings
-            updateAudioVolumes()
-            applyFontScale()
-        end
+local function loadSettings()
+    if not lf.getInfo("settings.dat") then return end
+
+    local lines = {}
+    for line in lf.read("settings.dat"):gmatch("[^\n]+") do
+        table.insert(lines, line)
     end
+
+    if #lines < 5 then return end
+
+    Game.currentResolution = tonumber(lines[1]) or 1
+    Game.displayMode       = lines[2] or "windowed"
+    Game.masterVolume      = tonumber(lines[3]) or 1.0
+    Game.sfxVolume         = tonumber(lines[4]) or 1.0
+    Game.musicVolume       = tonumber(lines[5]) or 0.2
+
+    if lines[6] then
+        Game.selectedShip = lines[6]
+        -- Validate selection
+        local validShip = false
+        for _, ship in ipairs(Game.availableShips or {}) do
+            if ship == Game.selectedShip then
+                validShip = true
+                break
+            end
+        end
+        if not validShip then Game.selectedShip = "alpha" end
+    end
+
+    if lines[7] then
+        Game.highContrast = lines[7] == "true"
+    end
+    if lines[8] then
+        Game.fontScale = tonumber(lines[8]) or 1
+    end
+
+    updateAudioVolumes()
+    applyFontScale()
 end
 
-function saveSettings()
-    local data = currentResolution .. "\n" ..
-                displayMode .. "\n" ..
-                masterVolume .. "\n" ..
-                sfxVolume .. "\n" ..
-                musicVolume .. "\n" ..
-                selectedShip .. "\n" ..
-                tostring(highContrast) .. "\n" ..
-                fontScale
+local function saveSettings()
+    local data =
+        Game.currentResolution .. "\n" ..
+        Game.displayMode       .. "\n" ..
+        Game.masterVolume      .. "\n" ..
+        Game.sfxVolume         .. "\n" ..
+        Game.musicVolume       .. "\n" ..
+        Game.selectedShip      .. "\n" ..
+        tostring(Game.highContrast) .. "\n" ..
+        Game.fontScale
 
     lf.write("settings.dat", data)
 
     Persistence.updateSettings({
-        masterVolume = masterVolume,
-        sfxVolume = sfxVolume,
-        musicVolume = musicVolume,
-        selectedShip = selectedShip,
-        displayMode = displayMode,
-        highContrast = highContrast,
-        fontScale = fontScale
+        masterVolume  = Game.masterVolume,
+        sfxVolume     = Game.sfxVolume,
+        musicVolume   = Game.musicVolume,
+        selectedShip  = Game.selectedShip,
+        displayMode   = Game.displayMode,
+        highContrast  = Game.highContrast,
+        fontScale     = Game.fontScale
     })
 end
 
-function applyWindowMode()
-    -- Resolution options (matching options.lua)
+-- Window mode ---------------------------------------------------------------
+
+local function applyWindowMode()
+    -- Resolution options (must match states/options.lua)
     local resolutions = {
-        {width = 800, height = 600},
-        {width = 1024, height = 768},
-        {width = 1280, height = 720},
-        {width = 1366, height = 768},
+        {width =  800, height =  600},
+        {width = 1024, height =  768},
+        {width = 1280, height =  720},
+        {width = 1366, height =  768},
         {width = 1920, height = 1080},
         {width = 2560, height = 1440}
     }
-    
+
     local flags = {
-        vsync = 1,
-        minwidth = constants.window.minWidth,
+        vsync     = 1,
+        minwidth  = constants.window.minWidth,
         minheight = constants.window.minHeight
     }
-    
-    -- Apply window settings based on display mode
-    if displayMode == "borderless" then
-        -- Borderless fullscreen (desktop mode)
-        flags.fullscreen = true
+
+    if Game.displayMode == "borderless" then
+        -- Borderless (desktop) fullscreen
+        flags.fullscreen     = true
         flags.fullscreentype = "desktop"
-        flags.resizable = false
-        lw.setMode(0, 0, flags)  -- 0,0 uses desktop dimensions automatically
-        
-    elseif displayMode == "fullscreen" then
-        -- Exclusive fullscreen
-        local resolution = resolutions[currentResolution] or resolutions[1]
-        flags.fullscreen = true
+        flags.resizable      = false
+        lw.setMode(0, 0, flags)  -- 0,0 => desktop dimensions
+    elseif Game.displayMode == "fullscreen" then
+        local res = resolutions[Game.currentResolution] or resolutions[1]
+        flags.fullscreen     = true
         flags.fullscreentype = "exclusive"
-        flags.resizable = false
-        lw.setMode(resolution.width, resolution.height, flags)
-        
-    else  -- windowed
-        local resolution = resolutions[currentResolution] or resolutions[1]
+        flags.resizable      = false
+        lw.setMode(res.width, res.height, flags)
+    else -- "windowed"
+        local res = resolutions[Game.currentResolution] or resolutions[1]
         flags.fullscreen = false
         flags.borderless = false
-        flags.resizable = true
-        lw.setMode(resolution.width, resolution.height, flags)
+        flags.resizable  = true
+        lw.setMode(res.width, res.height, flags)
     end
-    
-    -- Reinitialize starfield for new window size
+
+    -- Re‑initialise starfield for new window size
     initStarfield()
 end
 
-function updateAudioVolumes()
-    -- Update all SFX sources with new volume settings
-    for _, source in ipairs(sfxSources) do
-        if source then
-            local base = source.baseVolume or 1
-            source:setVolume(base * sfxVolume * masterVolume)
-        end
-    end
+-- Audio helper --------------------------------------------------------------
 
-    -- Update all music sources
-    for _, source in ipairs(musicSources) do
-        if source then
-            local base = source.baseVolume or 1
-            source:setVolume(base * musicVolume * masterVolume)
-        end
+function updateAudioVolumes()
+    for _, src in ipairs(sfxSources) do
+        local base = src.baseVolume or 1
+        src:setVolume(base * Game.sfxVolume * Game.masterVolume)
+    end
+    for _, src in ipairs(musicSources) do
+        local base = src.baseVolume or 1
+        src:setVolume(base * Game.musicVolume * Game.masterVolume)
     end
 end
 
--- Play a sound at a given world position with distance-based attenuation
+-- Positional SFX ------------------------------------------------------------
+
 function playPositionalSound(source, x, y)
     if not source or not player then return end
     local clone
 
-    -- Use preloaded clones for laser to allow overlapping sounds
-    if source == laserSound and laserClones then
-        clone = laserClones[laserCloneIndex]
-        laserCloneIndex = (laserCloneIndex % #laserClones) + 1
+    -- Use pre‑loaded clones for laser
+    if source == Game.laserSound and Game.laserClones then
+        clone                   = Game.laserClones[Game.laserCloneIndex]
+        Game.laserCloneIndex    = (Game.laserCloneIndex % #Game.laserClones) + 1
     else
-        clone = source:clone()
-        clone.baseVolume = source.baseVolume
+        clone                   = source:clone()
+        clone.baseVolume        = source.baseVolume
     end
 
     local dx, dy = x - player.x, y - player.y
@@ -447,23 +380,25 @@ function playPositionalSound(source, x, y)
         clone:setPosition(dx, dy, 0)
         clone:setAttenuationDistances(soundReferenceDistance, soundMaxDistance)
     end
-    local base = clone.baseVolume or source.baseVolume or 1
-    clone:setVolume(base * sfxVolume * masterVolume)
+
+    local base = clone.baseVolume or 1
+    clone:setVolume(base * Game.sfxVolume * Game.masterVolume)
     clone:play()
 end
 
--- Starfield background (shared across states)
-local stars = {}
-local starCount = 200
+-- Starfield -----------------------------------------------------------------
+
+local stars      = {}
+local starCount  = 200
 
 function initStarfield()
     stars = {}
     for i = 1, starCount do
         table.insert(stars, {
-            x = love.math.random() * lg.getWidth(),
-            y = love.math.random() * lg.getHeight(),
+            x     = love.math.random() * lg.getWidth(),
+            y     = love.math.random() * lg.getHeight(),
             speed = love.math.random() * 50 + 20,
-            size = love.math.random() * 2
+            size  = love.math.random() * 2
         })
     end
 end
@@ -481,124 +416,166 @@ end
 
 function drawStarfield()
     for _, star in ipairs(stars) do
-        local brightness = star.size / 2
-        lg.setColor(brightness, brightness, brightness)
+        local b = star.size / 2
+        lg.setColor(b, b, b)
         lg.circle("fill", star.x, star.y, star.size)
     end
 end
 
--- Make starfield functions global for states to use
-_G.initStarfield = initStarfield
+-- Make starfield helpers globally accessible to states
+_G.initStarfield  = initStarfield
 _G.updateStarfield = updateStarfield
-_G.drawStarfield = drawStarfield
+_G.drawStarfield  = drawStarfield
 
--- Initialize starfield
+-- Initial starfield
 initStarfield()
 
--- Love2D callbacks
-function love.update(dt)
-    -- Cap delta time to prevent large jumps
-    dt = math.min(dt, 1/30)
-    
-    -- Apply time scale if set
-    if _G.timeScale then
-        dt = dt * _G.timeScale
+-------------------------------------------------------------------------------
+-- Love2D lifecycle                                                          --
+-------------------------------------------------------------------------------
+
+function love.load()
+    initWindow()
+    loadFonts()
+
+    -- Load all sprites dynamically and categorise them
+    local SpriteManager   = require("src.sprite_manager")
+    Game.spriteManager    = SpriteManager.load("assets/sprites")
+
+    -- Categorise by filename patterns
+    Game.playerShips = Game.spriteManager:getCategory("player")
+    Game.enemyShips  = Game.spriteManager:getCategory("enemy")
+
+    -- Boss sprites handled as an ordered array
+    Game.bossSprites = {}
+    for name, sprite in pairs(Game.spriteManager:getCategory("boss")) do
+        local idx = tonumber(name:match("%d+")) or (#Game.bossSprites + 1)
+        Game.bossSprites[idx] = sprite
     end
-    
-    -- Update starfield
+    Game.bossSprite  = Game.bossSprites[1]
+    Game.boss2Sprite = Game.bossSprites[2]
+
+    -- Game configuration
+    Game.availableShips = { "alpha", "beta", "gamma" }
+    Game.selectedShip   = "alpha"
+
+    -- Global sprite scale factor
+    Game.spriteScale = 0.15
+
+    -- Audio
+    loadAudio()
+
+    -- Persisted settings
+    loadSettings()
+
+    -- Apply window mode & fonts
+    applyWindowMode()
+
+    -- Persistence
+    Persistence.init()
+    local psettings   = Persistence.getSettings()
+    Game.highContrast = psettings.highContrast or false
+    Game.fontScale    = psettings.fontScale    or 1
+    applyFontScale()
+
+    -- States / debug console
+    initStates()
+
+    logger.info("Stellar Assault started")
+    logger.info("Love2D version: %d.%d.%d", love.getVersion())
+    logger.info("Resolution: %dx%d", lg.getWidth(), lg.getHeight())
+
+    -- Start with main menu
+    stateManager:switch("menu")
+end
+
+function love.update(dt)
+    -- Cap delta to prevent giant jumps
+    dt = math.min(dt, 1/30)
+
+    -- Optional time scale
+    if _G.timeScale then dt = dt * _G.timeScale end
+
+    -- Background
     updateStarfield(dt)
-    
-    -- Update debug console
+
+    -- Debug console
     debugConsole:update(dt)
-    
-    -- Update config reload notification
+
+    -- Config reload notification
     if _G.configReloadNotification then
-        _G.configReloadNotification.timer = _G.configReloadNotification.timer - dt
+        _G.configReloadNotification.timer =
+            _G.configReloadNotification.timer - dt
         if _G.configReloadNotification.timer <= 0 then
             _G.configReloadNotification = nil
         end
     end
-    
-    -- Update current state
+
+    -- Current state
     stateManager:update(dt)
 end
 
 function love.draw()
     stateManager:draw()
-    
-    -- Debug info (press F3 to toggle)
-    if debugMode then
-        drawDebugInfo()
-    end
-    
-    -- Debug overlay (press F9 to toggle)
-    if debugOverlay then
-        drawDebugOverlay()
-    end
-    
+
+    -- Debug info / overlay
+    if debugMode   then drawDebugInfo()   end
+    if debugOverlay then drawDebugOverlay() end
+
     -- Config reload notification
     if _G.configReloadNotification then
-        local notif = _G.configReloadNotification
-        lg.setFont(menuFont)
-        lg.setColor(notif.color[1], notif.color[2], notif.color[3], notif.timer)
-        lg.printf(notif.text, 0, lg.getHeight() / 2 - 50, lg.getWidth(), "center")
-        lg.setColor(1, 1, 1, 1)
+        local n = _G.configReloadNotification
+        lg.setFont(Game.menuFont)
+        lg.setColor(n.color[1], n.color[2], n.color[3], n.timer)
+        lg.printf(n.text, 0, lg.getHeight()/2 - 50, lg.getWidth(), "center")
+        lg.setColor(1,1,1,1)
     end
-    
-    -- Log overlay (toggle with 'showlog' command)
+
+    -- Logger overlay
     if _G.showLogOverlay then
         logger.drawOverlay(10, lg.getHeight() - 200, 10)
     end
-    
-    -- Debug console (press ~ to toggle)
+
+    -- Debug console
     debugConsole:draw()
 end
 
 function love.keypressed(key, scancode, isrepeat)
     updateInputType("keyboard")
-    
-    -- Check debug console first
-    if debugConsole:keypressed(key) then
-        return -- Console handled the key
-    end
-    
-    -- Global keys
+
+    -- Debug console gets first dibs
+    if debugConsole:keypressed(key) then return end
+
     if key == "f3" then
         debugMode = not debugMode
         logger.info("Debug mode: %s", debugMode and "enabled" or "disabled")
     elseif key == "f5" then
-        -- Hot-reload config (dev only)
-        local success, newConstants = pcall(function()
-            -- Clear the require cache
+        -- Hot‑reload constants
+        local ok, newConstants = pcall(function()
             package.loaded["src.constants"] = nil
             return require("src.constants")
         end)
-        
-        if success then
-            -- Update global constants
+        if ok then
             constants = newConstants
             logger.info("Config reloaded successfully")
-            
-            -- Visual feedback
             _G.configReloadNotification = {
-                text = "Config Reloaded!",
+                text  = "Config Reloaded!",
                 timer = 2,
-                color = {0, 1, 0}
+                color = {0,1,0}
             }
         else
-            logger.error("Failed to reload config: " .. tostring(newConstants))
+            logger.error("Failed to reload config: %s", tostring(newConstants))
             _G.configReloadNotification = {
-                text = "Config Reload Failed!",
+                text  = "Config Reload Failed!",
                 timer = 2,
-                color = {1, 0, 0}
+                color = {1,0,0}
             }
         end
     elseif key == "f9" then
-        -- Toggle debug overlay
         debugOverlay = not debugOverlay
         logger.info("Debug overlay: %s", debugOverlay and "enabled" or "disabled")
     end
-    
+
     -- Pass to state
     stateManager:keypressed(key, scancode, isrepeat)
 end
@@ -608,18 +585,16 @@ function love.keyreleased(key, scancode)
 end
 
 function love.mousepressed(x, y, button, istouch, presses)
-    updateInputType("keyboard")  -- Treat mouse as keyboard context
+    updateInputType("keyboard") -- Mouse counts as KB context
     stateManager:mousepressed(x, y, button, istouch, presses)
 end
 
-function love.mousemoved(x, y, dx, dy, istouch)
-    updateInputType("keyboard")  -- Treat mouse as keyboard context
+function love.mousemoved()
+    updateInputType("keyboard")
 end
 
-function love.gamepadaxis(joystick, axis, value)
-    if math.abs(value) > 0.2 then  -- Deadzone to avoid noise
-        updateInputType("gamepad")
-    end
+function love.gamepadaxis(_, _, value)
+    if math.abs(value) > 0.2 then updateInputType("gamepad") end
 end
 
 function love.gamepadpressed(joystick, button)
@@ -632,60 +607,50 @@ function love.gamepadreleased(joystick, button)
 end
 
 function love.resize(w, h)
-    -- Reinitialize starfield for new dimensions
     initStarfield()
-    
-    -- Optional: Make scale relative to screen height for consistency across resolutions
-    -- spriteScale = (h / 600) * 4  -- Bases on 600px height; uncomment if fixed scale feels inconsistent
-    
-    -- Notify current state
     stateManager:resize(w, h)
-    
     logger.info("Window resized to %dx%d", w, h)
 end
 
 function love.textinput(text)
-    -- Pass to debug console
-    if debugConsole:textinput(text) then
-        return
-    end
+    debugConsole:textinput(text)
 end
 
--- Debug information
-debugMode = false
-debugOverlay = false
-frameTimeHistory = {}
-maxFrameTimeHistory = 60
+-------------------------------------------------------------------------------
+-- Debug helpers                                                             --
+-------------------------------------------------------------------------------
 
-function drawDebugInfo()
-    lg.setFont(smallFont)
-    lg.setColor(1, 1, 1, 0.8)
-    
-    -- Track frame time history
+debugMode      = false
+debugOverlay   = false
+frameTimeHistory      = {}
+maxFrameTimeHistory   = 60
+
+local function drawDebugInfo()
+    lg.setFont(Game.smallFont)
+    lg.setColor(1,1,1,0.8)
+
     table.insert(frameTimeHistory, lt.getDelta())
     if #frameTimeHistory > maxFrameTimeHistory then
         table.remove(frameTimeHistory, 1)
     end
-    
-    -- Calculate average and max frame time
-    local avgFrameTime = 0
-    local maxFrameTime = 0
-    for _, frameTime in ipairs(frameTimeHistory) do
-        avgFrameTime = avgFrameTime + frameTime
-        maxFrameTime = math.max(maxFrameTime, frameTime)
+
+    local avg, max = 0, 0
+    for _, dt in ipairs(frameTimeHistory) do
+        avg = avg + dt
+        if dt > max then max = dt end
     end
-    avgFrameTime = avgFrameTime / #frameTimeHistory
-    
+    avg = avg / #frameTimeHistory
+
     local info = {
-        "FPS: " .. tostring(lt.getFPS()),
-        "Memory: " .. string.format("%.2f MB", collectgarbage("count") / 1024),
-        "Delta: " .. string.format("%.3f ms", lt.getAverageDelta() * 1000),
-        "Avg Frame: " .. string.format("%.3f ms", avgFrameTime * 1000),
-        "Max Frame: " .. string.format("%.3f ms", maxFrameTime * 1000),
-        "State: " .. (stateManager.currentName or "none"),
-        "Resolution: " .. lg.getWidth() .. "x" .. lg.getHeight()
+        "FPS: "      .. lt.getFPS(),
+        string.format("Memory: %.2f MB", collectgarbage("count")/1024),
+        string.format("Delta: %.3f ms", lt.getAverageDelta()*1000),
+        string.format("Avg Frame: %.3f ms", avg*1000),
+        string.format("Max Frame: %.3f ms", max*1000),
+        "State: "    .. (stateManager.currentName or "none"),
+        string.format("Res: %dx%d", lg.getWidth(), lg.getHeight())
     }
-    
+
     local y = 10
     for _, line in ipairs(info) do
         lg.print(line, lg.getWidth() - 150, y)
@@ -693,80 +658,57 @@ function drawDebugInfo()
     end
 end
 
-function drawDebugOverlay()
-    lg.setFont(smallFont)
-    
-    -- Semi-transparent background
-    lg.setColor(0, 0, 0, 0.7)
-    lg.rectangle("fill", lg.getWidth() - 250, 10, 240, 180, 5)
-    
-    -- Performance metrics
-    lg.setColor(1, 1, 1, 1)
-    local x = lg.getWidth() - 240
-    local y = 20
-    local lineHeight = 18
-    
-    -- Memory usage
-    local memUsage = collectgarbage("count") / 1024
-    lg.print(string.format("Memory: %.2f MB", memUsage), x, y)
-    y = y + lineHeight
-    
-    -- Entity counts (if in playing state)
+local function drawDebugOverlay()
+    lg.setFont(Game.smallFont)
+
+    -- Semi‑transparent panel
+    lg.setColor(0,0,0,0.7)
+    lg.rectangle("fill", lg.getWidth()-250, 10, 240, 180, 5)
+
+    lg.setColor(1,1,1,1)
+    local x, y, lh = lg.getWidth()-240, 20, 18
+
+    lg.print(string.format("Memory: %.2f MB", collectgarbage("count")/1024), x, y)
+    y = y + lh
+
     if stateManager.currentState == stateManager.states.playing then
-        lg.print("Entities:", x, y)
-        y = y + lineHeight
-        
-        lg.print(string.format("  Asteroids: %d", asteroids and #asteroids or 0), x, y)
-        y = y + lineHeight
-        
-        lg.print(string.format("  Aliens: %d", aliens and #aliens or 0), x, y)
-        y = y + lineHeight
-        
-        lg.print(string.format("  Lasers: %d", lasers and #lasers or 0), x, y)
-        y = y + lineHeight
-        
-        lg.print(string.format("  Explosions: %d", explosions and #explosions or 0), x, y)
-        y = y + lineHeight
-        
-        lg.print(string.format("  Powerups: %d", powerups and #powerups or 0), x, y)
-        y = y + lineHeight
+        lg.print("Entities:", x, y); y = y + lh
+        lg.print(string.format("  Asteroids:  %d", asteroids and #asteroids or 0), x, y); y = y + lh
+        lg.print(string.format("  Aliens:     %d", aliens    and #aliens    or 0), x, y); y = y + lh
+        lg.print(string.format("  Lasers:     %d", lasers    and #lasers    or 0), x, y); y = y + lh
+        lg.print(string.format("  Explosions: %d", explosions and #explosions or 0), x, y); y = y + lh
+        lg.print(string.format("  Powerups:   %d", powerups  and #powerups  or 0), x, y); y = y + lh
     end
-    
-    -- Controls hint
-    y = y + lineHeight
-    lg.setColor(0.7, 0.7, 0.7, 1)
-    lg.print("F3: Debug Info", x, y)
-    y = y + lineHeight
-    lg.print("F5: Reload Config", x, y)
-    y = y + lineHeight
-    lg.print("F9: Toggle Overlay", x, y)
-    
-    lg.setColor(1, 1, 1, 1)
+
+    y = y + lh
+    lg.setColor(0.7,0.7,0.7,1)
+    lg.print("F3: Debug Info",   x, y); y = y + lh
+    lg.print("F5: Reload Config",x, y); y = y + lh
+    lg.print("F9: Toggle Overlay",x,y)
+
+    lg.setColor(1,1,1,1)
 end
 
--- Utility functions available globally
+-------------------------------------------------------------------------------
+-- Utility helpers                                                           --
+-------------------------------------------------------------------------------
+
 function saveGame(slot, level, score, lives)
-    local data = level .. "," .. score .. "," .. lives
-    lf.write("save" .. slot .. ".dat", data)
+    lf.write("save"..slot..".dat", table.concat({level,score,lives}, ","))
 end
 
 function checkCollision(a, b)
-    local aLeft = a.x - (a.width or a.size) / 2
-    local aRight = a.x + (a.width or a.size) / 2
-    local aTop = a.y - (a.height or a.size) / 2
-    local aBottom = a.y + (a.height or a.size) / 2
-    
-    local bLeft = b.x - (b.width or b.size) / 2
-    local bRight = b.x + (b.width or b.size) / 2
-    local bTop = b.y - (b.height or b.size) / 2
-    local bBottom = b.y + (b.height or b.size) / 2
-    
-    return aLeft < bRight and aRight > bLeft and 
-           aTop < bBottom and aBottom > bTop
+    local aw, ah = a.width  or a.size,  a.height  or a.size
+    local bw, bh = b.width  or b.size,  b.height  or b.size
+
+    return (a.x - aw/2) < (b.x + bw/2) and
+           (a.x + aw/2) > (b.x - bw/2) and
+           (a.y - ah/2) < (b.y + bh/2) and
+           (a.y + ah/2) > (b.y - bh/2)
 end
 
 function love.quit()
-    if spriteManager and spriteManager.reportUsage then
-        spriteManager:reportUsage()
+    if Game.spriteManager and Game.spriteManager.reportUsage then
+        Game.spriteManager:reportUsage()
     end
 end

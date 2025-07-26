@@ -3,6 +3,7 @@ local Persistence = require("src.persistence")
 local constants = require("src.constants")
 local ShopManager = require("src.shop_manager")
 local lg = love.graphics
+local Game = require("src.game")
 
 local function formatTime(t)
     if not t then return "" end
@@ -121,7 +122,7 @@ function LevelSelectState:draw()
     lg.setColor(1, 1, 1, self.fadeIn)
     
     -- Title
-    lg.setFont(titleFont)
+    lg.setFont(Game.titleFont)
     lg.printf("SELECT LEVEL", 0, 50, lg.getWidth(), "center")
     
     -- Level buttons
@@ -147,7 +148,7 @@ function LevelSelectState:draw()
             lg.printf(tostring(button.level), x, y + 20, button.width, "center")
 
             local stats = Persistence.getLevelStats(button.level)
-            lg.setFont(smallFont)
+            lg.setFont(Game.smallFont)
             lg.setColor(1, 1, 0, self.fadeIn)
             lg.printf("S:" .. tostring(stats.bestScore or 0), x, y + button.height - 28, button.width, "center")
             lg.setColor(0, 1, 1, self.fadeIn)
@@ -157,7 +158,7 @@ function LevelSelectState:draw()
             -- Boss indicator
             if button.level % constants.levels.bossFrequency == 0 then
                 lg.setColor(1, 0.5, 0.5, self.fadeIn)
-                lg.setFont(smallFont)
+                lg.setFont(Game.smallFont)
                 lg.printf("BOSS", x, y + 45, button.width, "center")
                 lg.setFont(menuFont)
             end
@@ -178,13 +179,13 @@ function LevelSelectState:draw()
     -- Instructions (only if shop not open)
     if not self.shopOpen and not self.shipSelectOpen then
         lg.setColor(1, 1, 1, self.fadeIn * 0.8)
-        lg.setFont(uiFont)
+        lg.setFont(Game.uiFont)
         lg.printf("Click a level to start", 0, lg.getHeight() - 100, lg.getWidth(), "center")
         lg.printf("Press ESC to return to menu", 0, lg.getHeight() - 70, lg.getWidth(), "center")
     end
     
     -- Score and high score display
-    lg.setFont(uiFont)
+    lg.setFont(Game.uiFont)
     local highScore = Persistence.getHighScore()
     lg.setColor(1, 1, 0, self.fadeIn)
     lg.printf("High Score: " .. tostring(highScore), 0, 20, lg.getWidth(), "center")
@@ -200,7 +201,7 @@ function LevelSelectState:draw()
     end
     lg.rectangle("fill", shopBtn.x, shopBtn.y, shopBtn.width, shopBtn.height, 5)
     lg.setColor(1, 1, 1, self.fadeIn)
-    lg.setFont(uiFont)
+    lg.setFont(Game.uiFont)
     lg.printf("SHOP", shopBtn.x, shopBtn.y + 12, shopBtn.width, "center")
     
     -- Ship select button
@@ -258,7 +259,7 @@ function LevelSelectState:drawShipSelection()
     
     -- Ship options
     local shipY = y + 60
-    lg.setFont(uiFont)
+    lg.setFont(Game.uiFont)
     
     for i, shipName in ipairs(availableShips) do
         local isUnlocked = Persistence.isShipUnlocked(shipName)
@@ -291,19 +292,19 @@ function LevelSelectState:drawShipSelection()
             end
             
             -- Ship stats
-            lg.setFont(smallFont)
+            lg.setFont(Game.smallFont)
             lg.setColor(0.7, 0.7, 0.7)
             lg.print("Speed: " .. string.format("%.0f%%", shipConfig.speedMultiplier * 100), x + 20, shipY + 20)
             lg.print("Shield: " .. string.format("%.0f%%", shipConfig.shieldMultiplier * 100), x + 20, shipY + 35)
             lg.print("Fire Rate: " .. string.format("%.0f%%", shipConfig.fireRateMultiplier * 100), x + 20, shipY + 50)
-            lg.setFont(uiFont)
+            lg.setFont(Game.uiFont)
         else
             lg.setColor(0.4, 0.4, 0.4)
             lg.print(shipConfig.name .. " [LOCKED]", x + 20, shipY)
-            lg.setFont(smallFont)
+            lg.setFont(Game.smallFont)
             lg.setColor(0.5, 0.5, 0.5)
             lg.print("Unlock in shop", x + 20, shipY + 20)
-            lg.setFont(uiFont)
+            lg.setFont(Game.uiFont)
         end
         
         shipY = shipY + 90
@@ -311,7 +312,7 @@ function LevelSelectState:drawShipSelection()
     
     -- Instructions
     lg.setColor(0.7, 0.7, 0.7)
-    lg.setFont(smallFont)
+    lg.setFont(Game.smallFont)
     lg.printf("Click to select", x, y + height - 25, width, "center")
 end
 

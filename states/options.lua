@@ -3,6 +3,7 @@ local constants = require("src.constants")
 local lg = love.graphics
 local lw = love.window
 local Persistence = require("src.persistence")
+local Game = require("src.game")
 
 local OptionsState = {}
 
@@ -39,7 +40,7 @@ function OptionsState:enter()
     -- Find current index (default to 3 for borderless if not set)
     local dmValue = 3  -- Default to borderless
     for i, mode in ipairs(self.displayModes) do
-        if mode == (displayMode or "borderless") then
+        if mode == (Game.displayMode or "borderless") then
             dmValue = i
             break
         end
@@ -50,11 +51,11 @@ function OptionsState:enter()
 
     -- Menu items (change Display Mode to list type)
     self.menuItems = {
-        {name = "Resolution", type = "list", value = currentResolution or 1},
+        {name = "Resolution", type = "list", value = Game.currentResolution or 1},
         {name = "Display Mode", type = "list", value = dmValue},
-        {name = "Master Volume", type = "slider", value = masterVolume or 1.0},
-        {name = "SFX Volume", type = "slider", value = sfxVolume or 1.0},
-        {name = "Music Volume", type = "slider", value = musicVolume or 0.2},
+        {name = "Master Volume", type = "slider", value = Game.masterVolume or 1.0},
+        {name = "SFX Volume", type = "slider", value = Game.sfxVolume or 1.0},
+        {name = "Music Volume", type = "slider", value = Game.musicVolume or 0.2},
         {name = "High Contrast", type = "toggle", value = settings.highContrast or false},
         {name = "Font Size", type = "slider", value = fontValue},
         {name = "Controls", type = "button"},
@@ -141,24 +142,24 @@ function OptionsState:draw()
     end
     
     -- Title
-    local titleColor = highContrast and {1, 1, 1} or {0, 1, 1}
-    uiManager:drawMessage("OPTIONS", self.screenWidth/2, 80, titleColor, titleFont)
+    local titleColor = Game.highContrast and {1, 1, 1} or {0, 1, 1}
+    uiManager:drawMessage("OPTIONS", self.screenWidth/2, 80, titleColor, Game.titleFont)
     
     -- Draw menu items
-    lg.setFont(menuFont or lg.newFont(24))
+    lg.setFont(Game.menuFont or lg.newFont(24))
     
     local y = 200
     for i, item in ipairs(self.menuItems) do
         local isSelected = i == self.selection
         
         if isSelected then
-            if highContrast then
+            if Game.highContrast then
                 lg.setColor(1, 0, 0)
             else
                 lg.setColor(1, 1, 0)
             end
         else
-            if highContrast then
+            if Game.highContrast then
                 lg.setColor(1, 1, 1)
             else
                 lg.setColor(0.7, 0.7, 0.7)
@@ -199,7 +200,7 @@ function OptionsState:draw()
                 fillValue = (item.value - self.fontScaleRange.min) /
                              (self.fontScaleRange.max - self.fontScaleRange.min)
             end
-            if highContrast then
+            if Game.highContrast then
                 lg.setColor(1, 1, 1, 1)
             else
                 lg.setColor(0, 1, 1, 1)
@@ -217,12 +218,12 @@ function OptionsState:draw()
     end
     
     -- Instructions
-    local nav = inputHints[lastInputType].navigate or "Arrow Keys"
-    local select = inputHints[lastInputType].select or "Enter"
-    local adjust = lastInputType == "gamepad" and "Left/Right Stick" or "Left/Right"
+    local nav = Game.inputHints[Game.lastInputType].navigate or "Arrow Keys"
+    local select = Game.inputHints[Game.lastInputType].select or "Enter"
+    local adjust = Game.lastInputType == "gamepad" and "Left/Right Stick" or "Left/Right"
     local instructions = nav .. ": Navigate | " .. select .. ": Select | " .. adjust .. ": Adjust"
-    local instrColor = highContrast and {1, 1, 1} or {0.5, 0.5, 0.5}
-    uiManager:drawMessage(instructions, self.screenWidth/2, self.screenHeight - 40, instrColor, smallFont)
+    local instrColor = Game.highContrast and {1, 1, 1} or {0.5, 0.5, 0.5}
+    uiManager:drawMessage(instructions, self.screenWidth/2, self.screenHeight - 40, instrColor, Game.smallFont)
 end
 
 function OptionsState:keypressed(key)
@@ -299,8 +300,8 @@ function OptionsState:adjustValue(direction)
     elseif item.type == "toggle" then
         item.value = not item.value
         if item.name == "High Contrast" then
-            highContrast = item.value
-            Persistence.updateSettings({highContrast = highContrast})
+            Game.highContrast = item.value
+            Persistence.updateSettings({highContrast = Game.highContrast})
         end
     elseif item.type == "slider" then
         -- For continuous adjustment, direction is already scaled by dt
@@ -319,15 +320,15 @@ function OptionsState:adjustValue(direction)
         
         -- Update global values
         if item.name == "Master Volume" then
-            masterVolume = item.value
+            Game.masterVolume = item.value
         elseif item.name == "SFX Volume" then
-            sfxVolume = item.value
+            Game.sfxVolume = item.value
         elseif item.name == "Music Volume" then
-            musicVolume = item.value
+            Game.musicVolume = item.value
         elseif item.name == "Font Size" then
-            fontScale = item.value
+            Game.fontScale = item.value
             applyFontScale()
-            Persistence.updateSettings({fontScale = fontScale})
+            Persistence.updateSettings({fontScale = Game.fontScale})
         end
         
         -- Apply audio changes immediately
@@ -339,14 +340,14 @@ function OptionsState:applySettings()
     -- Apply resolution
     local resItem = self.menuItems[1]
     local resolution = self.resolutions[resItem.value]
-    currentResolution = resItem.value
+    Game.currentResolution = resItem.value
     
     -- Apply display mode
     local modeItem = self.menuItems[2]
-    displayMode = self.displayModes[modeItem.value]
+    Game.displayMode = self.displayModes[modeItem.value]
     
     -- Apply window settings based on mode
-    if displayMode == "borderless" then
+    if Game.displayMode == "borderless" then
         -- Get desktop dimensions
         local dw, dh = love.window.getDesktopDimensions()
         
@@ -365,7 +366,7 @@ function OptionsState:applySettings()
         love.window.setPosition(0, 0)
         love.window.maximize()
         
-    elseif displayMode == "fullscreen" then
+    elseif Game.displayMode == "fullscreen" then
         -- Exclusive fullscreen
         love.window.setMode(resolution.width, resolution.height, {
             fullscreen = true,
@@ -392,15 +393,15 @@ function OptionsState:applySettings()
 
     local hcItem = self.menuItems[6]
     local fsItem = self.menuItems[7]
-    highContrast = hcItem.value
-    fontScale = fsItem.value
+    Game.highContrast = hcItem.value
+    Game.fontScale = fsItem.value
     applyFontScale()
 
     -- Save settings
     saveSettings()
     Persistence.updateSettings({
-        highContrast = highContrast,
-        fontScale = fontScale
+        highContrast = Game.highContrast,
+        fontScale = Game.fontScale
     })
 end
 
@@ -433,8 +434,8 @@ end
 
 function OptionsState:drawControlsMenu()
     -- Title
-    lg.setFont(titleFont or lg.newFont(48))
-    if highContrast then
+    lg.setFont(Game.titleFont or lg.newFont(48))
+    if Game.highContrast then
         lg.setColor(1, 1, 1)
     else
         lg.setColor(0, 1, 1)
@@ -448,13 +449,13 @@ function OptionsState:drawControlsMenu()
         lg.setColor(0, 0, 0, 0.8)
         lg.rectangle("fill", 0, 0, self.screenWidth, self.screenHeight)
         
-        lg.setFont(menuFont or lg.newFont(24))
+        lg.setFont(Game.menuFont or lg.newFont(24))
         lg.setColor(1, 1, 0)
         local remapText = "Press new key for: " .. self.remappingKey
         local remapWidth = lg.getFont():getWidth(remapText)
         lg.print(remapText, self.screenWidth/2 - remapWidth/2, self.screenHeight/2 - 50)
         
-        lg.setFont(smallFont or lg.newFont(14))
+        lg.setFont(Game.smallFont or lg.newFont(14))
         lg.setColor(0.5, 0.5, 0.5)
         local escText = "Press ESC to cancel"
         local escWidth = lg.getFont():getWidth(escText)
@@ -470,23 +471,23 @@ function OptionsState:drawControlsMenu()
         local isSelected = i == self.controlsSelection
         
         if item.type == "header" then
-            lg.setFont(mediumFont or lg.newFont(20))
+            lg.setFont(Game.mediumFont or lg.newFont(20))
             lg.setColor(0.5, 0.8, 1)
             local headerWidth = lg.getFont():getWidth(item.name)
             lg.print(item.name, self.screenWidth/2 - headerWidth/2, y)
         elseif item.type == "spacer" then
             -- Skip spacers
         else
-            lg.setFont(uiFont or lg.newFont(18))
+            lg.setFont(Game.uiFont or lg.newFont(18))
             
             if isSelected then
-                if highContrast then
+                if Game.highContrast then
                     lg.setColor(1, 0, 0)
                 else
                     lg.setColor(1, 1, 0)
                 end
             else
-                if highContrast then
+                if Game.highContrast then
                     lg.setColor(1, 1, 1)
                 else
                     lg.setColor(0.7, 0.7, 0.7)
@@ -506,13 +507,13 @@ function OptionsState:drawControlsMenu()
     end
     
     -- Instructions
-    lg.setFont(smallFont or lg.newFont(14))
-    local nav = inputHints[lastInputType].navigate or "Arrow Keys"
-    local remap = inputHints[lastInputType].action or "Enter"
-    local back = inputHints[lastInputType].back or "ESC"
+    lg.setFont(Game.smallFont or lg.newFont(14))
+    local nav = Game.inputHints[Game.lastInputType].navigate or "Arrow Keys"
+    local remap = Game.inputHints[Game.lastInputType].action or "Enter"
+    local back = Game.inputHints[Game.lastInputType].back or "ESC"
     local instructions = nav .. ": Navigate | " .. remap .. ": Remap | " .. back .. ": Back"
-    local instrColor = highContrast and {1, 1, 1} or {0.5, 0.5, 0.5}
-    uiManager:drawMessage(instructions, self.screenWidth/2, self.screenHeight - 40, instrColor, smallFont)
+    local instrColor = Game.highContrast and {1, 1, 1} or {0.5, 0.5, 0.5}
+    uiManager:drawMessage(instructions, self.screenWidth/2, self.screenHeight - 40, instrColor, Game.smallFont)
 end
 
 function OptionsState:controlsKeypressed(key)
