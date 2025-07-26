@@ -133,6 +133,7 @@ end
 
 -- Shoot a laser from the player ship
 function PlayerControl.shoot(state, dt)
+    dt = dt or 0
     if state.showDebug then
         print(string.format(
             "Shoot: heat=%.1f, cooldown=%.3f, overheat=%.3f, lasers=%d",

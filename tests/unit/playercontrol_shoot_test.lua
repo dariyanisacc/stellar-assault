@@ -34,7 +34,8 @@ describe("PlayerControl.shoot", function()
         PlayerControl.shoot(state)
         assert.equals(1, #lasers)
         assert.is_true(state.shootCooldown > 0)
-        assert.is_true(player.heat > 0)
+        -- dt defaults to 0 when omitted, so heat should remain unchanged
+        assert.equals(0, player.heat)
     end)
 
     it("does not shoot when overheated", function()
