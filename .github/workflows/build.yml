@@ -29,6 +29,16 @@ jobs:
       run: |
         luacheck . --globals love --no-max-line-length
 
+    - name: Install stylua
+      run: |
+        curl -L https://github.com/JohnnyMorganz/StyLua/releases/download/v0.20.0/stylua-linux-x86_64.zip -o stylua.zip
+        unzip stylua.zip -d stylua
+        sudo mv stylua/stylua /usr/local/bin/stylua
+        sudo chmod +x /usr/local/bin/stylua
+
+    - name: Run stylua
+      run: stylua --check .
+
   test:
     runs-on: ubuntu-latest
     needs: lint
