@@ -1,0 +1,6 @@
+{
+  "enemiesForBoss": [150, 175, 200, 225, 250],
+  "asteroidSpeedMultiplier": [1, 1.2, 1.4, 1.6, 1.8],
+  "alienSpawnMultiplier": [1, 0.9, 0.8, 0.7, 0.6],
+  "bossFrequency": 4
+}
