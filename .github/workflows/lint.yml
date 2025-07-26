@@ -1,0 +1,36 @@
+name: Lua Lint and Format
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Lua
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.1"
+
+      - name: Setup LuaRocks
+        uses: leafo/gh-actions-luarocks@v4
+
+      - name: Install luacheck
+        run: luarocks install luacheck
+
+      - name: Run luacheck
+        run: luacheck . --config .luacheckrc
+
+      - name: Install luafmt (stylua)
+        run: |
+          curl -L https://github.com/JohnnyMorganz/StyLua/releases/download/v0.20.0/stylua-linux-x86_64.zip -o stylua.zip
+          unzip stylua.zip -d stylua
+          sudo mv stylua/stylua /usr/local/bin/stylua
+          sudo chmod +x /usr/local/bin/stylua
+
+      - name: Run luafmt check
+        run: stylua --config-path stylua.toml --check .
