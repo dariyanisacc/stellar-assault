@@ -351,38 +351,32 @@ function playPositionalSound(src, x, y)
   c:play()
 end
 
--- Starfield -----------------------------------------------------------------
-local stars, starCount = {}, 200
-function initStarfield()
-  stars = {}
-  for i = 1, starCount do
-    stars[#stars + 1] = {
-      x = love.math.random() * lg.getWidth(),
-      y = love.math.random() * lg.getHeight(),
-      speed = love.math.random() * 50 + 20,
-      size = love.math.random() * 2,
-    }
+local Starfield = require("src.starfield")
+local starfield
+
+local function initStarfield()
+  starfield = Starfield.new(200)
+end
+
+local function updateStarfield(dt)
+  if starfield then
+    starfield:update(dt)
   end
 end
-function updateStarfield(dt)
-  local h = lg.getHeight()
-  for _, s in ipairs(stars) do
-    s.y = s.y + s.speed * dt
-    if s.y > h then
-      s.y = -s.size
-      s.x = love.math.random() * lg.getWidth()
-    end
+
+local function drawStarfield()
+  if starfield then
+    starfield:draw()
   end
 end
-function drawStarfield()
-  for _, s in ipairs(stars) do
-    local b = s.size / 2
-    lg.setColor(b, b, b)
-    lg.circle("fill", s.x, s.y, s.size)
-  end
-end
+
 _G.initStarfield, _G.updateStarfield, _G.drawStarfield =
   initStarfield, updateStarfield, drawStarfield
+
+_G.initWindow = initWindow
+_G.loadFonts = loadFonts
+_G.loadAudio = loadAudio
+_G.initStates = initStates
 
 -- ---------------------------------------------------------------------------
 -- Love2D callbacks
