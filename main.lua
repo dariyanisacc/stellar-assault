@@ -14,7 +14,8 @@ end
 -- ---------------------------------------------------------------------------
 -- Core modules
 -- ---------------------------------------------------------------------------
-local StateManager = require("src.StateManager")
+local StateManager = require("src.core.statemachine")
+local Helpers = require("src.core.helpers")
 local constants = require("src.constants")
 local DebugConsole = require("src.debugconsole")
 local CONFIG = require("src.config")
@@ -53,6 +54,8 @@ Game.victorySound = nil
 
 Game.laserClones = nil
 Game.laserCloneIndex = 1
+
+Game.helpers = Helpers
 
 local soundReferenceDistance, soundMaxDistance = 50, 800
 local sfxSources, musicSources = {}, {}
