@@ -51,7 +51,7 @@ jobs:
 
     - name: Run tests with coverage
       run: |
-        busted --coverage tests/ || echo "Tests need Love2D environment"
+        busted --coverage tests/ tests/unit/test_assets.lua || echo "Tests need Love2D environment"
         test -f luacov.stats.out
         luacov
 
