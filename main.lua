@@ -2,7 +2,7 @@
 -- A space shooter with modular architecture
 
 -- Core modules
-local StateManager = require("src.statemanager")
+local StateManager = require("src.StateManager")
 local constants = require("src.constants")
 local DebugConsole = require("src.debugconsole")
 local logger = require("src.logger")
