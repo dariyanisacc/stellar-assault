@@ -1,74 +1,103 @@
 -- src/logger.lua
--- Logger implementation for Stellar Assault (supports levels, formatted logs, and on-screen overlay)
+-- Simple logger for Stellar Assault
+--  ✧ NEW ✧ 2025‑07‑25 : adds a singleton‑facade so dot‑style calls work
+-----------------------------------------------------------------------
 
 local Logger = {}
 Logger.__index = Logger
 
-Logger.levels = {
-    debug = 1,
-    info = 2,
-    warn = 3,
-    error = 4
-}
+-- log‑level → numeric priority
+Logger.levels = { debug = 1, info = 2, warn = 3, error = 4 }
 
+-----------------------------------------------------------------------
+--  Core class --------------------------------------------------------
+-----------------------------------------------------------------------
+
+--- Construct a fresh logger object
 function Logger:new()
-    local self = setmetatable({}, Logger)
-    self.currentLevel = self.levels.info
-    self.history = {}
-    self.overlayEnabled = false  -- Toggled via console command; main.lua can call drawOverlay always, this checks internally
-    return self
+  local self = setmetatable({}, Logger)
+  self.currentLevel   = Logger.levels.info
+  self.history        = {}           -- last 50 lines for on‑screen overlay
+  self.overlayEnabled = false
+  return self
 end
 
+--- Change active log level (“debug”, “info”, “warn”, “error”)
 function Logger:setLevel(levelStr)
-    local level = self.levels[levelStr:lower()]
-    if level then
-        self.currentLevel = level
-    else
-        print("[LOGGER] Invalid log level: " .. levelStr .. ". Defaulting to INFO.")
-        self.currentLevel = self.levels.info
-    end
+  local lvl = Logger.levels[(levelStr or ""):lower()]
+  if lvl then
+    self.currentLevel = lvl
+  else
+    print(("[LOGGER] Invalid level '%s' – keeping %d")
+          :format(tostring(levelStr), self.currentLevel))
+  end
 end
 
-function Logger:toggleOverlay()
-    self.overlayEnabled = not self.overlayEnabled
-end
+--- Toggle on‑screen overlay
+function Logger:toggleOverlay()  self.overlayEnabled = not self.overlayEnabled end
 
+--- Internal helper that actually emits and stores the message
 function Logger:internalLog(levelStr, fmt, ...)
-    local levelNum = self.levels[levelStr:lower()]
-    if not levelNum or levelNum < self.currentLevel then
-        return
-    end
+  local idx = Logger.levels[levelStr]
+  if not idx or idx < self.currentLevel then return end     -- filtered out
 
-    local msg = string.format(fmt, ...)
-    print("[" .. levelStr:upper() .. "] " .. msg)
-    table.insert(self.history, "[" .. levelStr:upper() .. "] " .. msg)
-    if #self.history > 50 then
-        table.remove(self.history, 1)
-    end
+  local ok, msg = pcall(string.format, fmt, ...)
+  if not ok then  msg = fmt  end                            -- bad format string
+
+  local line = ("[%s] %s"):format(levelStr:upper(), msg)
+  print(line)
+
+  table.insert(self.history, line)
+  if #self.history > 50 then table.remove(self.history, 1) end
 end
 
 function Logger:debug(fmt, ...) self:internalLog("debug", fmt, ...) end
-function Logger:info(fmt, ...) self:internalLog("info", fmt, ...) end
-function Logger:warn(fmt, ...) self:internalLog("warn", fmt, ...) end
+function Logger:info (fmt, ...) self:internalLog("info",  fmt, ...) end
+function Logger:warn (fmt, ...) self:internalLog("warn",  fmt, ...) end
 function Logger:error(fmt, ...) self:internalLog("error", fmt, ...) end
 
+--- Optional on‑screen overlay (toggle with logger.toggleOverlay())
 function Logger:drawOverlay(x, y, lineSpacing)
-    if not self.overlayEnabled then return end
+  if not self.overlayEnabled then return end
+  x, y             = x or 10, y or 10
+  lineSpacing      = lineSpacing or 14
+  local maxLines   = math.floor((love.graphics.getHeight() - y) / lineSpacing)
+  local startIndex = math.max(1, #self.history - maxLines + 1)
 
-    local font = love.graphics.getFont() or love.graphics.newFont(12)
-    local screenH = love.graphics.getHeight()
-    local maxHeight = screenH - y
-    local numLines = math.floor(maxHeight / lineSpacing)
-    local startIdx = math.max(1, #self.history - numLines + 1)
-
-    love.graphics.setColor(1, 1, 1, 0.8)  -- Semi-transparent white for visibility
-    for i = 1, numLines do
-        local idx = startIdx + i - 1
-        if idx <= #self.history then
-            love.graphics.print(self.history[idx], x, y + (i - 1) * lineSpacing)
-        end
-    end
-    love.graphics.setColor(1, 1, 1, 1)  -- Reset color
+  love.graphics.setColor(1, 1, 1, 0.8)
+  for i = startIndex, #self.history do
+    love.graphics.print(self.history[i], x, y + (i - startIndex) * lineSpacing)
+  end
+  love.graphics.setColor(1, 1, 1, 1)
 end
 
-return Logger
+-----------------------------------------------------------------------
+--  Singleton facade (backwards‑compat) ------------------------------
+-----------------------------------------------------------------------
+-- Many existing modules do `local logger = require("src.logger")`
+-- and then call `logger.info("text")` (dot‑syntax, *no* implicit `self`).
+-- The facade below transparently injects the singleton object as `self`,
+-- so no changes are needed elsewhere.
+-----------------------------------------------------------------------
+
+local _instance = Logger:new()
+local facade    = {}
+
+local function forward(method)
+  return function(...)
+    return _instance[method](_instance, ...)
+  end
+end
+
+facade.debug         = forward("debug")
+facade.info          = forward("info")
+facade.warn          = forward("warn")
+facade.error         = forward("error")
+facade.setLevel      = forward("setLevel")
+facade.toggleOverlay = forward("toggleOverlay")
+facade.drawOverlay   = forward("drawOverlay")
+
+-- expose the real object for advanced use‑cases
+facade._instance = _instance
+
+return facade
