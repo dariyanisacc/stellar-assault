@@ -119,7 +119,9 @@ luarocks install busted
 busted
 
 # Run with coverage
+# Produces luacov.stats.out for luacov
 busted --coverage
+luacov
 ```
 
 ### Project Structure
