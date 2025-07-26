@@ -130,6 +130,9 @@ busted --coverage
 - `src/objectpool.lua` - Defines object pools including new trail and debris pools
 - Audio files (`.mp3`, `.wav`, `.ogg`, `.flac`) - Sound effects and music
 
+### Code Style
+Use `luacheck` for linting and `stylua` for consistent formatting. See `.luacheckrc` and `stylua.toml` for configuration.
+
 ## License
 
 This project is open source. Feel free to modify and distribute as needed.
