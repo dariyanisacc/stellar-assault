@@ -26,12 +26,48 @@ end
 local logger = require("src.logger")
 
 ----------------------------------------------------------------------
+-- UTILITY
+----------------------------------------------------------------------
+
+---Simple deep-copy (avoids sharing references to default data).
+local function deepcopy(obj)
+  if type(obj) ~= "table" then
+    return obj
+  end
+  local res = {}
+  for k, v in pairs(obj) do
+    res[deepcopy(k)] = deepcopy(v)
+  end
+  return res
+end
+
+----------------------------------------------------------------------
 -- CONSTANTS
 ----------------------------------------------------------------------
 
 local Persistence   = {}
 local SAVE_FILE     = "stellar_assault_save.dat"
 local CHECKSUM_FILE = SAVE_FILE .. ".sum"
+
+-- Default control mappings
+local defaultControls = {
+  keyboard = {
+    left = "left",
+    right = "right",
+    up = "up",
+    down = "down",
+    shoot = "space",
+    boost = "lshift",
+    bomb = "b",
+    pause = "escape",
+  },
+  gamepad = {
+    shoot = "rightshoulder",
+    bomb = "a",
+    boost = "x",
+    pause = "start",
+  },
+}
 
 -- Set when a load fails so calling code can react
 Persistence.loadError = nil
@@ -53,6 +89,8 @@ local defaultSaveData = {
     },
 
     achievements = {},
+
+    controls = deepcopy(defaultControls),
 
     settings = {
         masterVolume = 1.0,
@@ -153,16 +191,213 @@ function Persistence.save(data)
     return true
 end
 
-----------------------------------------------------------------------
--- UTILITY
-----------------------------------------------------------------------
+-----------------------------------------------------------------------
+-- Save Data Helpers
+-----------------------------------------------------------------------
 
----Simple deep-copy (avoids sharing references to default data).
-function deepcopy(obj)
-    if type(obj) ~= "table" then return obj end
-    local res = {}
-    for k, v in pairs(obj) do res[deepcopy(k)] = deepcopy(v) end
-    return res
+---Return cached save data, loading from disk if needed.
+function Persistence.getSaveData()
+  if not Persistence.saveData then
+    Persistence.saveData = Persistence.load()
+  end
+  return Persistence.saveData
+end
+
+---Return and clear the last load error.
+function Persistence.getLoadError()
+  return Persistence.loadError
+end
+
+function Persistence.clearLoadError()
+  Persistence.loadError = nil
+end
+
+-----------------------------------------------------------------------
+-- Settings and Controls
+-----------------------------------------------------------------------
+
+---Return settings table (read-only).
+function Persistence.getSettings()
+  return deepcopy(Persistence.getSaveData().settings)
+end
+
+---Update settings fields and persist to disk.
+function Persistence.updateSettings(changes)
+  local data = Persistence.getSaveData()
+  data.settings = data.settings or {}
+  for k, v in pairs(changes or {}) do
+    data.settings[k] = v
+  end
+  Persistence.save(data)
+end
+
+---Return control bindings.
+function Persistence.getControls()
+  local data = Persistence.getSaveData()
+  data.controls = data.controls or deepcopy(defaultControls)
+  return deepcopy(data.controls)
+end
+
+---Set a keyboard binding and persist.
+function Persistence.setKeyBinding(action, key)
+  local data = Persistence.getSaveData()
+  data.controls = data.controls or deepcopy(defaultControls)
+  data.controls.keyboard[action] = key
+  Persistence.save(data)
+end
+
+---Set a gamepad binding and persist.
+function Persistence.setGamepadBinding(action, button)
+  local data = Persistence.getSaveData()
+  data.controls = data.controls or deepcopy(defaultControls)
+  data.controls.gamepad[action] = button
+  Persistence.save(data)
+end
+
+---Reset all control bindings to defaults.
+function Persistence.resetControls()
+  local data = Persistence.getSaveData()
+  data.controls = deepcopy(defaultControls)
+  Persistence.save(data)
+end
+
+-----------------------------------------------------------------------
+-- Score and Progression
+-----------------------------------------------------------------------
+
+function Persistence.getHighScore()
+  local data = Persistence.getSaveData()
+  return data.highScore or 0
+end
+
+function Persistence.setHighScore(score, name)
+  local data = Persistence.getSaveData()
+  if score > (data.highScore or 0) then
+    data.highScore = score
+    data.leaderboard = data.leaderboard or {}
+    table.insert(data.leaderboard, { name = name or "Player", score = score })
+    table.sort(data.leaderboard, function(a, b)
+      return (a.score or 0) > (b.score or 0)
+    end)
+    if #data.leaderboard > 10 then
+      data.leaderboard[11] = nil
+    end
+    Persistence.save(data)
+    return true
+  end
+  return false
+end
+
+function Persistence.getCurrentScore()
+  local data = Persistence.getSaveData()
+  return data.currentScore or 0
+end
+
+function Persistence.setCurrentScore(score)
+  local data = Persistence.getSaveData()
+  data.currentScore = score
+  Persistence.save(data)
+end
+
+function Persistence.addScore(score)
+  local data = Persistence.getSaveData()
+  data.currentScore = (data.currentScore or 0) + (score or 0)
+  Persistence.save(data)
+end
+
+function Persistence.incrementBossesDefeated()
+  local data = Persistence.getSaveData()
+  data.totalBossesDefeated = (data.totalBossesDefeated or 0) + 1
+  Persistence.save(data)
+end
+
+function Persistence.unlockLevel(level)
+  local data = Persistence.getSaveData()
+  data.unlockedLevels = data.unlockedLevels or { true }
+  for i = #data.unlockedLevels + 1, level do
+    data.unlockedLevels[i] = false
+  end
+  data.unlockedLevels[level] = true
+  Persistence.save(data)
+end
+
+function Persistence.getUnlockedLevels()
+  local data = Persistence.getSaveData()
+  data.unlockedLevels = data.unlockedLevels or { true }
+  local count = 0
+  for i = 1, #data.unlockedLevels do
+    if data.unlockedLevels[i] then
+      count = i
+    end
+  end
+  return count
+end
+
+function Persistence.isShipUnlocked(_name)
+  -- Ships are always unlocked in this lightweight implementation
+  return true
+end
+
+function Persistence.getLevelStats(level)
+  local data = Persistence.getSaveData()
+  data.levelStats = data.levelStats or {}
+  data.levelStats[level] = data.levelStats[level] or { bestScore = 0, bestTime = 0 }
+  return deepcopy(data.levelStats[level])
+end
+
+function Persistence.updateLevelStats(level, score, time)
+  local data = Persistence.getSaveData()
+  data.levelStats = data.levelStats or {}
+  local stats = data.levelStats[level] or { bestScore = 0, bestTime = 0 }
+  if score and score > (stats.bestScore or 0) then
+    stats.bestScore = score
+  end
+  if time and (stats.bestTime == 0 or time < stats.bestTime) then
+    stats.bestTime = time
+  end
+  data.levelStats[level] = stats
+  Persistence.save(data)
+end
+
+function Persistence.updateStatistics(changes)
+  local data = Persistence.getSaveData()
+  data.statistics = data.statistics or {}
+  for k, v in pairs(changes or {}) do
+    data.statistics[k] = v
+  end
+  Persistence.save(data)
+end
+
+function Persistence.getBestKillCount()
+  local data = Persistence.getSaveData()
+  return (data.statistics and data.statistics.bestKillCount) or 0
+end
+
+function Persistence.updateBestKillCount(count)
+  local data = Persistence.getSaveData()
+  data.statistics = data.statistics or {}
+  if count > (data.statistics.bestKillCount or 0) then
+    data.statistics.bestKillCount = count
+    Persistence.save(data)
+    return true
+  end
+  return false
+end
+
+function Persistence.getBestSurvivalTime()
+  local data = Persistence.getSaveData()
+  return (data.statistics and data.statistics.bestSurvivalTime) or 0
+end
+
+function Persistence.updateBestSurvivalTime(time)
+  local data = Persistence.getSaveData()
+  data.statistics = data.statistics or {}
+  if data.statistics.bestSurvivalTime == nil or time > data.statistics.bestSurvivalTime then
+    data.statistics.bestSurvivalTime = time
+    Persistence.save(data)
+    return true
+  end
+  return false
 end
 
 return Persistence
