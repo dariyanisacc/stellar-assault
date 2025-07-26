@@ -67,6 +67,8 @@ Game.displayMode = "borderless"
 Game.currentResolution = 1
 Game.highContrast = false
 Game.fontScale = 1
+Game.paletteName = constants.defaultPalette
+Game.palette = constants.palettes[Game.paletteName]
 
 Game.lastInputType = "keyboard"
 Game.inputHints = {
@@ -236,6 +238,11 @@ local function applyFontScale()
   Game.mediumFont = lg.newFont(20 * Game.fontScale)
 end
 
+local function applyPalette()
+  Game.palette = constants.palettes[Game.paletteName]
+    or constants.palettes[constants.defaultPalette]
+end
+
 -- Settings I/O --------------------------------------------------------------
 local function updateAudioVolumes()
   for _, s in ipairs(sfxSources) do
@@ -269,8 +276,12 @@ local function loadSettings()
   if lines[8] then
     Game.fontScale = tonumber(lines[8]) or 1
   end
+  if lines[9] then
+    Game.paletteName = lines[9]
+  end
   updateAudioVolumes()
   applyFontScale()
+  applyPalette()
 end
 
 function saveSettings()
@@ -283,6 +294,7 @@ function saveSettings()
     Game.selectedShip or "alpha",
     tostring(Game.highContrast),
     Game.fontScale,
+    Game.paletteName,
   }, "\n")
   lf.write("settings.dat", out)
   Persistence.updateSettings({
@@ -293,6 +305,7 @@ function saveSettings()
     displayMode = Game.displayMode,
     highContrast = Game.highContrast,
     fontScale = Game.fontScale,
+    palette = Game.paletteName,
   })
 end
 
@@ -383,6 +396,8 @@ function drawStarfield()
 end
 _G.initStarfield, _G.updateStarfield, _G.drawStarfield =
   initStarfield, updateStarfield, drawStarfield
+_G.applyFontScale = applyFontScale
+_G.applyPalette = applyPalette
 
 -- ---------------------------------------------------------------------------
 -- Love2D callbacks

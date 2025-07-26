@@ -3,6 +3,7 @@
 -- Handles enemy waves, spawning, and AI behaviors
 
 local logger = require("src.logger")
+local Game = require("src.game")
 
 local WaveManager = {}
 WaveManager.__index = WaveManager
@@ -518,7 +519,7 @@ function WaveManager:draw()
 
     -- Draw sprite if available, otherwise fall back to rectangles
     if sprite then
-      love.graphics.setColor(1, 1, 1, 1)
+      love.graphics.setColor(Game.palette.enemy)
       -- Calculate scale to fit enemy dimensions * 4
       local scaleX = (enemy.width / sprite:getWidth()) * 4
       local scaleY = (enemy.height / sprite:getHeight()) * 4
@@ -535,27 +536,14 @@ function WaveManager:draw()
       )
     else
       -- Fallback to colored rectangles if sprites not loaded
-      if enemy.behaviorName == "homing" or enemy.behaviorName == "move_to_player" then
-        love.graphics.setColor(1, 0.5, 0.5) -- Reddish for homing enemies
-      elseif enemy.behaviorName == "dive_attack" then
-        love.graphics.setColor(1, 1, 0.5) -- Yellowish for dive attackers
-      elseif enemy.behaviorName == "zigzag" then
-        love.graphics.setColor(0.5, 1, 0.5) -- Greenish for zigzag
-      elseif enemy.behaviorName == "formation" then
-        love.graphics.setColor(0.5, 0.5, 1) -- Bluish for formation
-      else
-        love.graphics.setColor(0.8, 0.8, 0.8) -- Gray for basic
-      end
-
+      love.graphics.setColor(Game.palette.enemy)
       love.graphics.rectangle("fill", enemy.x, enemy.y, enemy.width, enemy.height)
     end
 
     -- Health bar if damaged
     if enemy.health < enemy.maxHealth then
       local healthPercent = enemy.health / enemy.maxHealth
-      love.graphics.setColor(1, 0, 0)
-      love.graphics.rectangle("fill", enemy.x, enemy.y - 10, enemy.width, 4)
-      love.graphics.setColor(0, 1, 0)
+      love.graphics.setColor(Game.palette.enemy)
       love.graphics.rectangle("fill", enemy.x, enemy.y - 10, enemy.width * healthPercent, 4)
     end
 
