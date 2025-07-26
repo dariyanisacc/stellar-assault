@@ -81,8 +81,8 @@ jobs:
       run: |
         chmod +x build.sh
         ./build.sh
-    
-      - name: Upload .love artifact
+
+    - name: Upload .love artifact
       uses: actions/upload-artifact@v4
       with:
         name: stellar-assault-love
@@ -107,8 +107,8 @@ jobs:
     - name: Build Windows executable
       shell: cmd
       run: build.bat
-    
-      - name: Upload Windows artifact
+
+    - name: Upload Windows artifact
       uses: actions/upload-artifact@v4
       with:
         name: stellar-assault-windows
@@ -128,8 +128,8 @@ jobs:
       run: |
         chmod +x build.sh
         ./build.sh
-    
-      - name: Upload macOS artifact
+
+    - name: Upload macOS artifact
       uses: actions/upload-artifact@v4
       with:
         name: stellar-assault-macos
