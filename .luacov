@@ -1,0 +1,6 @@
+return {
+  include = {"^src/"},
+  exclude = {"^tests/"},
+  reporter = 'lcov',
+  reportfile = 'coverage.lcov'
+}
