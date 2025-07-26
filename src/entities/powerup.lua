@@ -6,6 +6,7 @@
 -- states/playing.lua.
 
 local lg = love.graphics
+local AssetLoader = require("src.core.asset_loader")
 
 local Powerup = {}
 
@@ -16,7 +17,7 @@ local _images = {}
 local _loaded = false
 
 local function _tryLoadImage(name, fallbackColor)
-  local ok, img = pcall(lg.newImage, ("assets/powerups/%s.png"):format(name))
+  local ok, img = pcall(AssetLoader.getImage, ("assets/powerups/%s.png"):format(name))
   if ok and img then
     return { kind = name, img = img, w = img:getWidth(), h = img:getHeight() }
   else
