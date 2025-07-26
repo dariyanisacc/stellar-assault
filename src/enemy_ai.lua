@@ -30,7 +30,7 @@ function EnemyAI.updateAsteroids(state, dt)
         local asteroid = asteroids[i]
         if asteroid.vx then
             asteroid.x = asteroid.x + asteroid.vx * dt
-            asteroid.vx = asteroid.vx * 0.98
+            asteroid.vx = asteroid.vx * math.pow(0.98, dt * 60)
             if asteroid.x < -asteroid.size then
                 asteroid.x = state.screenWidth + asteroid.size
             elseif asteroid.x > state.screenWidth + asteroid.size then
