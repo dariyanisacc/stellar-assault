@@ -105,7 +105,7 @@ function OptionsControls:draw()
   local back = Game.inputHints[Game.lastInputType].back or "ESC"
   local inst = nav .. ": Navigate | " .. remap .. ": Remap | " .. back .. ": Back"
   local instrColor = Game.highContrast and { 1, 1, 1 } or { 0.5, 0.5, 0.5 }
-  uiManager:drawMessage(
+  Game.uiManager:drawMessage(
     inst,
     self.screenWidth / 2,
     self.screenHeight - 40,
