@@ -15,9 +15,9 @@ love.filesystem.read = function(path)
   return nil, "File not found"
 end
 
-local ObjectPool    = require("src.objectpool")
+local ObjectPool = require("src.objectpool")
 local PlayerControl = require("src.player_control")
-local Scene         = require("src.scene")
+local Scene = require("src.scene")
 
 describe("PlayerControl.shoot", function()
   local state
@@ -26,16 +26,21 @@ describe("PlayerControl.shoot", function()
     --------------------------------------------------------------
     -- Scene & global tables
     --------------------------------------------------------------
-    local scene = Scene.new()               -- pooled resources
-    _G.lasers         = scene.lasers        -- fallback globals
-    _G.missiles       = nil
+    local scene = Scene.new() -- pooled resources
+    _G.lasers = scene.lasers -- fallback globals
+    _G.missiles = nil
     _G.activePowerups = scene.activePowerups
-    _G.selectedShip   = "alpha"
+    _G.selectedShip = "alpha"
     _G.player = {
-      x = 50, y = 100,
-      width = 20, height = 20,
-      heat = 0, maxHeat = 100, heatRate = 5,
-      overheatTimer = 0, overheatPenalty = 1.5,
+      x = 50,
+      y = 100,
+      width = 20,
+      height = 20,
+      heat = 0,
+      maxHeat = 100,
+      heatRate = 5,
+      overheatTimer = 0,
+      overheatPenalty = 1.5,
     }
 
     --------------------------------------------------------------
@@ -43,9 +48,9 @@ describe("PlayerControl.shoot", function()
     --------------------------------------------------------------
     state = {
       shootCooldown = 0,
-      keys          = { shoot = true },
-      scene         = scene,
-      laserPool     = scene.laserPool,      -- use scene’s pool
+      keys = { shoot = true },
+      scene = scene,
+      laserPool = scene.laserPool, -- use scene’s pool
     }
   end)
 
@@ -58,3 +63,7 @@ describe("PlayerControl.shoot", function()
 
   it("does not shoot when overheated", function()
     player.heat = player.maxHeat
+    PlayerControl.shoot(state)
+    assert.equal(0, #state.scene.lasers)
+  end)
+end)

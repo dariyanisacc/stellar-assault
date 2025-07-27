@@ -474,7 +474,7 @@ function MenuState:handleSaveMenuInput(key)
         if Game.backgroundMusic then
           Game.backgroundMusic:stop()
         end
-        stateManager:switch("intro")
+        stateManager:switch("intro", { nextState = "playing" })
       end
     end
   elseif key == "escape" then
