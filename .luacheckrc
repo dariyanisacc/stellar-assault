@@ -1,3 +1,8 @@
+-- Lint only our own source; ignore vendored LuaRocks tree and its tests
+exclude_files = {
+  "./.luarocks/**"
+}
+
 std = "lua51+love"
 
 globals = {
@@ -14,6 +19,7 @@ globals = {
   "alienLasers",
   "aliens",
   "applyFontScale",
+  "applyPalette",
   "asteroids",
   "availableShips",
   "backgroundMusic",

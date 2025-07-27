@@ -62,8 +62,8 @@ A fast-paced endless runner space game built with Love2D where players dodge ast
 
 Press `~` to open or close the in-game debug console. Use **F3** to toggle
 on-screen debug info (FPS, entity counts, etc.) and **F9** for the debug overlay
-with memory graphs and other stats. **F5** hot‑reloads the config file during
-development.
+with memory graphs and other stats. **F5** reloads the constants JSON files so
+changes take effect immediately.
 
 In the console, type `help` for a complete list of commands.
 

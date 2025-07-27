@@ -1,6 +1,14 @@
 local love_mock = require("tests.mocks.love_mock")
 _G.love = love_mock
 love.filesystem.append = function() end
+love.filesystem.read = function(path)
+  if path == "data/ships.json" then
+    return [[{"alpha":{"name":"Alpha","spread":0,"fireRate":0.3,"speedMultiplier":1.0,"shieldMultiplier":1.0,"description":"Balanced fighter"}}]]
+  elseif path == "data/levels.json" then
+    return [[{"bossFrequency":4}]]
+  end
+  return nil, "File not found"
+end
 
 local PlayerControl = require("src.player_control")
 local ObjectPool = require("src.objectpool")
