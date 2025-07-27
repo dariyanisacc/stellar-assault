@@ -154,6 +154,8 @@ function EnemyAI.spawnAsteroid(state)
     x = math.random(size, state.screenWidth - size),
     y = -size,
     size = size,
+    width = size * 2,
+    height = size * 2,
     rotation = math.random() * math.pi * 2,
     rotationSpeed = math.random() - 0.5,
     tag = "asteroid",

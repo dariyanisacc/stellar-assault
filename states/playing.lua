@@ -963,6 +963,8 @@ function PlayingState:handleAsteroidDestruction(asteroid, index)
         x = asteroid.x + math.cos(angle) * 10,
         y = asteroid.y + math.sin(angle) * 10,
         size = math.max(20, newSize), -- Minimum size of 20
+        width = math.max(20, newSize) * 2,
+        height = math.max(20, newSize) * 2,
         rotation = random() * pi * 2,
         rotationSpeed = (random() - 0.5) * 2, -- Faster rotation for fragments
         -- Add velocity to make fragments fly apart
