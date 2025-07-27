@@ -155,7 +155,7 @@ function OptionsState:draw()
 
   -- Title
   local titleColor = Game.highContrast and { 1, 1, 1 } or { 0, 1, 1 }
-  uiManager:drawMessage("OPTIONS", self.screenWidth / 2, 80, titleColor, Game.titleFont)
+  Game.uiManager:drawMessage("OPTIONS", self.screenWidth / 2, 80, titleColor, Game.titleFont)
 
   -- Draw menu items
   lg.setFont(Game.menuFont or lg.newFont(24))
@@ -237,7 +237,7 @@ function OptionsState:draw()
   local adjust = Game.lastInputType == "gamepad" and "Left/Right Stick" or "Left/Right"
   local instructions = nav .. ": Navigate | " .. select .. ": Select | " .. adjust .. ": Adjust"
   local instrColor = Game.highContrast and { 1, 1, 1 } or { 0.5, 0.5, 0.5 }
-  uiManager:drawMessage(
+  Game.uiManager:drawMessage(
     instructions,
     self.screenWidth / 2,
     self.screenHeight - 40,
@@ -557,7 +557,7 @@ function OptionsState:drawControlsMenu()
   local back = Game.inputHints[Game.lastInputType].back or "ESC"
   local instructions = nav .. ": Navigate | " .. remap .. ": Remap | " .. back .. ": Back"
   local instrColor = Game.highContrast and { 1, 1, 1 } or { 0.5, 0.5, 0.5 }
-  uiManager:drawMessage(
+  Game.uiManager:drawMessage(
     instructions,
     self.screenWidth / 2,
     self.screenHeight - 40,
