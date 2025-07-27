@@ -6,6 +6,7 @@ local SpatialHash = require("src.spatial")
 local logger = require("src.logger")
 local Powerup = require("src.entities.powerup")
 local Persistence = require("src.persistence")
+local Game = require("src.game")
 
 ------------------------------------------------------------------
 -- 🔧 BACKWARD-COMPATIBILITY PATCH
