@@ -9,7 +9,13 @@
 -- ---------------------------------------------------------------------------
 local ok, json = pcall(require, "lunajson")
 if not ok then ok, json = pcall(require, "src.lunajson") end
-if not ok then error("lunajson module not found") end
+if not ok then
+  print("[Constants] lunajson not found - falling back to love.data JSON.")
+  json = {
+    encode = function(tbl) return love.data.encode("string", "json", tbl) end,
+    decode = function(str) return love.data.decode("string", "json", str) end,
+  }
+end
 
 local lf = love.filesystem
 
