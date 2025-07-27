@@ -2,7 +2,7 @@
 -- Usage: local Boss02 = require("src.entities.boss02"); boss = Boss02.new(level)
 
 local lg = love.graphics
-local AssetLoader = require("src.core.asset_loader")
+local AssetManager = require("src.asset_manager")
 
 local Boss02 = {}
 Boss02.__index = Boss02
@@ -11,7 +11,7 @@ function Boss02.new(level)
   local self = setmetatable({}, Boss02)
 
   -- basic placement
-  self.sprite = AssetLoader.getImage("assets/bosses/boss_02@97x84.png")
+  self.sprite = AssetManager.getImage("assets/bosses/boss_02@97x84.png")
   self.x = lg.getWidth() / 2
   self.y = -100
 

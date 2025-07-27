@@ -2,7 +2,7 @@
 -- Usage: local Boss = require("src.entities.boss"); boss = Boss.new(level)
 
 local lg = love.graphics
-local AssetLoader = require("src.core.asset_loader")
+local AssetManager = require("src.asset_manager")
 local BULLET_COOLDOWN = 1.5 -- seconds between patterns
 
 local Boss = {}
@@ -13,7 +13,7 @@ function Boss.new(level)
 
   -- basic placement ----------------------------
   local path = string.format("assets/bosses/boss_%02d@97x84.png", level)
-  self.sprite = AssetLoader.getImage(path)
+  self.sprite = AssetManager.getImage(path)
   self.x = lg.getWidth() / 2
   self.y = -self.sprite:getHeight() -- scroll in from top
 
