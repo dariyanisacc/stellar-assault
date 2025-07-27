@@ -1,3 +1,9 @@
+-- File: src/playercontrol.lua
+----------------------------------------------------------------------
+-- Stellar Assault – Player Control Module
+-- Handles movement, shooting, heat, and input abstraction.
+----------------------------------------------------------------------
+
 local constants   = require("src.constants")
 local Persistence = require("src.persistence")
 
@@ -7,15 +13,19 @@ local PlayerControl = {}
 -- MOVEMENT, THRUST & HEAT
 ----------------------------------------------------------------------
 
+---@param state table  -- current game‑state table (laser pool, etc.)
+---@param dt    number -- fixed delta‑time from main loop
 function PlayerControl.update(state, dt)
-  -- Aggregate keyboard input
+  --------------------------------------------------------------------
+  -- Aggregate input -------------------------------------------------
+  --------------------------------------------------------------------
   local dx, dy = 0, 0
   if state.keys.left  then dx = dx - 1 end
   if state.keys.right then dx = dx + 1 end
   if state.keys.up    then dy = dy - 1 end
   if state.keys.down  then dy = dy + 1 end
 
-  -- Add analog stick input
+  -- Left‑stick on first connected gamepad
   local joysticks = love.joystick.getJoysticks()
   if #joysticks > 0 then
     local js = joysticks[1]
@@ -24,20 +34,24 @@ function PlayerControl.update(state, dt)
       if math.abs(jx) > 0.2 then dx = dx + jx end
       if math.abs(jy) > 0.2 then dy = dy + jy end
 
-      -- Right trigger → continuous shooting
+      -- Hold right trigger for continuous fire
       if js:getGamepadAxis("triggerright") > 0.5 then
         PlayerControl.shoot(state, dt)
       end
     end
   end
 
-  -- Normalise and apply thrust
+  --------------------------------------------------------------------
+  -- Apply thrust & physics -----------------------------------------
+  --------------------------------------------------------------------
   local len = math.sqrt(dx * dx + dy * dy)
   if len > 0 then
     dx, dy = dx / len, dy / len
+
     local thrustMult = 1
     if activePowerups.boost then thrustMult = thrustMult * 1.5 end
-    if state.keys.boost        then thrustMult = thrustMult * 2   end
+    if state.keys.boost      then thrustMult = thrustMult * 2   end
+
     player.vx = player.vx + dx * player.thrust * dt * thrustMult
     player.vy = player.vy + dy * player.thrust * dt * thrustMult
   end
@@ -46,8 +60,8 @@ function PlayerControl.update(state, dt)
   player.vx = player.vx * (1 - player.drag * dt)
   player.vy = player.vy * (1 - player.drag * dt)
 
-  -- Clamp speed
-  local speed      = math.sqrt(player.vx * player.vx + player.vy * player.vy)
+  -- Clamp top‑speed
+  local speed      = math.sqrt(player.vx^2 + player.vy^2)
   local baseMaxVel = player.maxSpeed or 300
   local maxVel     = activePowerups.boost and baseMaxVel * 1.5 or baseMaxVel
   if speed > maxVel then
@@ -55,37 +69,31 @@ function PlayerControl.update(state, dt)
     player.vy = (player.vy / speed) * maxVel
   end
 
-  -- Position update
+  -- Update position
   player.x = player.x + player.vx * dt
   player.y = player.y + player.vy * dt
 
-  -- Screen clamp (wrapped to satisfy 120‑char limit)
+  -- Screen clamp
   local w, h = love.graphics.getDimensions()
-
-  if player.x < player.width / 2 then
-    player.x = player.width / 2
-    player.vx = math.max(0, player.vx)
-  elseif player.x > w - player.width / 2 then
-    player.x = w - player.width / 2
-    player.vx = math.min(0, player.vx)
+  if player.x < player.width/2 then
+    player.x = player.width/2; player.vx = math.max(0, player.vx)
+  elseif player.x > w - player.width/2 then
+    player.x = w - player.width/2; player.vx = math.min(0, player.vx)
+  end
+  if player.y < player.height/2 then
+    player.y = player.height/2; player.vy = math.max(0, player.vy)
+  elseif player.y > h - player.height/2 then
+    player.y = h - player.height/2; player.vy = math.min(0, player.vy)
   end
 
-  if player.y < player.height / 2 then
-    player.y = player.height / 2
-    player.vy = math.max(0, player.vy)
-  elseif player.y > h - player.height / 2 then
-    player.y = h - player.height / 2
-    player.vy = math.min(0, player.vy)
-  end
-
-  -- Cooldowns & heat
+  --------------------------------------------------------------------
+  -- Cooldowns & heat -----------------------------------------------
+  --------------------------------------------------------------------
   if state.shootCooldown and state.shootCooldown > 0 then
     state.shootCooldown = math.max(0, state.shootCooldown - dt)
   end
 
-  if state.keys.shoot then PlayerControl.shoot(state, dt) end
-
-  -- Force‑free a laser slot if pool nearly full
+  -- If pool is close to full, free the oldest laser
   if state.keys.shoot and state.shootCooldown <= 0
      and player.overheatTimer <= 0 and #lasers >= 95 then
     local old = table.remove(lasers, 1)
@@ -96,7 +104,7 @@ function PlayerControl.update(state, dt)
   -- Heat dissipation
   if player.heat > 0 then
     local cool = activePowerups.coolant and 1.5 or 1
-    if player.overheatTimer > 0 then cool = cool * 2 end
+    if player.overheatTimer > 0 then cool = cool * 2 end -- faster while overheated
     player.heat = math.max(0, player.heat - player.coolRate * dt * cool)
   end
 
@@ -105,14 +113,14 @@ function PlayerControl.update(state, dt)
     player.overheatTimer = player.overheatTimer - dt
     if player.overheatTimer <= 0 then
       player.heat = 0
-      if state.showDebug then print("Overheat period ended, weapon ready!") end
+      if state.showDebug then print("Overheat period ended – weapon ready!") end
     end
   end
 
-  -- Heat visual feedback
+  -- Heat‑based colour shift
   local hpct = player.heat / player.maxHeat
   if hpct > 0.75 then
-    player.color = { 1, 1 - (hpct - 0.75) * 2, 1 - (hpct - 0.75) * 2 }
+    player.color = { 1, 1 - (hpct - 0.75)*2, 1 - (hpct - 0.75)*2 }
   else
     player.color = { 1, 1, 1 }
   end
@@ -121,6 +129,9 @@ function PlayerControl.update(state, dt)
   if hpct > 0.6 and math.random() < (hpct - 0.6) * 2.5 * dt then
     PlayerControl.createHeatParticle(state)
   end
+
+  -- Continuous shooting
+  if state.keys.shoot then PlayerControl.shoot(state, dt) end
 end
 
 ----------------------------------------------------------------------
@@ -135,9 +146,7 @@ function PlayerControl.shoot(state, dt)
   end
   if player.heat >= player.maxHeat then
     player.overheatTimer = player.overheatPenalty
-    if explosionSound and playPositionalSound then
-      playPositionalSound(explosionSound, player.x, player.y)
-    end
+    playPositionalSound(Game.explosionSound, player.x, player.y)
     if state.showDebug then print("OVERHEAT! Starting cooldown period") end
     return
   end
@@ -151,13 +160,13 @@ function PlayerControl.shoot(state, dt)
     return
   end
 
-  laser.x, laser.y  = player.x, player.y - player.height / 2
-  laser.width       = constants.laser.width or 4
-  laser.height      = constants.laser.height or 12
-  laser.speed       = constants.laser.speed
-  laser.vx, laser.vy= nil, nil
-  laser._remove     = false
-  laser.isAlien     = false
+  laser.x, laser.y = player.x, player.y - player.height/2
+  laser.width      = constants.laser.width  or 4
+  laser.height     = constants.laser.height or 12
+  laser.speed      = constants.laser.speed
+  laser.vx, laser.vy = nil, nil
+  laser._remove    = false
+  laser.isAlien    = false
   table.insert(lasers, laser)
   if state.laserGrid then state.laserGrid:insert(laser) end
 
@@ -173,7 +182,8 @@ function PlayerControl.shoot(state, dt)
       local lz = state.laserPool:get()
       if lz then
         lz.x, lz.y  = laser.x, laser.y
-        lz.width    = laser.width; lz.height = laser.height; lz.speed = laser.speed
+        lz.width    = laser.width; lz.height = laser.height
+        lz.speed    = laser.speed
         lz.vx       = dir * math.sin(spread) * lz.speed
         lz.vy       = -math.cos(spread)      * lz.speed
         lz._remove  = false; lz.isAlien = false
@@ -189,12 +199,9 @@ function PlayerControl.shoot(state, dt)
     player.heat = math.min(player.maxHeat, player.heat + player.heatRate * dt)
   end
 
-  -- Sound
-  if laserSound and playPositionalSound then
-    playPositionalSound(laserSound, player.x, player.y)
-  end
+  playPositionalSound(Game.laserSound, player.x, player.y)
 
-  -- Base cooldown
+  -- Cooldown
   local baseCD = activePowerups.rapid and 0.1 or shipCfg.fireRate
   state.shootCooldown = baseCD * (player.fireRateMultiplier or 1)
 
@@ -203,10 +210,11 @@ function PlayerControl.shoot(state, dt)
     for offset = -15, 15, 30 do
       local lz = state.laserPool:get()
       if lz then
-        lz.x, lz.y = player.x + offset, laser.y
-        lz.width, lz.height = laser.width, laser.height
-        lz.speed = laser.speed; lz.vx, lz.vy = nil, nil
-        lz._remove = false; lz.isAlien = false
+        lz.x, lz.y  = player.x + offset, laser.y
+        lz.width    = laser.width; lz.height = laser.height
+        lz.speed    = laser.speed
+        lz.vx, lz.vy= nil, nil
+        lz._remove  = false; lz.isAlien = false
         table.insert(lasers, lz)
         if state.laserGrid then state.laserGrid:insert(lz) end
       end
@@ -284,7 +292,7 @@ end
 -- MOBILE UI (STUB)
 ----------------------------------------------------------------------
 
-function PlayerControl.update_mobile_ui(buttons, touches)
+function PlayerControl.update_mobile_ui(_buttons, _touches)
   -- Implement touch controls here if needed
 end
 

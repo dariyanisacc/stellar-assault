@@ -37,6 +37,8 @@ function Collision.aabbTables(a, b)
   )
 end
 
+Collision.checkAABB = Collision.aabbTables
+
 --- Polymorphic version: objects supply :getBounds() → x, y, w, h
 function Collision.aabbObjects(a, b)
   local ax, ay, aw, ah = a:getBounds()

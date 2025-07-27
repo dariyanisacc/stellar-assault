@@ -649,9 +649,9 @@ function PlayingState:checkPlayerCollisions()
           self.entityGrid:remove(entity)
           local _ = self:findEntityIndex(self.waveManager.enemies, entity)
           activePowerups.shield = nil
-          if shieldBreakSound and playPositionalSound then
-            playPositionalSound(
-              shieldBreakSound,
+          if Game and Game.audioPool then
+            Game.audioPool:play(
+              "shield_break",
               entity.x + entity.width / 2,
               entity.y + entity.height / 2
             )
@@ -692,9 +692,9 @@ function PlayingState:checkPlayerCollisions()
           enemy.active = false
           table.remove(self.waveManager.enemies, i)
           activePowerups.shield = nil
-          if shieldBreakSound and playPositionalSound then
-            playPositionalSound(
-              shieldBreakSound,
+          if Game and Game.audioPool then
+            Game.audioPool:play(
+              "shield_break",
               enemy.x + enemy.width / 2,
               enemy.y + enemy.height / 2
             )
@@ -746,9 +746,9 @@ function PlayingState:checkLaserCollisions()
               entity.y + entity.height / 2,
               enemySize
             )
-            if explosionSound and playPositionalSound then
-              playPositionalSound(
-                explosionSound,
+            if Game and Game.audioPool then
+              Game.audioPool:play(
+                "explosion",
                 entity.x + entity.width / 2,
                 entity.y + entity.height / 2
               )
@@ -851,8 +851,8 @@ function PlayingState:checkPowerupCollisions()
         self:showNewHighScoreNotification()
       end
 
-      if powerupSound and playPositionalSound then
-        playPositionalSound(powerupSound, powerup.x, powerup.y)
+      if Game and Game.audioPool then
+        Game.audioPool:play("powerup", powerup.x, powerup.y)
       end
 
       -- Create floating text
@@ -1267,8 +1267,8 @@ function PlayingState:createExplosion(x, y, size)
     table.insert(explosions, particle)
   end
 
-  if explosionSound and playPositionalSound then
-    playPositionalSound(explosionSound, x, y)
+  if Game and Game.audioPool then
+    Game.audioPool:play("explosion", x, y)
   end
 end
 
@@ -1309,8 +1309,8 @@ function PlayingState:playerHit()
 
     gameState = "gameOver"
     levelAtDeath = currentLevel
-    if gameOverSound and playPositionalSound then
-      playPositionalSound(gameOverSound, player.x, player.y)
+    if Game and Game.audioPool then
+      Game.audioPool:play("gameover", player.x, player.y)
     end
     if backgroundMusic then
       backgroundMusic:stop()
@@ -1372,8 +1372,8 @@ function PlayingState:screenBomb()
   -- Big camera shake for bomb
   self.camera:shake(0.5, 10)
 
-  if explosionSound and playPositionalSound then
-    playPositionalSound(explosionSound, player.x, player.y)
+  if Game and Game.audioPool then
+    Game.audioPool:play("explosion", player.x, player.y)
   end
 end
 
@@ -2228,8 +2228,8 @@ function PlayingState:executeBossAttack(attackType, dt)
         local angle = i * angleStep
         self:createBossLaser(boss.x, boss.y + boss.size / 2, angle)
       end
-      if laserSound and playPositionalSound then
-        playPositionalSound(laserSound, boss.x, boss.y + boss.size / 2)
+      if Game and Game.audioPool then
+        Game.audioPool:play("laser", boss.x, boss.y + boss.size / 2)
       end
     end
     if boss.attackTimer > 0.5 then
@@ -2401,8 +2401,8 @@ function PlayingState:checkGameConditions()
     self:saveGameStats()
 
     gameState = "gameOver"
-    if victorySound and playPositionalSound then
-      playPositionalSound(victorySound, player.x, player.y)
+    if Game and Game.audioPool then
+      Game.audioPool:play("victory", player.x, player.y)
     end
     if backgroundMusic then
       backgroundMusic:stop()
@@ -2451,8 +2451,8 @@ function PlayingState:showNewHighScoreNotification()
   })
 
   -- Play a special sound if available
-  if powerupSound and playPositionalSound then
-    playPositionalSound(powerupSound, self.screenWidth / 2, 200)
+  if Game and Game.audioPool then
+    Game.audioPool:play("powerup", self.screenWidth / 2, 200)
   end
 end
 
