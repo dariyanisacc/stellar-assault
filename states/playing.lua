@@ -1293,6 +1293,8 @@ function PlayingState:createHitEffect(x, y)
   explosion.maxRadius = 30
   explosion.speed = 60
   explosion.alpha = 0.8
+  explosion.debrisSpawned = 0
+  explosion.debrisMax = 0
   explosion.pool = self.explosionPool
 
   table.insert(self.scene.explosions, explosion)
