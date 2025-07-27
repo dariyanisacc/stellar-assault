@@ -11,7 +11,7 @@ function Boss02.new(level)
   local self = setmetatable({}, Boss02)
 
   -- basic placement
-  self.sprite = AssetLoader.getImage("assets/bosses/boss_02@97x84.png")
+  self.sprite = AssetLoader.getImage("assets/gfx/Boss 2.png")
   self.x = lg.getWidth() / 2
   self.y = -100
 
