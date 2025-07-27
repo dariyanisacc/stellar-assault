@@ -25,8 +25,16 @@ end
 
 --- Convenience wrapper: takes two tables where each has x, y, w, h fields
 function Collision.aabbTables(a, b)
-  return Collision.aabb(a.x, a.y, a.w or a.width, a.h or a.height,
-                        b.x, b.y, b.w or b.width, b.h or b.height)
+  return Collision.aabb(
+    a.x,
+    a.y,
+    a.w or a.width,
+    a.h or a.height,
+    b.x,
+    b.y,
+    b.w or b.width,
+    b.h or b.height
+  )
 end
 
 --- Polymorphic version: objects supply :getBounds() → x, y, w, h
@@ -49,8 +57,7 @@ end
 
 --- Convenience: tables with x, y, r fields.
 function Collision.circlesTables(a, b)
-  return Collision.circles(a.x, a.y, a.r or a.radius,
-                           b.x, b.y, b.r or b.radius)
+  return Collision.circles(a.x, a.y, a.r or a.radius, b.x, b.y, b.r or b.radius)
 end
 
 ---------------------------------------------------------------------
@@ -65,6 +72,9 @@ function Collision.pointInCircle(px, py, cx, cy, r)
   local dx, dy = px - cx, py - cy
   return dx * dx + dy * dy <= r * r
 end
+
+-- Compatibility helper for legacy code
+Collision.checkAABB = Collision.aabbTables
 
 ---------------------------------------------------------------------
 -- Swept AABB (for simple continuous collision) ----------------------
@@ -88,7 +98,7 @@ function Collision.sweptAABB(ax, ay, aw, ah, avx, avy, bx, by, bw, bh)
   local ty2 = (expandedY + expandedH - ay) * invVy
 
   local tEntry = math.max(math.min(tx1, tx2), math.min(ty1, ty2))
-  local tExit  = math.min(math.max(tx1, tx2), math.max(ty1, ty2))
+  local tExit = math.min(math.max(tx1, tx2), math.max(ty1, ty2))
 
   if tEntry > tExit or tExit < 0 or tEntry > 1 then
     return nil -- no collision within 0..1

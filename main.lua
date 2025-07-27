@@ -27,6 +27,10 @@ local Game = require("src.game")
 -- Cache Love2D modules for speed
 local lg, la, lw, lt, lf = love.graphics, love.audio, love.window, love.timer, love.filesystem
 
+-- Fixed time-step variables for deterministic updates
+local FIXED_DT = 1 / 60
+local accumulator = 0
+
 -- ---------------------------------------------------------------------------
 -- Globals stored on Game table
 -- ---------------------------------------------------------------------------
@@ -67,6 +71,8 @@ Game.displayMode = "borderless"
 Game.currentResolution = 1
 Game.highContrast = false
 Game.fontScale = 1
+Game.paletteName = constants.defaultPalette
+Game.palette = constants.palettes[Game.paletteName]
 
 Game.lastInputType = "keyboard"
 Game.inputHints = {
@@ -237,6 +243,11 @@ local function applyFontScale()
   Game.mediumFont = lg.newFont(20 * Game.fontScale)
 end
 
+local function applyPalette()
+  Game.palette = constants.palettes[Game.paletteName]
+    or constants.palettes[constants.defaultPalette]
+end
+
 -- Settings I/O --------------------------------------------------------------
 local function updateAudioVolumes()
   for _, s in ipairs(sfxSources) do
@@ -270,8 +281,12 @@ local function loadSettings()
   if lines[8] then
     Game.fontScale = tonumber(lines[8]) or 1
   end
+  if lines[9] then
+    Game.paletteName = lines[9]
+  end
   updateAudioVolumes()
   applyFontScale()
+  applyPalette()
 end
 
 function saveSettings()
@@ -284,6 +299,7 @@ function saveSettings()
     Game.selectedShip or "alpha",
     tostring(Game.highContrast),
     Game.fontScale,
+    Game.paletteName,
   }, "\n")
   lf.write("settings.dat", out)
   Persistence.updateSettings({
@@ -294,6 +310,7 @@ function saveSettings()
     displayMode = Game.displayMode,
     highContrast = Game.highContrast,
     fontScale = Game.fontScale,
+    palette = Game.paletteName,
   })
 end
 
@@ -352,38 +369,34 @@ function playPositionalSound(src, x, y)
   c:play()
 end
 
--- Starfield -----------------------------------------------------------------
-local stars, starCount = {}, 200
-function initStarfield()
-  stars = {}
-  for i = 1, starCount do
-    stars[#stars + 1] = {
-      x = love.math.random() * lg.getWidth(),
-      y = love.math.random() * lg.getHeight(),
-      speed = love.math.random() * 50 + 20,
-      size = love.math.random() * 2,
-    }
+local Starfield = require("src.starfield")
+local starfield
+
+local function initStarfield()
+  starfield = Starfield.new(200)
+end
+
+local function updateStarfield(dt)
+  if starfield then
+    starfield:update(dt)
   end
 end
-function updateStarfield(dt)
-  local h = lg.getHeight()
-  for _, s in ipairs(stars) do
-    s.y = s.y + s.speed * dt
-    if s.y > h then
-      s.y = -s.size
-      s.x = love.math.random() * lg.getWidth()
-    end
+
+local function drawStarfield()
+  if starfield then
+    starfield:draw()
   end
 end
-function drawStarfield()
-  for _, s in ipairs(stars) do
-    local b = s.size / 2
-    lg.setColor(b, b, b)
-    lg.circle("fill", s.x, s.y, s.size)
-  end
-end
+
 _G.initStarfield, _G.updateStarfield, _G.drawStarfield =
   initStarfield, updateStarfield, drawStarfield
+_G.applyFontScale = applyFontScale
+_G.applyPalette = applyPalette
+
+_G.initWindow = initWindow
+_G.loadFonts = loadFonts
+_G.loadAudio = loadAudio
+_G.initStates = initStates
 
 -- ---------------------------------------------------------------------------
 -- Love2D callbacks
@@ -425,16 +438,21 @@ function love.update(dt)
   if _G.timeScale then
     dt = dt * _G.timeScale
   end
-  updateStarfield(dt)
-  debugConsole:update(dt)
-  if _G.configReloadNotification then
-    local n = _G.configReloadNotification
-    n.timer = n.timer - dt
-    if n.timer <= 0 then
-      _G.configReloadNotification = nil
+
+  accumulator = accumulator + dt
+  while accumulator >= FIXED_DT do
+    updateStarfield(FIXED_DT)
+    debugConsole:update(FIXED_DT)
+    if _G.configReloadNotification then
+      local n = _G.configReloadNotification
+      n.timer = n.timer - FIXED_DT
+      if n.timer <= 0 then
+        _G.configReloadNotification = nil
+      end
     end
+    stateManager:update(FIXED_DT)
+    accumulator = accumulator - FIXED_DT
   end
-  stateManager:update(dt)
 end
 
 local drawDebugInfo, drawDebugOverlay
@@ -595,5 +613,27 @@ end
 function love.quit()
   if Game.spriteManager and Game.spriteManager.reportUsage then
     Game.spriteManager:reportUsage()
+  end
+end
+
+-- ---------------------------------------------------------------------------
+-- Error handling -------------------------------------------------------------
+-- ---------------------------------------------------------------------------
+
+local _original_love_run = love.run
+
+local function _handle_error(err)
+  local trace = debug.traceback(err, 2)
+  local filename = string.format("crash_%s.log", os.date("%Y%m%d_%H%M%S"))
+  pcall(love.filesystem.write, filename, trace)
+  return trace
+end
+
+function love.run(...)
+  local ok, result = xpcall(_original_love_run, _handle_error, ...)
+  if ok then
+    return result
+  else
+    return result
   end
 end
