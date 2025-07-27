@@ -20,41 +20,42 @@ local timer = 0
 ---------------------------------------------------------------------
 -- StateManager hooks ------------------------------------------------
 ---------------------------------------------------------------------
-function Intro:enter(_params)
-    timer = 0
+function Intro:enter(params)
+  timer = 0
+  self.nextState = (params and params.nextState) or "menu"
 end
 
 function Intro:update(dt)
-    timer = timer + dt
-    if timer >= AUTO_ADVANCE then
-        stateManager:switch("menu")
-    end
+  timer = timer + dt
+  if timer >= AUTO_ADVANCE then
+    stateManager:switch(self.nextState)
+  end
 end
 
 function Intro:draw()
-    -- Background
-    drawStarfield()
+  -- Background
+  drawStarfield()
 
-    -- Title text
-    lg.setColor(1, 1, 1, 1)
-    lg.setFont(Game.titleFont)
-    lg.printf("Stellar Assault", 0, lg.getHeight() * 0.4, lg.getWidth(), "center")
+  -- Title text
+  lg.setColor(1, 1, 1, 1)
+  lg.setFont(Game.titleFont)
+  lg.printf("Stellar Assault", 0, lg.getHeight() * 0.4, lg.getWidth(), "center")
 
-    -- Prompt
-    lg.setFont(Game.uiFont)
-    lg.printf("Press any key to begin", 0, lg.getHeight() * 0.6, lg.getWidth(), "center")
+  -- Prompt
+  lg.setFont(Game.uiFont)
+  lg.printf("Press any key to begin", 0, lg.getHeight() * 0.6, lg.getWidth(), "center")
 end
 
 function Intro:keypressed(_key)
-    if timer >= INPUT_DELAY then
-        stateManager:switch("menu")
-    end
+  if timer >= INPUT_DELAY then
+    stateManager:switch(self.nextState)
+  end
 end
 
 function Intro:gamepadpressed(_joy, _button)
-    if timer >= INPUT_DELAY then
-        stateManager:switch("menu")
-    end
+  if timer >= INPUT_DELAY then
+    stateManager:switch(self.nextState)
+  end
 end
 
 -- Provide empty handlers so StateManager can safely call them

@@ -46,7 +46,7 @@ describe("Persistence version migration", function()
     local data = { highScore = 10 }
     assert.is_true(Persistence.save(data))
     local fileStr = fs["stellar_assault_save.dat"]
-    assert.is_not_nil(fileStr:match("^version = 2\n"))
+    assert.is_not_nil(fileStr:match("^version = 3\n"))
     local loaded = Persistence.load()
     assert.equals(10, loaded.highScore)
   end)
