@@ -1,157 +1,184 @@
--- src/entities/powerup.lua
--- Simple power‑up manager for Stellar Assault.
--- Provides spawning, updating, drawing and pickup handling for power‑up entities.
--- This (re‑)implementation is intentionally lightweight so it can act as a
--- drop‑in replacement for the original missing file referenced from
--- states/playing.lua.
+-- Powerup entity ---------------------------------------------------------------
+-- Usage: local Powerup = require("src.entities.powerup"); powerup = Powerup.new(x, y, type)
 
 local lg = love.graphics
-local AssetLoader = require("src.core.asset_loader")
 
 local Powerup = {}
+Powerup.__index = Powerup
 
--- ========================================================================= --
--- >>> INTERNAL HELPERS
--- ========================================================================= --
-local _images = {}
-local _loaded = false
+-- Powerup types and their properties
+local POWERUP_TYPES = {
+  rapid = {
+    color = { 1, 1, 0 }, -- yellow
+    icon = "R",
+    duration = 8,
+    description = "Rapid Fire",
+  },
+  spread = {
+    color = { 1, 0.5, 0 }, -- orange
+    icon = "S",
+    duration = 10,
+    description = "Spread Shot",
+  },
+  shield = {
+    color = { 0, 1, 1 }, -- cyan
+    icon = "D",
+    duration = 15, -- shield barrier duration
+    description = "Shield Barrier",
+  },
+  health = {
+    color = { 1, 0.2, 0.2 }, -- red
+    icon = "+",
+    duration = 0, -- instant
+    description = "Shield +1",
+  },
+  bomb = {
+    color = { 1, 0, 1 }, -- magenta
+    icon = "B",
+    duration = 0, -- instant
+    description = "Screen Clear",
+  },
+  boost = {
+    color = { 0, 1, 0 }, -- green
+    icon = ">>",
+    duration = 6,
+    description = "Speed Boost",
+  },
+  coolant = {
+    color = { 0, 0.5, 1 }, -- ice blue
+    icon = "C",
+    duration = 10, -- cooling boost duration
+    description = "Heat Coolant",
+  },
+  homingMissile = {
+    color = { 1, 1, 1 }, -- white
+    icon = "M",
+    duration = 5,
+    description = "Homing Missiles",
+  },
+}
 
-local function _tryLoadImage(name, fallbackColor)
-  local ok, img = pcall(AssetLoader.getImage, ("assets/powerups/%s.png"):format(name))
-  if ok and img then
-    return { kind = name, img = img, w = img:getWidth(), h = img:getHeight() }
+function Powerup.new(x, y, type)
+  local self = setmetatable({}, Powerup)
+
+  -- position and movement
+  self.x = x
+  self.y = y
+  self.width = 24
+  self.height = 24
+  self.size = 24 -- For collision compatibility
+  self.fallSpeed = 50
+
+  -- type and properties
+  self.type = type or "rapid"
+  local config = POWERUP_TYPES[self.type] or POWERUP_TYPES.rapid
+  self.color = config.color
+  self.icon = config.icon
+  self.duration = config.duration
+  self.description = config.description
+
+  -- visual state
+  self.rotation = 0
+  self.pulse = 0
+  self.collected = false
+
+  return self
+end
+
+function Powerup:update(dt)
+  -- fall down
+  self.y = self.y + self.fallSpeed * dt
+
+  -- rotate and pulse
+  self.rotation = self.rotation + dt * 2
+  self.pulse = self.pulse + dt * 3
+end
+
+function Powerup:draw()
+  lg.push()
+  lg.translate(self.x, self.y)
+  lg.rotate(self.rotation)
+
+  -- Enhanced powerups have special visual effects
+  if self.enhanced then
+    -- Extra glow ring for enhanced powerups
+    local pulse = math.sin(self.pulse * 1.5) * 0.3 + 0.7
+    lg.setColor(1, 1, 0.5, pulse * 0.4)
+    lg.circle("line", 0, 0, self.width + 5)
+    lg.setLineWidth(2)
+  end
+
+  -- pulsing glow effect
+  local scale = 1 + math.sin(self.pulse) * 0.2
+  if self.enhanced then
+    scale = scale * 1.2 -- Slightly larger for enhanced
+  end
+
+  -- outer glow
+  lg.setColor(self.color[1], self.color[2], self.color[3], 0.3)
+  lg.circle("fill", 0, 0, self.width * scale)
+
+  -- main body
+  lg.setColor(self.color[1], self.color[2], self.color[3], 0.8)
+  lg.circle("fill", 0, 0, self.width / 2)
+
+  -- border
+  if self.enhanced then
+    lg.setColor(1, 1, 0.8, 1) -- Golden border for enhanced
+    lg.setLineWidth(2)
   else
-    -- Use a dummy coloured circle if the sprite is missing
-    return { kind = name, color = fallbackColor or { 1, 1, 1 }, w = 32, h = 32 }
+    lg.setColor(1, 1, 1, 1)
   end
-end
+  lg.circle("line", 0, 0, self.width / 2)
+  lg.setLineWidth(1)
 
-local function _ensureLoaded()
-  if _loaded then
-    return
-  end
-  _loaded = true
-  -- Preload the common power‑up sprites (or fallbacks)
-  _images["health"] = _tryLoadImage("health", { 0.1, 1.0, 0.1 })
-  _images["shield"] = _tryLoadImage("shield", { 0.1, 0.6, 1.0 })
-  _images["weapon"] = _tryLoadImage("weapon", { 1.0, 0.6, 0.1 })
-  _images["score"] = _tryLoadImage("score", { 1.0, 0.9, 0.1 })
-end
-
--- ========================================================================= --
--- >>> POWER‑UP INSTANCE OBJECT
--- ========================================================================= --
-local PU = {}
-PU.__index = PU
-
-function PU:new(kind, x, y)
-  _ensureLoaded()
-  local sprite = _images[kind] or _images["score"]
-  local o = {
-    kind = kind,
-    x = x,
-    y = y,
-    r = 0, -- rotation for visual flair
-    radius = math.max(sprite.w, sprite.h) * 0.5,
-    sprite = sprite,
-    ttl = 15, -- despawn after N seconds if unpicked
-    active = true,
-  }
-  return setmetatable(o, self)
-end
-
-function PU:update(dt)
-  if not self.active then
-    return
-  end
-  self.r = (self.r + dt) % (math.pi * 2)
-  self.ttl = self.ttl - dt
-  if self.ttl <= 0 then
-    self.active = false
-  end
-end
-
-function PU:draw()
-  if not self.active then
-    return
-  end
-  if self.sprite.img then
-    lg.draw(self.sprite.img, self.x, self.y, self.r, 1, 1, self.sprite.w * 0.5, self.sprite.h * 0.5)
-  else
+  -- icon
+  if self.enhanced then
+    -- Slightly larger icon for enhanced
     lg.push()
-    lg.translate(self.x, self.y)
-    lg.rotate(self.r)
-    lg.setColor(self.sprite.color)
-    lg.circle("fill", 0, 0, self.radius)
-    lg.setColor(1, 1, 1)
+    lg.scale(1.2, 1.2)
+    lg.setColor(0, 0, 0, 1)
+    lg.print(self.icon, -7, -9)
     lg.pop()
+  else
+    lg.setColor(0, 0, 0, 1)
+    lg.print(self.icon, -6, -8)
+  end
+
+  lg.pop()
+end
+
+function Powerup:collect(player)
+  if self.collected then
+    return
+  end
+  self.collected = true
+
+  -- apply effect based on type
+  if self.type == "health" then
+    -- instant shield restore
+    player.shield = math.min(player.shield + 1, player.maxShield or 5)
+    return true -- instant effect
+  elseif self.type == "bomb" then
+    -- clear screen of enemies (handled by playing state)
+    return "bomb"
+  else
+    -- timed powerup (including shield barrier)
+    return {
+      type = self.type,
+      duration = self.duration,
+      timer = self.duration,
+    }
   end
 end
 
--- Axis‑aligned bounding box vs circle (player vs power‑up) utility.
-local function _aabbCircle(ax, ay, aw, ah, cx, cy, cr)
-  local nearestX = math.max(ax, math.min(cx, ax + aw))
-  local nearestY = math.max(ay, math.min(cy, ay + ah))
-  local dx = cx - nearestX
-  local dy = cy - nearestY
-  return (dx * dx + dy * dy) <= cr * cr
-end
-
--- ========================================================================= --
--- >>> PUBLIC API (returned module)
--- ========================================================================= --
-
-Powerup._list = {}
-
---- Spawn a new power‑up at the given coordinates. Returns the new instance.
----@param kind string @"health", "shield", "weapon", or "score"
-function Powerup.spawn(kind, x, y)
-  _ensureLoaded()
-  local pu = PU:new(kind, x, y)
-  table.insert(Powerup._list, pu)
-  return pu
-end
-
---- Reset/clear all active power‑ups.
-function Powerup.reset()
-  Powerup._list = {}
-end
-
---- Update all power‑ups (called from states/playing.lua)
-function Powerup.update(dt)
-  for i = #Powerup._list, 1, -1 do
-    local pu = Powerup._list[i]
-    pu:update(dt)
-    if not pu.active then
-      table.remove(Powerup._list, i)
-    end
+-- Static method to get random powerup type
+function Powerup.getRandomType()
+  local types = {}
+  for k, _ in pairs(POWERUP_TYPES) do
+    table.insert(types, k)
   end
-end
-
---- Draw all power‑ups (called from states/playing.lua)
-function Powerup.draw()
-  for _, pu in ipairs(Powerup._list) do
-    pu:draw()
-  end
-end
-
---- Check if an AABB entity (e.g. player) has picked up any power‑up.
---- Returns the kind of the first collected power‑up or nil.
----@param x number
----@param y number
----@param w number
----@param h number
-function Powerup.checkPickupAABB(x, y, w, h)
-  for i = #Powerup._list, 1, -1 do
-    local pu = Powerup._list[i]
-    if _aabbCircle(x, y, w, h, pu.x, pu.y, pu.radius) then
-      local kind = pu.kind
-      pu.active = false
-      table.remove(Powerup._list, i)
-      return kind
-    end
-  end
-  return nil
+  return types[math.random(#types)]
 end
 
 return Powerup
