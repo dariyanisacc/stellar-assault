@@ -108,7 +108,7 @@ local function initWindow()
     minwidth   = constants.window.minWidth,
     minheight  = constants.window.minHeight,
   })
-  lg.setDefaultFilter("nearest", "nearest")
+  lg.setDefaultFilter("nearest", "nearest", 0)
   lg.setBackgroundColor(0.05, 0.05, 0.10)
 end
 

@@ -6,6 +6,7 @@ local logger = require("src.logger")
 
 local ParticleManager = {}
 ParticleManager.__index = ParticleManager
+-- Particle systems are pooled to avoid creating new ones for every effect
 
 -- Pre-create explosion images (circular blasts of different sizes)
 local function createBlastImage(size)
@@ -29,9 +30,32 @@ local function getBlastImage(size)
   return blastImages[cacheSize]
 end
 
+local function acquireSystem(self, image, buffer)
+  local pool = self.psPools[image]
+  if pool and #pool > 0 then
+    local ps = table.remove(pool)
+    ps:setBufferSize(buffer)
+    ps:setImage(image)
+    ps:reset()
+    return ps
+  end
+  return love.graphics.newParticleSystem(image, buffer)
+end
+
+local function releaseSystem(self, image, ps)
+  ps:reset()
+  local pool = self.psPools[image]
+  if not pool then
+    pool = {}
+    self.psPools[image] = pool
+  end
+  table.insert(pool, ps)
+end
+
 function ParticleManager:new()
   local self = setmetatable({}, ParticleManager)
   self.explosions = {} -- Table to hold active particle systems
+  self.psPools = {}
 
   -- Pre-create common sizes
   blastImages[16] = createBlastImage(16)
@@ -52,8 +76,8 @@ function ParticleManager:createExplosion(x, y, size)
   local blastImage = getBlastImage(math.min(size, 64))
   local particleCount = math.floor(10 + size / 4)
 
-  -- Create particle system
-  local ps = love.graphics.newParticleSystem(blastImage, particleCount + 10)
+  -- Create or reuse particle system
+  local ps = acquireSystem(self, blastImage, particleCount + 10)
   ps:setParticleLifetime(0.3, 0.7)
   ps:setLinearAcceleration(-150, -150, 150, 150)
   ps:setColors(
@@ -88,6 +112,7 @@ function ParticleManager:createExplosion(x, y, size)
   table.insert(self.explosions, {
     ps = ps,
     lifetime = 0.7,
+    image = blastImage,
     x = x,
     y = y,
   })
@@ -116,6 +141,7 @@ function ParticleManager:update(dt)
 
     if explosion.lifetime <= 0 and explosion.ps:getCount() == 0 then
       table.remove(self.explosions, i)
+      releaseSystem(self, explosion.image, explosion.ps)
     end
   end
 end
@@ -129,6 +155,9 @@ function ParticleManager:draw()
 end
 
 function ParticleManager:clear()
+  for _, exp in ipairs(self.explosions) do
+    releaseSystem(self, exp.image, exp.ps)
+  end
   self.explosions = {}
 end
 
