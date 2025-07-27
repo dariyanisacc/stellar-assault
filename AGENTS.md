@@ -120,10 +120,13 @@ end
 
 ### 7. Asset & Audio Pipeline
 
-1. Place raw art in `assets_src/`.  
-2. Run `build.sh` → compresses, trims, copies to `assets/`.  
-3. Audio must be mono OGG; peak normalized to –1 dBFS.  
-4. Each asset referenced only via **data files**, *not* by hard‑coded string paths.
+1. Place raw art in `assets_src/` using the same folder names as `assets/`
+   (`ships/`, `enemies/`, `bosses/`, `palettes/`).
+2. Run `build.sh` → compresses, trims, copies to `assets/`.
+3. Audio must be mono OGG; peak normalized to –1 dBFS.
+4. Load processed assets through the **AssetManager**
+   (`src/core/asset_loader.lua`) and reference them only via **data files**—no
+   hard-coded paths.
 
 ---
 
