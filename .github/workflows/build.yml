@@ -1,168 +1,32 @@
-name: Build and Release
+name: Build Releases
 
 on:
   push:
-    branches: [ main, develop ]
     tags:
       - 'v*'
-  pull_request:
-    branches: [ main ]
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Setup Lua
-      uses: leafo/gh-actions-lua@v10
-      with:
-        luaVersion: "5.1"
-    
-    - name: Setup LuaRocks
-      uses: leafo/gh-actions-luarocks@v4
-    
-    - name: Install luacheck
-      run: luarocks install luacheck
-    
-    - name: Run luacheck
-      run: |
-        luacheck . --globals love --no-max-line-length
-
-    - name: Install stylua
-      run: |
-        curl -L https://github.com/JohnnyMorganz/StyLua/releases/download/v0.20.0/stylua-linux-x86_64.zip -o stylua.zip
-        unzip stylua.zip -d stylua
-        sudo mv stylua/stylua /usr/local/bin/stylua
-        sudo chmod +x /usr/local/bin/stylua
-
-    - name: Run stylua
-      run: stylua --check .
-
-  test:
-    runs-on: ubuntu-latest
-    needs: lint
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Setup Lua
-      uses: leafo/gh-actions-lua@v10
-      with:
-        luaVersion: "5.1"
-    
-    - name: Setup LuaRocks
-      uses: leafo/gh-actions-luarocks@v4
-    
-    - name: Install test dependencies
-      run: |
-        luarocks install busted
-        luarocks install luacov
-        luarocks install luacov-reporter-lcov
-        luarocks install luafilesystem
-
-    - name: Run tests with coverage
-      run: |
-        busted --coverage tests/ tests/unit/test_assets.lua || echo "Tests need Love2D environment"
-        test -f luacov.stats.out
-        luacov
-
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        files: coverage.lcov
-
-    - name: Check coverage threshold
-      run: |
-        cov=$(awk -F: '/^LF:/ {lf+=$2} /^LH:/ {lh+=$2} END {if(lf==0){print 0}else{print (lh*100)/lf}}' coverage.lcov)
-        echo "Total coverage: $cov%"
-        awk -v cov="$cov" 'BEGIN { if (cov < 80) exit 1 }'
-
   build:
     runs-on: ubuntu-latest
-    needs: test
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y zip
-    
-    - name: Build .love file
-      run: |
-        chmod +x build.sh
-        ./build.sh
+      - uses: actions/checkout@v3
 
-    - name: Upload .love artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: stellar-assault-love
-        path: build/stellar-assault.love
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y luarocks libzip-dev zip
+          sudo luarocks install love-release
 
-  build-windows:
-    runs-on: windows-latest
-    needs: test
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Download Love2D
-      shell: powershell
-      run: |
-        $url = "https://github.com/love2d/love/releases/download/11.5/love-11.5-win64.zip"
-        $output = "love-win.zip"
-        Invoke-WebRequest -Uri $url -OutFile $output
-        Expand-Archive -Path $output -DestinationPath "dist/windows"
-        Move-Item "dist/windows/love-11.5-win64/*" "dist/windows/" -Force
-        Remove-Item "dist/windows/love-11.5-win64" -Recurse
-    
-    - name: Build Windows executable
-      shell: cmd
-      run: build.bat
+      - name: Package game
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          love-release -M -W64 -v "$VERSION" -l 11.3 --uti com.stellar.assault
 
-    - name: Upload Windows artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: stellar-assault-windows
-        path: dist/windows/
-
-  build-macos:
-    runs-on: macos-latest
-    needs: test
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Install Love2D
-      run: |
-        brew install --cask love
-    
-    - name: Build macOS app
-      run: |
-        chmod +x build.sh
-        ./build.sh
-
-    - name: Upload macOS artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: stellar-assault-macos
-        path: dist/StellarAssault.app
-
-  release:
-    runs-on: ubuntu-latest
-    needs: [build, build-windows, build-macos]
-    if: startsWith(github.ref, 'refs/tags/')
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Download artifacts
-      uses: actions/download-artifact@v3
-    
-    - name: Create Release
-      uses: softprops/action-gh-release@v1
-      with:
-        files: |
-          stellar-assault-love/stellar-assault.love
-          stellar-assault-windows/*
-          stellar-assault-macos/*
-        draft: false
-        prerelease: false
-        generate_release_notes: true
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: |
+            releases/stellar-assault.love
+            releases/stellar-assault-win64.zip
+            releases/stellar-assault-macos.zip

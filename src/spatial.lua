@@ -1,5 +1,5 @@
--- src/spatial.lua
--- Simple spatial‑hash grid utility for Stellar Assault
+-- File: src/spatial.lua
+-- Simple spatial‑hash grid utility for Stellar Assault
 -- Provides fast neighbourhood queries and basic collision helpers.
 -- Drop‑in replacement for the missing `src.spatial` module expected by
 -- states/playing.lua and other gameplay code.
@@ -21,9 +21,7 @@ function SpatialHash:new(cellSize)
 end
 
 ---Remove everything from the grid.
-function SpatialHash:clear()
-  self.cells = {}
-end
+function SpatialHash:clear() self.cells = {} end
 
 ---------------------------------------------------------------------
 -- Insert / remove / update -----------------------------------------
@@ -52,13 +50,9 @@ end
 function SpatialHash:remove(item)
   for key, cell in pairs(self.cells) do
     for i = #cell, 1, -1 do
-      if cell[i] == item then
-        table.remove(cell, i)
-      end
+      if cell[i] == item then table.remove(cell, i) end
     end
-    if #cell == 0 then
-      self.cells[key] = nil
-    end
+    if #cell == 0 then self.cells[key] = nil end
   end
 end
 
@@ -74,14 +68,11 @@ end
 
 ---Collect items whose AABB intersects the rectangle centred on (x,y)
 ---with dimensions `w × h`.
----@return table results
 function SpatialHash:queryRange(x, y, w, h, results)
-  results    = results or {}
-  local halfW, halfH = w * 0.5, h * 0.5
-  local minX  = math.floor((x - halfW) / self.cellSize)
-  local maxX  = math.floor((x + halfW) / self.cellSize)
-  local minY  = math.floor((y - halfH) / self.cellSize)
-  local maxY  = math.floor((y + halfH) / self.cellSize)
+  results = results or {}
+  local halfW, halfH     = w * 0.5, h * 0.5
+  local minX, maxX       = math.floor((x - halfW) / self.cellSize), math.floor((x + halfW) / self.cellSize)
+  local minY, maxY       = math.floor((y - halfH) / self.cellSize), math.floor((y + halfH) / self.cellSize)
 
   local visited = {}
   for cx = minX, maxX do
@@ -102,7 +93,14 @@ end
 
 ---Convenience: query everything within `radius` of point (x,y).
 function SpatialHash:queryRadius(x, y, radius, results)
-  return self:queryRange(x, y, radius * 2, radius * 2, results)
+  return self:queryRange(x, y, radius*2, radius*2, results)
+end
+
+---Return nearby entities occupying the same cells as the given item.
+function SpatialHash:getNearby(item)
+  local w = item.width  or item.size or 0
+  local h = item.height or item.size or 0
+  return self:queryRange(item.x, item.y, w, h, {})
 end
 
 ---------------------------------------------------------------------
@@ -121,27 +119,25 @@ end
 
 local function _pointInCircle(px, py, cx, cy, r)
   local dx, dy = px - cx, py - cy
-  return dx * dx + dy * dy <= r * r
+  return dx*dx + dy*dy <= r*r
 end
 
 ---------------------------------------------------------------------
 -- Public API table -------------------------------------------------
 ---------------------------------------------------------------------
-
 local M = {
-  -- Class
-  SpatialHash    = SpatialHash,
+  SpatialHash = SpatialHash,
 
   -- Factory helper for legacy code
-  new            = function(cellSize) return SpatialHash:new(cellSize) end,
+  new = function(_, cellSize) return SpatialHash:new(cellSize) end,
 
-  -- Legacy collision helpers
+  -- Legacy helpers
   checkCollision = _aabb,
   aabb           = _aabb,
   pointInCircle  = _pointInCircle,
 }
 
--- Let `setmetatable({}, M)` behave like a grid instance
+-- Allow setmetatable({}, M) to behave like an instance
 M.__index = SpatialHash
 
 return M
