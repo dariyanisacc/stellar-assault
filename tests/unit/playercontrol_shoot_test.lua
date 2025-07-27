@@ -2,34 +2,42 @@
 local love_mock = require("tests.mocks.love_mock")
 _G.love = love_mock
 love.filesystem.append = function() end
+love.filesystem.read = function(path)
+  if path == "data/ships.json" then
+    return [[{"alpha":{"name":"Alpha","spread":0,"fireRate":0.3,"speedMultiplier":1.0,"shieldMultiplier":1.0,"description":"Balanced fighter"}}]]
+  elseif path == "data/levels.json" then
+    return [[{"bossFrequency":4}]]
+  end
+  return nil, "File not found"
+end
 
-local ObjectPool    = require("src.objectpool")
+local ObjectPool = require("src.objectpool")
 local PlayerControl = require("src.player_control")
 
 describe("PlayerControl.shoot", function()
   local state
 
   before_each(function()
-    _G.lasers         = {}
-    _G.missiles       = nil
+    _G.lasers = {}
+    _G.missiles = nil
     _G.activePowerups = {}
-    _G.selectedShip   = "alpha"
+    _G.selectedShip = "alpha"
     _G.player = {
-      x              = 50,
-      y              = 100,
-      width          = 20,
-      height         = 20,
-      heat           = 0,
-      maxHeat        = 100,
-      heatRate       = 5,
-      overheatTimer  = 0,
+      x = 50,
+      y = 100,
+      width = 20,
+      height = 20,
+      heat = 0,
+      maxHeat = 100,
+      heatRate = 5,
+      overheatTimer = 0,
       overheatPenalty = 1.5,
     }
 
     state = {
       shootCooldown = 0,
-      laserPool     = ObjectPool.createLaserPool(),
-      keys          = { shoot = true },
+      laserPool = ObjectPool.createLaserPool(),
+      keys = { shoot = true },
     }
   end)
 
