@@ -1899,7 +1899,7 @@ function PlayingState:drawUI()
   end
 
   -- === LEFT SECTION: Level/Wave/Enemies ===
-  lg.setFont(mediumFont or lg.newFont(18))
+  lg.setFont(Game.mediumFont or lg.newFont(18))
   lg.setColor(0.8, 0.8, 1, 1)
   lg.print("LEVEL " .. currentLevel, panelPadding, 5)
 
@@ -1915,9 +1915,9 @@ function PlayingState:drawUI()
   end
 
   local scoreText = "Score: " .. tostring(score)
-  local scoreFont = uiFont or lg.newFont(18)
+  local scoreFont = Game.uiFont or lg.newFont(18)
   local scoreWidth = scoreFont:getWidth(scoreText)
-  uiManager:drawScore(self.screenWidth / 2 - scoreWidth / 2, 5, score)
+  Game.uiManager:drawScore(self.screenWidth / 2 - scoreWidth / 2, 5, score)
 
   -- Compact bars below score
   local barWidth = 150 -- Reduced from 200
@@ -1935,7 +1935,7 @@ function PlayingState:drawUI()
   self:drawBar(barX, 42, barWidth, barHeight, heatPercent, { 1, heatPercent, 0 }, nil)
 
   -- === RIGHT SECTION: High Score/Lives/Bombs ===
-  lg.setFont(uiFont or lg.newFont(16))
+  lg.setFont(Game.uiFont or lg.newFont(16))
 
   -- High score with subtle animation
   local highScore = self.newHighScore and score or (Persistence and Persistence.getHighScore() or 0)
@@ -1952,9 +1952,9 @@ function PlayingState:drawUI()
 
   -- Lives display
   local livesText = "Lives: " .. tostring(lives)
-  local livesFont = uiFont or lg.newFont(18)
+  local livesFont = Game.uiFont or lg.newFont(18)
   local livesWidth = livesFont:getWidth(livesText)
-  uiManager:drawLives(self.screenWidth - livesWidth - panelPadding, 30, lives)
+  Game.uiManager:drawLives(self.screenWidth - livesWidth - panelPadding, 30, lives)
 
   -- Bombs (smaller icons)
   if player.bombs and player.bombs > 0 then
