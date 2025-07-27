@@ -293,9 +293,7 @@ function OptionsState:keypressed(key)
         saveSettings()
         stateManager:switch("menu")
       elseif item.name == "Controls" then
-        self.inControlsMenu = true
-        self.controlsSelection = 1
-        self:setupControlsMenu()
+        stateManager:switch("options_controls")
       end
     elseif item.type == "toggle" or item.type == "list" then
       self:adjustValue(1)
