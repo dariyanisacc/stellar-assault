@@ -3,6 +3,7 @@
 -- Handles enemy waves, spawning, and AI behaviors
 
 local logger = require("src.logger")
+local Game = require("src.game")
 
 local WaveManager = {}
 WaveManager.__index = WaveManager
@@ -313,7 +314,10 @@ function WaveManager:new(player, entityGrid)
   self.remainingToSpawn = 0
   self.enemiesSpawned = 0
   self.playerPerformance = { killRate = 0, combo = 0 }
+  -- Scales enemy health and speed
   self.difficultyMultiplier = 1
+  -- Separately scale spawn rate based on performance
+  self.spawnRateMultiplier = 1
   self.waveCompleteCallback = nil
   self.enemyLasers = {} -- Store enemy lasers
   self.shootCallback = nil -- Callback for when enemy shoots
@@ -328,6 +332,8 @@ function WaveManager:startWave(waveNumber)
   end
 
   -- Calculate performance based difficulty for this wave
+  -- Update multipliers from latest performance metrics
+  self:updateDifficulty()
   local killRate = self.playerPerformance.killRate or 0
   local increase = killRate > 0.5 and 0.10 or 0.05
   -- Difficulty starts at 1 and increases per wave based on performance
@@ -357,18 +363,28 @@ function WaveManager:getRandomEnemyType()
     return nil
   end
 
-  -- Calculate total weight
+  -- Adjust weights based on player performance.
+  -- Higher kill rates increase the chance of advanced patterns.
+  local killRate = self.playerPerformance.killRate or 0
+  local advancedFactor = math.min(killRate / 2, 1)
+
   local totalWeight = 0
   for _, enemyType in ipairs(config.enemyTypes) do
-    totalWeight = totalWeight + enemyType.weight
+    local weight = enemyType.weight
+    if enemyType.behavior ~= "move_left" then
+      weight = weight * (1 + advancedFactor)
+    else
+      weight = weight * (1 - advancedFactor * 0.5)
+    end
+    enemyType.__adjustedWeight = weight
+    totalWeight = totalWeight + weight
   end
 
-  -- Select based on weight
   local random = love.math.random() * totalWeight
   local currentWeight = 0
 
   for _, enemyType in ipairs(config.enemyTypes) do
-    currentWeight = currentWeight + enemyType.weight
+    currentWeight = currentWeight + enemyType.__adjustedWeight
     if random <= currentWeight then
       return enemyType
     end
@@ -445,7 +461,7 @@ function WaveManager:update(dt)
       self:spawnEnemy()
       self.remainingToSpawn = self.remainingToSpawn - 1
       local interval = self.spawnInterval
-        / ((1 + self.waveNumber * 0.1) * self.difficultyMultiplier)
+        / ((1 + self.waveNumber * 0.1) * self.difficultyMultiplier * self.spawnRateMultiplier)
       self.spawnTimer = math.max(interval, 0.1)
     end
   end
@@ -518,7 +534,7 @@ function WaveManager:draw()
 
     -- Draw sprite if available, otherwise fall back to rectangles
     if sprite then
-      love.graphics.setColor(1, 1, 1, 1)
+      love.graphics.setColor(Game.palette.enemy)
       -- Calculate scale to fit enemy dimensions * 4
       local scaleX = (enemy.width / sprite:getWidth()) * 4
       local scaleY = (enemy.height / sprite:getHeight()) * 4
@@ -535,27 +551,14 @@ function WaveManager:draw()
       )
     else
       -- Fallback to colored rectangles if sprites not loaded
-      if enemy.behaviorName == "homing" or enemy.behaviorName == "move_to_player" then
-        love.graphics.setColor(1, 0.5, 0.5) -- Reddish for homing enemies
-      elseif enemy.behaviorName == "dive_attack" then
-        love.graphics.setColor(1, 1, 0.5) -- Yellowish for dive attackers
-      elseif enemy.behaviorName == "zigzag" then
-        love.graphics.setColor(0.5, 1, 0.5) -- Greenish for zigzag
-      elseif enemy.behaviorName == "formation" then
-        love.graphics.setColor(0.5, 0.5, 1) -- Bluish for formation
-      else
-        love.graphics.setColor(0.8, 0.8, 0.8) -- Gray for basic
-      end
-
+      love.graphics.setColor(Game.palette.enemy)
       love.graphics.rectangle("fill", enemy.x, enemy.y, enemy.width, enemy.height)
     end
 
     -- Health bar if damaged
     if enemy.health < enemy.maxHealth then
       local healthPercent = enemy.health / enemy.maxHealth
-      love.graphics.setColor(1, 0, 0)
-      love.graphics.rectangle("fill", enemy.x, enemy.y - 10, enemy.width, 4)
-      love.graphics.setColor(0, 1, 0)
+      love.graphics.setColor(Game.palette.enemy)
       love.graphics.rectangle("fill", enemy.x, enemy.y - 10, enemy.width * healthPercent, 4)
     end
 
@@ -676,7 +679,10 @@ function WaveManager:updateDifficulty()
   local comboFactor = math.min((self.playerPerformance.combo or 0) / 10, 1)
   local killFactor = math.min((self.playerPerformance.killRate or 0) / 2, 1)
   local diff = 1 + (comboFactor + killFactor) * 0.5
+  -- Enemy health and speed multiplier
   self.difficultyMultiplier = math.min(diff, 2)
+  -- Spawn rate multiplier is a bit less aggressive
+  self.spawnRateMultiplier = 1 + killFactor * 0.5
 end
 
 function WaveManager:updateLasers(dt)

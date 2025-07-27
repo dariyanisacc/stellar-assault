@@ -75,6 +75,9 @@ function Collision.pointInCircle(px, py, cx, cy, r)
   return dx * dx + dy * dy <= r * r
 end
 
+-- Compatibility helper for legacy code
+Collision.checkAABB = Collision.aabbTables
+
 ---------------------------------------------------------------------
 -- Swept AABB (for simple continuous collision) ----------------------
 ---------------------------------------------------------------------

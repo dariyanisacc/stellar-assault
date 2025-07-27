@@ -40,6 +40,7 @@ local PlayerControl = require("src.player_control")
 local EnemyAI = require("src.enemy_ai")
 local PowerupHandler = require("src.powerup_handler")
 local BossManager = require("src.bossmanager")
+local Input = require("states.playing.input")
 local lg = love.graphics
 local lm = love.math or math
 
@@ -72,6 +73,9 @@ function PlayingState:enter(params)
   -- Create camera
   local Camera = require("src.camera")
   self.camera = Camera:new()
+
+  -- Input handler
+  self.input = Input:new(self)
 
   -- Create object pools
   self.laserPool = ObjectPool.createLaserPool()
@@ -285,6 +289,9 @@ function PlayingState:update(dt)
   end
 
   self:handleTimers(dt)
+  if self.input then
+    self.input:update(dt)
+  end
   self:updatePlayer(dt)
   self:updateEntities(dt)
   self:updateWaveManager(dt)
@@ -2034,19 +2041,27 @@ function PlayingState:drawUI()
 end
 
 function PlayingState:keypressed(key, scancode, isrepeat)
-  PlayerControl.handleKeyPress(self, key)
+  if self.input then
+    self.input:keypressed(key, scancode, isrepeat)
+  end
 end
 
 function PlayingState:keyreleased(key, scancode)
-  PlayerControl.handleKeyRelease(self, key)
+  if self.input then
+    self.input:keyreleased(key, scancode)
+  end
 end
 
 function PlayingState:gamepadpressed(joystick, button)
-  PlayerControl.handleGamepadPress(self, button)
+  if self.input then
+    self.input:gamepadpressed(joystick, button)
+  end
 end
 
 function PlayingState:gamepadreleased(joystick, button)
-  PlayerControl.handleGamepadRelease(self, button)
+  if self.input then
+    self.input:gamepadreleased(joystick, button)
+  end
 end
 
 -- Boss-related methods
