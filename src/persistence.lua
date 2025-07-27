@@ -1,7 +1,7 @@
 ----------------------------------------------------------------------
 -- Stellar Assault – Persistence system
 -- Handles saving / loading game data and validates it with a checksum.
--- Falls back to love.data JSON if lunajson isn’t bundled with the project.
+-- Falls back to a bundled json.lua if lunajson isn’t available.
 ----------------------------------------------------------------------
 
 ----------------------------------------------------------------------
@@ -12,11 +12,12 @@ local ok, json = pcall(require, "lunajson")        -- system‑wide install
 if not ok then ok, json = pcall(require, "src.lunajson") end -- bundled copy
 
 if not ok then
-  print("[Persistence] lunajson not found – falling back to love.data JSON.")
-  json = {
-    encode = function(tbl) return love.data.encode("string", "json", tbl) end,
-    decode = function(str) return love.data.decode("string", "json", str) end,
-  }
+  ok, json = pcall(require, "src.json")
+  if ok then
+    print("[Persistence] lunajson not found – using bundled json.lua")
+  else
+    error("[Persistence] No JSON library available")
+  end
 end
 
 ----------------------------------------------------------------------
