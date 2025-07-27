@@ -247,6 +247,9 @@ local function updateAudioVolumes()
   end
 end
 
+-- Make audio volume helper accessible outside this module (e.g. options menu)
+_G.updateAudioVolumes = updateAudioVolumes
+
 local function loadSettings()
   if not lf.getInfo("settings.dat") then return end
   local lines = {}
