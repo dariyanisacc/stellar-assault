@@ -132,6 +132,18 @@ luacov
 - `src/objectpool.lua` - Defines object pools including new trail and debris pools
 - Audio files (`.mp3`, `.wav`, `.ogg`, `.flac`) - Sound effects and music
 
+### Asset Taxonomy
+
+- `assets/ships/` – processed player ship sprites
+- `assets/enemies/` – standard enemy sprites
+- `assets/bosses/` – boss artwork
+- `assets/palettes/` – Lua colour palettes
+
+Raw source files live in `assets_src/` using the same layout. After adding art
+run `./build.sh` to compress and copy files into `assets/`. Reference new
+assets from the relevant data files and load them via the `AssetLoader`
+(the game's AssetManager).
+
 ### Code Style
 Use `luacheck` for linting and `stylua` for consistent formatting. See `.luacheckrc` and `stylua.toml` for configuration.
 
