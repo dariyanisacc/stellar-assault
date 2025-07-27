@@ -12,7 +12,7 @@ function Boss.new(level)
   local self = setmetatable({}, Boss)
 
   -- basic placement ----------------------------
-  local path = string.format("assets/bosses/boss_%02d@97x84.png", level)
+  local path = string.format("assets/gfx/Boss %d.png", level)
   self.sprite = AssetLoader.getImage(path)
   self.x = lg.getWidth() / 2
   self.y = -self.sprite:getHeight() -- scroll in from top

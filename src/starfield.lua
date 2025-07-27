@@ -17,7 +17,7 @@ function Starfield.new(count, image)
       data:setPixel(0, 0, 1, 1, 1, 1)
       self.image = lg.newImage(data)
     else
-      self.image = lg.newImage("assets/ships/ship_alpha@1024x1024.png")
+      self.image = lg.newImage("assets/gfx/ship_alpha@1024x1024.png")
     end
   end
   self.quads = {}
