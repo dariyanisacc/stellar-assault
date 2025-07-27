@@ -1,20 +1,16 @@
 ----------------------------------------------------------------------
--- Stellar Assault – Persistence system
+-- Stellar Assault – Persistence system
 -- Handles saving / loading game data and validates it with a checksum.
--- Tries to use lunajson for speed, but falls back to love.data JSON
--- if lunajson isn’t bundled with the project.
+-- Falls back to love.data JSON if lunajson isn’t bundled with the project.
 ----------------------------------------------------------------------
 
 ----------------------------------------------------------------------
 -- JSON SET‑UP
 ----------------------------------------------------------------------
 
-local ok, json = pcall(require, "lunajson")      -- system‑wide install
-if not ok then
-  ok, json = pcall(require, "src.lunajson")      -- bundled copy
-end
+local ok, json = pcall(require, "lunajson")        -- system‑wide install
+if not ok then ok, json = pcall(require, "src.lunajson") end -- bundled copy
 
--- Graceful fallback so the game still boots without lunajson
 if not ok then
   print("[Persistence] lunajson not found – falling back to love.data JSON.")
   json = {
@@ -34,7 +30,7 @@ local constants = require("src.constants")
 -- UTILITY
 ----------------------------------------------------------------------
 
----Simple deep‑copy (avoids sharing references to default data).
+---Deep‑copy any Lua value (tables copied by value, not reference).
 local function deepcopy(obj)
   if type(obj) ~= "table" then return obj end
   local res = {}
@@ -47,11 +43,11 @@ end
 ----------------------------------------------------------------------
 
 local Persistence      = {}
-Persistence.settings   = nil          -- cached reference for convenience
+Persistence.settings   = nil          -- convenience cache
 
 local SAVE_FILE        = "stellar_assault_save.dat"
 local CHECKSUM_FILE    = SAVE_FILE .. ".sum"
-local SAVE_VERSION     = 3            -- bump when schema changes
+local SAVE_VERSION     = 3            -- bump whenever schema changes
 
 -- Default control mappings
 local defaultControls = {
@@ -59,26 +55,31 @@ local defaultControls = {
     left   = "left",  right = "right", up   = "up",    down = "down",
     shoot  = "space", boost = "lshift", bomb = "b",    pause = "escape",
   },
-  gamepad  = { shoot = "rightshoulder", bomb = "a", boost = "x", pause = "start" }
+  gamepad = {
+    shoot = "rightshoulder",
+    bomb  = "a",
+    boost = "x",
+    pause = "start",
+  },
 }
 
--- Set when a load fails so calling code can react
+-- Inform callers if a load failed so they can notify players
 Persistence.loadError = nil
 
--- Default structure for new saves or schema upgrades
+-- Default save‑data skeleton
 local defaultSaveData = {
-  highScore            = 0,
-  leaderboard          = {},
-  unlockedLevels       = { true }, -- Level 1 always unlocked
-  totalBossesDefeated  = 0,
+  highScore           = 0,
+  leaderboard         = {},
+  unlockedLevels      = { true }, -- Level 1 always unlocked
+  totalBossesDefeated = 0,
 
   statistics = {
-    totalPlayTime      = 0,
+    totalPlayTime        = 0,
     totalEnemiesDefeated = 0,
-    totalDeaths        = 0,
-    favoriteShip       = "alpha",
-    bestKillCount      = 0,
-    bestSurvivalTime   = 0,
+    totalDeaths          = 0,
+    favoriteShip         = "alpha",
+    bestKillCount        = 0,
+    bestSurvivalTime     = 0,
   },
 
   achievements = {},
@@ -91,7 +92,7 @@ local defaultSaveData = {
     selectedShip  = "alpha",
     displayMode   = "windowed",
     highContrast  = false,
-    palette       = constants.defaultPalette, -- from main
+    palette       = constants.defaultPalette,
   },
 }
 
@@ -110,7 +111,7 @@ local function isChecksumValid(jsonStr)
   return love.filesystem.read(CHECKSUM_FILE) == checksum(jsonStr)
 end
 
----Deep‑merge source into destination, preserving existing keys.
+---Merge *src* defaults into *dst* without clobbering existing keys.
 local function mergeDefaults(dst, src)
   for k, v in pairs(src) do
     if type(v) == "table" then
@@ -126,29 +127,25 @@ end
 -- PUBLIC API
 ----------------------------------------------------------------------
 
----Load the save file (creating a new one if necessary).
+---Load save data; create new save if none exists or if corrupt.
 function Persistence.load()
-  -- No save yet – create one with defaults
   if not love.filesystem.getInfo(SAVE_FILE) then
     logger.info("Save file not found – creating new save.")
     Persistence.save(deepcopy(defaultSaveData))
     return deepcopy(defaultSaveData)
   end
 
-  --------------------------------------------------------------------
-  -- Handle version header (added originally in SAVE_VERSION 2)
-  --------------------------------------------------------------------
-  local fileStr       = love.filesystem.read(SAVE_FILE)
-  local version       = 1                -- default to pre‑header saves
-  local first, rest   = fileStr:match("^(.-)\n(.*)$")
-  local jsonStr       = fileStr
-
-  if first then
-    local v = first:match("^version%s*=%s*(%d+)$")
-    if v then version = tonumber(v); jsonStr = rest end
+  -- Extract version header (introduced in SAVE_VERSION 2)
+  local raw            = love.filesystem.read(SAVE_FILE)
+  local fileVersion    = 1
+  local header, body   = raw:match("^(.-)\n(.*)$")
+  local jsonStr        = raw
+  if header then
+    local v = header:match("^version%s*=%s*(%d+)$")
+    if v then fileVersion = tonumber(v); jsonStr = body end
   end
 
-  -- Integrity check (JSON portion only)
+  -- Verify checksum
   if not isChecksumValid(jsonStr) then
     Persistence.loadError = "Save data failed checksum – starting fresh."
     logger.warn(Persistence.loadError)
@@ -169,29 +166,24 @@ function Persistence.load()
     return deepcopy(defaultSaveData)
   end
 
-  --------------------------------------------------------------------
-  -- Schema migrations ----------------------------------------------
-  --------------------------------------------------------------------
-  -- Merge new default keys
+  -- Schema migrations
   mergeDefaults(data, defaultSaveData)
 
-  -- Migrate old top‑level `controls` into `settings.controls`
+  -- Move legacy top‑level controls table into settings.controls
   if data.controls and not (data.settings and data.settings.controls) then
-    data.settings        = data.settings or {}
+    data.settings = data.settings or {}
     data.settings.controls = deepcopy(data.controls)
-    data.controls        = nil
+    data.controls = nil
   end
 
-  if version < SAVE_VERSION then
-    -- future migrations belong here (currently none needed 2 → 3)
-    version = SAVE_VERSION
-    Persistence.save(data)  -- write upgraded schema back to disk
+  if fileVersion < SAVE_VERSION then
+    Persistence.save(data) -- Write upgraded schema back to disk
   end
 
   return data
 end
 
----Write the supplied table to disk.
+---Save supplied table to disk.
 function Persistence.save(data)
   assert(type(data) == "table", "Persistence.save expects a table")
 
@@ -203,28 +195,26 @@ function Persistence.save(data)
 
   local fileStr = string.format("version = %d\n%s", SAVE_VERSION, jsonStr)
   love.filesystem.write(SAVE_FILE, fileStr)
-  writeChecksum(jsonStr)  -- checksum ONLY the JSON payload
+  writeChecksum(jsonStr)
   return true
 end
 
------------------------------------------------------------------------
--- Save Data Helpers
------------------------------------------------------------------------
+----------------------------------------------------------------------
+-- CACHE & ERROR HELPERS
+----------------------------------------------------------------------
 
 function Persistence.getSaveData()
-  if not Persistence.saveData then
-    Persistence.saveData = Persistence.load()
-  end
+  if not Persistence.saveData then Persistence.saveData = Persistence.load() end
   Persistence.settings = Persistence.saveData.settings
   return Persistence.saveData
 end
 
-function Persistence.getLoadError() return Persistence.loadError end
-function Persistence.clearLoadError() Persistence.loadError = nil end
+function Persistence.getLoadError()   return Persistence.loadError end
+function Persistence.clearLoadError() Persistence.loadError = nil   end
 
------------------------------------------------------------------------
--- Settings and Controls
------------------------------------------------------------------------
+----------------------------------------------------------------------
+-- SETTINGS & CONTROL BINDINGS
+----------------------------------------------------------------------
 
 function Persistence.getSettings()
   return deepcopy(Persistence.getSaveData().settings)
@@ -238,6 +228,7 @@ function Persistence.updateSettings(changes)
   Persistence.settings = data.settings
 end
 
+---Return a *deep copy* of current control bindings.
 function Persistence.getControls()
   local data = Persistence.getSaveData()
   data.settings = data.settings or {}
@@ -272,9 +263,9 @@ function Persistence.resetControls()
   Persistence.settings = data.settings
 end
 
------------------------------------------------------------------------
--- Score and Progression
------------------------------------------------------------------------
+----------------------------------------------------------------------
+-- SCORE & PROGRESSION
+----------------------------------------------------------------------
 
 function Persistence.getHighScore()
   return Persistence.getSaveData().highScore or 0
@@ -294,16 +285,12 @@ function Persistence.setHighScore(score, name)
   return false
 end
 
-function Persistence.getCurrentScore()
-  return Persistence.getSaveData().currentScore or 0
-end
-
+function Persistence.getCurrentScore() return Persistence.getSaveData().currentScore or 0 end
 function Persistence.setCurrentScore(score)
   local data = Persistence.getSaveData()
   data.currentScore = score
   Persistence.save(data)
 end
-
 function Persistence.addScore(score)
   local data = Persistence.getSaveData()
   data.currentScore = (data.currentScore or 0) + (score or 0)
@@ -331,7 +318,11 @@ function Persistence.getUnlockedLevels()
   return count
 end
 
-function Persistence.isShipUnlocked(_) return true end -- all ships unlocked
+function Persistence.isShipUnlocked(_) return true end -- All ships unlocked
+
+----------------------------------------------------------------------
+-- PER‑LEVEL STATS
+----------------------------------------------------------------------
 
 function Persistence.getLevelStats(level)
   local data = Persistence.getSaveData()
@@ -349,6 +340,10 @@ function Persistence.updateLevelStats(level, score, time)
   data.levelStats[level] = stats
   Persistence.save(data)
 end
+
+----------------------------------------------------------------------
+-- GLOBAL STATISTICS
+----------------------------------------------------------------------
 
 function Persistence.updateStatistics(changes)
   local data = Persistence.getSaveData()
