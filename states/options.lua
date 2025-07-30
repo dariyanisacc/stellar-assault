@@ -362,18 +362,26 @@ function OptionsState:adjustValue(direction)
     -- Update global values
     if item.name == "Master Volume" then
       Game.masterVolume = item.value
+      if Game.mixer then
+        Game.mixer:setMasterVolume("master", Game.masterVolume)
+      end
     elseif item.name == "SFX Volume" then
       Game.sfxVolume = item.value
+      if Game.mixer then
+        Game.mixer:setMasterVolume("sfx", Game.sfxVolume)
+      end
     elseif item.name == "Music Volume" then
       Game.musicVolume = item.value
+      if Game.mixer then
+        Game.mixer:setMasterVolume("music", Game.musicVolume)
+      end
     elseif item.name == "Font Size" then
       Game.fontScale = item.value
       applyFontScale()
       Persistence.updateSettings({ fontScale = Game.fontScale })
     end
 
-    -- Apply audio changes immediately
-    updateAudioVolumes()
+    -- Apply audio changes immediately (handled by mixer)
   end
 end
 
