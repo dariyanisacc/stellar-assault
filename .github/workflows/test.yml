@@ -9,6 +9,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      SDL_VIDEODRIVER: dummy
     steps:
       - uses: actions/checkout@v3
 
