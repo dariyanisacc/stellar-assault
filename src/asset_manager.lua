@@ -1,57 +1,90 @@
-local lg = love.graphics
-local la = love.audio
-local lf = love.filesystem
+-- File: src/asset_manager.lua
+------------------------------------------------------------------------------
+-- AssetManager
+--  • Singleton cache for images, fonts, and sounds
+--  • Automatically scans “assets/” on demand
+------------------------------------------------------------------------------
+
+local lg, la, lf = love.graphics, love.audio, love.filesystem
 
 ---@class AssetManager
----@field gfx table<string, love.Image>
----@field sfx table<string, love.Source>
----@field music table<string, love.Source>
----@field fonts table<string, love.Font>
----@field atlases table<string, love.Image>
-local AssetManager = {}
-AssetManager.__index = AssetManager
+local AssetManager = {
+  images  = {},   -- [normalizedPath] = love.Image
+  fonts   = {},   -- [key]            = love.Font          (key = "<path|default>:<size>")
+  sounds  = {},   -- [key]            = love.Source        (key = "<path>:<static|stream>")
+  atlases = {},   -- reserved for future use
+}
 
-function AssetManager.new()
-  local self = setmetatable({}, AssetManager)
-  self.gfx = {}
-  self.sfx = {}
-  self.music = {}
-  self.fonts = {}
-  self.atlases = {}
-  return self
+-- ---------------------------------------------------------------------------
+-- Internal helpers
+-- ---------------------------------------------------------------------------
+local function norm(path)      return path:gsub("\\","/"):lower() end
+local function cache(tbl,k,f)  k = norm(k); if not tbl[k] then tbl[k] = f() end; return tbl[k] end
+
+-- ---------------------------------------------------------------------------
+-- Public getters
+-- ---------------------------------------------------------------------------
+function AssetManager.getImage(path)
+  return cache(AssetManager.images, path, function() return lg.newImage(path) end)
 end
 
-local function loadDirectory(out, path, loader, exts)
-  if not lf.getInfo(path, "directory") then
-    return
-  end
-  for _, filename in ipairs(lf.getDirectoryItems(path)) do
-    local full = path .. "/" .. filename
-    if lf.getInfo(full, "file") then
-      local ext = filename:match("%.([%w]+)$")
-      if ext and exts[ext:lower()] then
-        local key = filename:gsub("%.[%w]+$", ""):lower()
-        out[key] = loader(full)
+---@overload fun(size:number):love.Font
+function AssetManager.getFont(arg1, size)
+  local path = arg1
+  if type(arg1) == "number" then size, path = arg1, nil end
+  size = size or 12
+  local key = (path or "default") .. ":" .. tostring(size)
+  return cache(AssetManager.fonts, key, function()
+    return path and lg.newFont(path, size) or lg.newFont(size)
+  end)
+end
+
+function AssetManager.getSound(path, kind)
+  kind = kind or "static"
+  local key = path .. ":" .. kind
+  return cache(AssetManager.sounds, key, function() return la.newSource(path, kind) end)
+end
+
+-- ---------------------------------------------------------------------------
+-- Bulk loader (optional—pre-caches everything in /assets)
+-- ---------------------------------------------------------------------------
+local exts = {
+  img  = { png=true, jpg=true, jpeg=true },
+  sfx  = { ogg=true, wav=true, mp3=true, flac=true },
+  font = { ttf=true, otf=true },
+}
+
+local function scanDir(dir)
+  for _, entry in ipairs(lf.getDirectoryItems(dir)) do
+    if entry ~= "." and entry ~= ".." then
+      local path = dir .. "/" .. entry
+      local info = lf.getInfo(path)
+      if info then
+        if info.type == "directory" then
+          scanDir(path)
+        elseif info.type == "file" then
+          local ext = entry:match("%.([%w]+)$")
+          if ext then
+            ext = ext:lower()
+            if exts.img[ext] then
+              AssetManager.getImage(path)
+            elseif exts.font[ext] then
+              AssetManager.getFont(path, 14)
+            elseif exts.sfx[ext] then
+              local kind = (info.size and info.size > 256 * 1024) and "stream" or "static"
+              AssetManager.getSound(path, kind)
+            end
+          end
+        end
       end
     end
   end
 end
 
-function AssetManager:loadAll()
-  loadDirectory(self.gfx, "assets/gfx", lg.newImage, { png = true, jpg = true })
-  loadDirectory(self.sfx, "assets/sfx", function(p)
-    return la.newSource(p, "static")
-  end, { ogg = true, wav = true })
-  loadDirectory(self.music, "assets/music", function(p)
-    return la.newSource(p, "stream")
-  end, { ogg = true, mp3 = true })
-  loadDirectory(self.fonts, "assets/fonts", lg.newFont, { ttf = true, otf = true })
-  loadDirectory(self.atlases, "assets/atlases", lg.newImage, { png = true })
-end
-
-function AssetManager:get(category, name)
-  local set = self[category]
-  return set and set[name]
+function AssetManager.loadAll()
+  if lf.getInfo("assets") then  -- only scan if assets folder exists
+    scanDir("assets")
+  end
 end
 
 return AssetManager
