@@ -12,14 +12,14 @@ The palette files in `assets/palettes` are original works by Dariyan Jones and a
 
 ## Audio
 
-Sound effects bundled with the project originate from the open source sound packs on [Kenney.nl](https://www.kenney.nl/) and are licensed CC0 1.0.  The following files are included:
+Sound effects are sourced from the open source **Sci‑Fi Sounds** pack by [Kenney.nl](https://www.kenney.nl/) and are licensed CC0 1.0. These files are not stored in the repository. To use them, copy the following into `assets/sfx/`:
 
 - `gameover.ogg` – game over jingle
-- `victory.ogg` – victory fanfare (new)
-- `laser.wav` – player laser shot
-- `explosion.wav` – explosion effect
-- `powerup.wav` – power‑up pickup
-- `shield_break.wav` – shield break effect
-- `menu.flac` – menu select sound
+- `victory.ogg` – victory fanfare
+- `laser.ogg` – player laser shot
+- `explosion.ogg` – explosion effect
+- `powerup.ogg` – power‑up pickup
+- `shield_break.ogg` – shield break effect
+- `menu.ogg` – menu select sound
 
 All other assets not listed here were created specifically for this game and are released under CC0 1.0 unless noted otherwise.

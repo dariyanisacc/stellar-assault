@@ -259,6 +259,23 @@ constants.audio = {
 }
 
 -- ---------------------------------------------------------------------------
+-- Sound effect paths (JSON‑overrideable)
+-- ---------------------------------------------------------------------------
+local soundsFromFile = loadJson("data/sounds.json")
+
+constants.sounds = next(soundsFromFile) and soundsFromFile or {
+  laser        = "assets/sfx/laser.ogg",
+  explosion    = "assets/sfx/explosion.ogg",
+  powerup      = "assets/sfx/powerup.ogg",
+  shield_break = "assets/sfx/shield_break.ogg",
+  gameover     = "assets/sfx/gameover.ogg",
+  menu         = "assets/sfx/menu.ogg",
+  victory      = "assets/sfx/victory.ogg",
+  background   = "assets/sfx/background.ogg",
+  boss         = "assets/sfx/boss.ogg",
+}
+
+-- ---------------------------------------------------------------------------
 -- Window
 -- ---------------------------------------------------------------------------
 constants.window = {
