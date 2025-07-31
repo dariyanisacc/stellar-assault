@@ -27,3 +27,7 @@ dist/
 
 # Coverage reports
 luacov.*
+
+# External sound assets
+Sci-Fi Sounds/
+assets/sfx/

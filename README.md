@@ -138,11 +138,15 @@ luacov
 - `assets/enemies/` – standard enemy sprites
 - `assets/bosses/` – boss artwork
 - `assets/palettes/` – Lua colour palettes
+- `assets/sfx/` – sound effects (OGG, not stored in Git)
 
 Raw source files live in `assets_src/` using the same layout. After adding art
 run `./build.sh` to compress and copy files into `assets/`. Reference new
 assets from the relevant data files and load them via the `AssetLoader`
 (the game's AssetManager).
+
+Sound effects are from Kenney's free Sci-Fi pack. Copy the desired `.ogg` files
+into `assets/sfx/` before running the game.
 
 ### Code Style
 Use `luacheck` for linting and `stylua` for consistent formatting. See `.luacheckrc` and `stylua.toml` for configuration.

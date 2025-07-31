@@ -9,25 +9,25 @@
 if not package.path:match("src/%.lua") then
   package.path = table.concat({
     package.path,
-    "src/?.lua",          -- e.g. src/lunajson.lua
-    "src/?/init.lua",     -- e.g. src/lunajson/init.lua
+    "src/?.lua", -- e.g. src/lunajson.lua
+    "src/?/init.lua", -- e.g. src/lunajson/init.lua
   }, ";")
 end
 
 -- ---------------------------------------------------------------------------
 -- Core modules
 -- ---------------------------------------------------------------------------
-local StateManager   = require("src.core.statemachine")
-local Helpers        = require("src.core.helpers")
-local constants      = require("src.constants")
-local DebugConsole   = require("src.debugconsole")
-local CONFIG         = require("src.config")
-local logger         = require("src.logger")
-local Persistence    = require("src.persistence")
-local UIManager      = require("src.uimanager")
-local AudioPool      = require("src.audiopool")
-local Game           = require("src.game")
-local AssetManager   = require("src.asset_manager")  -- NEW
+local StateManager = require("src.core.statemachine")
+local Helpers = require("src.core.helpers")
+local constants = require("src.constants")
+local DebugConsole = require("src.debugconsole")
+local CONFIG = require("src.config")
+local logger = require("src.logger")
+local Persistence = require("src.persistence")
+local UIManager = require("src.uimanager")
+local AudioPool = require("src.audiopool")
+local Game = require("src.game")
+local AssetManager = require("src.asset_manager") -- NEW
 
 -- ---------------------------------------------------------------------------
 -- Cached Love2D handles & fixed-timestep vars
@@ -38,45 +38,59 @@ local FIXED_DT, accumulator = 1 / 60, 0
 -- ---------------------------------------------------------------------------
 -- Globals stored on the Game table
 -- ---------------------------------------------------------------------------
-Game.stateManager     = nil
-Game.debugConsole     = nil         -- still referenced by some callbacks
-debugConsole          = nil         -- legacy global for quick access
+Game.stateManager = nil
+Game.debugConsole = nil -- still referenced by some callbacks
+debugConsole = nil -- legacy global for quick access
 
 Game.titleFont, Game.menuFont, Game.uiFont = nil, nil, nil
-Game.smallFont, Game.mediumFont            = nil, nil
-Game.uiManager                              = nil
+Game.smallFont, Game.mediumFont = nil, nil
+Game.uiManager = nil
 
-Game.laserSound, Game.explosionSound        = nil, nil
-Game.powerupSound, Game.shieldBreakSound    = nil, nil
-Game.gameOverSound, Game.menuSelectSound    = nil, nil
-Game.menuConfirmSound                       = nil
-Game.backgroundMusic, Game.bossMusic        = nil, nil
-Game.victorySound                           = nil
+Game.laserSound, Game.explosionSound = nil, nil
+Game.powerupSound, Game.shieldBreakSound = nil, nil
+Game.gameOverSound, Game.menuSelectSound = nil, nil
+Game.menuConfirmSound = nil
+Game.backgroundMusic, Game.bossMusic = nil, nil
+Game.victorySound = nil
 
-Game.audioPool      = nil
-Game.helpers        = Helpers
+Game.audioPool = nil
+Game.helpers = Helpers
 
 local soundReferenceDistance, soundMaxDistance = 50, 800
 Game.soundReferenceDistance = soundReferenceDistance
-Game.soundMaxDistance       = soundMaxDistance
+Game.soundMaxDistance = soundMaxDistance
 local sfxSources, musicSources = {}, {}
 
-Game.masterVolume  = constants.audio.defaultMasterVolume
-Game.sfxVolume     = constants.audio.defaultSFXVolume
-Game.musicVolume   = constants.audio.defaultMusicVolume
-Game.displayMode   = "borderless"
+Game.masterVolume = constants.audio.defaultMasterVolume
+Game.sfxVolume = constants.audio.defaultSFXVolume
+Game.musicVolume = constants.audio.defaultMusicVolume
+Game.displayMode = "borderless"
 Game.currentResolution = 1
-Game.highContrast  = false
-Game.fontScale     = 1
-Game.paletteName   = constants.defaultPalette
-Game.palette       = constants.palettes[Game.paletteName]
+Game.highContrast = false
+Game.fontScale = 1
+Game.paletteName = constants.defaultPalette
+Game.palette = constants.palettes[Game.paletteName]
 
 Game.lastInputType = "keyboard"
-Game.inputHints    = {
-  keyboard = { select = "Enter", back = "ESC",  navigate = "Arrow Keys",
-               skip = "SPACE",  confirm = "Enter", cancel = "ESC", action = "Space" },
-  gamepad  = { select = "A",     back = "B",    navigate = "D-Pad",
-               skip = "A",       confirm = "A", cancel = "B",      action = "X"     },
+Game.inputHints = {
+  keyboard = {
+    select = "Enter",
+    back = "ESC",
+    navigate = "Arrow Keys",
+    skip = "SPACE",
+    confirm = "Enter",
+    cancel = "ESC",
+    action = "Space",
+  },
+  gamepad = {
+    select = "A",
+    back = "B",
+    navigate = "D-Pad",
+    skip = "A",
+    confirm = "A",
+    cancel = "B",
+    action = "X",
+  },
 }
 
 -- ---------------------------------------------------------------------------
@@ -96,9 +110,9 @@ local function initWindow()
   lw.setTitle("Stellar Assault")
   lw.setMode(800, 600, {
     fullscreen = false,
-    resizable  = true,
-    minwidth   = constants.window.minWidth,
-    minheight  = constants.window.minHeight,
+    resizable = true,
+    minwidth = constants.window.minWidth,
+    minheight = constants.window.minHeight,
   })
   lg.setDefaultFilter("nearest", "nearest")
   lg.setBackgroundColor(0.05, 0.05, 0.10)
@@ -108,12 +122,12 @@ end
 -- Font loading (now via AssetManager)
 -- ---------------------------------------------------------------------------
 local function loadFonts()
-  Game.titleFont  = AssetManager.getFont(48)
-  Game.menuFont   = AssetManager.getFont(24)
-  Game.uiFont     = AssetManager.getFont(18)
-  Game.smallFont  = AssetManager.getFont(14)
+  Game.titleFont = AssetManager.getFont(48)
+  Game.menuFont = AssetManager.getFont(24)
+  Game.uiFont = AssetManager.getFont(18)
+  Game.smallFont = AssetManager.getFont(14)
   Game.mediumFont = AssetManager.getFont(20)
-  Game.uiManager  = UIManager:new()
+  Game.uiManager = UIManager:new()
 
   -- Optional console font
   if lf.getInfo("assets/fonts/monospace.ttf") then
@@ -127,19 +141,19 @@ end
 -- Game-state registration
 -- ---------------------------------------------------------------------------
 local function initStates()
-  stateManager            = StateManager:new()
-  Game.stateManager       = stateManager
+  stateManager = StateManager:new()
+  Game.stateManager = stateManager
 
-  stateManager:register("loading",        require("states.loading"))  -- NEW
-  stateManager:register("menu",           require("states.menu"))
-  stateManager:register("intro",          require("states.intro"))
-  stateManager:register("playing",        require("states.playing"))
-  stateManager:register("pause",          require("states.pause"))
-  stateManager:register("gameover",       require("states.gameover"))
-  stateManager:register("options",        require("states.options"))
+  stateManager:register("loading", require("states.loading")) -- NEW
+  stateManager:register("menu", require("states.menu"))
+  stateManager:register("intro", require("states.intro"))
+  stateManager:register("playing", require("states.playing"))
+  stateManager:register("pause", require("states.pause"))
+  stateManager:register("gameover", require("states.gameover"))
+  stateManager:register("options", require("states.options"))
   stateManager:register("options_controls", require("states.options_controls"))
-  stateManager:register("levelselect",    require("states.levelselect"))
-  stateManager:register("leaderboard",    require("states.leaderboard"))
+  stateManager:register("levelselect", require("states.levelselect"))
+  stateManager:register("leaderboard", require("states.leaderboard"))
 
   -- Console setup
   if CONFIG.debug then
@@ -147,10 +161,14 @@ local function initStates()
     require("src.debugcommands").register(debugConsole)
   else
     debugConsole = {
-      update       = function() end,
-      draw         = function() end,
-      keypressed   = function() return false end,
-      textinput    = function() return false end,
+      update = function() end,
+      draw = function() end,
+      keypressed = function()
+        return false
+      end,
+      textinput = function()
+        return false
+      end,
     }
   end
   Game.debugConsole = debugConsole
@@ -161,7 +179,9 @@ end
 -- ---------------------------------------------------------------------------
 local function registerSfx(path, base)
   local src = AssetManager.getSound(path, "static")
-  if not src then return nil end
+  if not src then
+    return nil
+  end
   src.baseVolume = base
   src:setVolume(base * Game.sfxVolume * Game.masterVolume)
   table.insert(sfxSources, src)
@@ -170,7 +190,9 @@ end
 
 local function registerMusic(path, base, loop)
   local src = AssetManager.getSound(path, "stream")
-  if not src then return nil end
+  if not src then
+    return nil
+  end
   src.baseVolume = base
   src:setLooping(loop)
   src:setVolume(base * Game.musicVolume * Game.masterVolume)
@@ -181,17 +203,32 @@ end
 local function loadAudio()
   la.setDistanceModel("inverseclamped")
 
-  Game.laserSound       = registerSfx("laser.wav",       0.5)
-  Game.explosionSound   = registerSfx("explosion.wav",   0.7)
-  Game.powerupSound     = registerSfx("powerup.wav",     0.6)
-  Game.shieldBreakSound = registerSfx("shield_break.wav",0.7)
-  Game.gameOverSound    = registerSfx("gameover.ogg",    0.8)
-  Game.menuSelectSound  = registerSfx("menu.flac",       0.4)
-  Game.victorySound     = registerSfx("victory.ogg",     0.8)
+  local sounds = constants.sounds or {}
+  if sounds.laser then
+    Game.laserSound = registerSfx(sounds.laser, 0.5)
+  end
+  if sounds.explosion then
+    Game.explosionSound = registerSfx(sounds.explosion, 0.7)
+  end
+  if sounds.powerup then
+    Game.powerupSound = registerSfx(sounds.powerup, 0.6)
+  end
+  if sounds.shield_break then
+    Game.shieldBreakSound = registerSfx(sounds.shield_break, 0.7)
+  end
+  if sounds.gameover then
+    Game.gameOverSound = registerSfx(sounds.gameover, 0.8)
+  end
+  if sounds.menu then
+    Game.menuSelectSound = registerSfx(sounds.menu, 0.4)
+  end
+  if sounds.victory then
+    Game.victorySound = registerSfx(sounds.victory, 0.8)
+  end
 
   if Game.menuSelectSound then
-    Game.menuConfirmSound             = Game.menuSelectSound:clone()
-    Game.menuConfirmSound.baseVolume  = Game.menuSelectSound.baseVolume
+    Game.menuConfirmSound = Game.menuSelectSound:clone()
+    Game.menuConfirmSound.baseVolume = Game.menuSelectSound.baseVolume
     Game.menuConfirmSound:setVolume(
       Game.menuConfirmSound.baseVolume * Game.sfxVolume * Game.masterVolume
     )
@@ -199,40 +236,48 @@ local function loadAudio()
   end
 
   Game.audioPool = AudioPool:new(8, sfxSources)
-  Game.audioPool:register("laser",        Game.laserSound)
-  Game.audioPool:register("explosion",    Game.explosionSound)
-  Game.audioPool:register("powerup",      Game.powerupSound)
+  Game.audioPool:register("laser", Game.laserSound)
+  Game.audioPool:register("explosion", Game.explosionSound)
+  Game.audioPool:register("powerup", Game.powerupSound)
   Game.audioPool:register("shield_break", Game.shieldBreakSound)
-  Game.audioPool:register("gameover",     Game.gameOverSound)
-  Game.audioPool:register("menu_select",  Game.menuSelectSound)
+  Game.audioPool:register("gameover", Game.gameOverSound)
+  Game.audioPool:register("menu_select", Game.menuSelectSound)
   Game.audioPool:register("menu_confirm", Game.menuConfirmSound)
-  Game.audioPool:register("victory",      Game.victorySound)
+  Game.audioPool:register("victory", Game.victorySound)
 
-  Game.backgroundMusic = registerMusic("background.mp3", 1.0, true)
-  Game.bossMusic       = registerMusic("boss.mp3",       0.8, true)
+  if sounds.background then
+    Game.backgroundMusic = registerMusic(sounds.background, 1.0, true)
+  end
+  if sounds.boss then
+    Game.bossMusic = registerMusic(sounds.boss, 0.8, true)
+  end
 end
 
 -- ---------------------------------------------------------------------------
 -- Settings helpers (font scaling, palette, saving, etc.)
 -- ---------------------------------------------------------------------------
 local function applyFontScale()
-  Game.titleFont  = AssetManager.getFont(48 * Game.fontScale)
-  Game.menuFont   = AssetManager.getFont(24 * Game.fontScale)
-  Game.uiFont     = AssetManager.getFont(18 * Game.fontScale)
-  Game.smallFont  = AssetManager.getFont(14 * Game.fontScale)
+  Game.titleFont = AssetManager.getFont(48 * Game.fontScale)
+  Game.menuFont = AssetManager.getFont(24 * Game.fontScale)
+  Game.uiFont = AssetManager.getFont(18 * Game.fontScale)
+  Game.smallFont = AssetManager.getFont(14 * Game.fontScale)
   Game.mediumFont = AssetManager.getFont(20 * Game.fontScale)
 end
 _G.applyFontScale = applyFontScale
 
 local function applyPalette()
   Game.palette = constants.palettes[Game.paletteName]
-             or constants.palettes[constants.defaultPalette]
+    or constants.palettes[constants.defaultPalette]
 end
 _G.applyPalette = applyPalette
 
 local function updateAudioVolumes()
-  for _, s in ipairs(sfxSources)   do s:setVolume((s.baseVolume or 1) * Game.sfxVolume * Game.masterVolume) end
-  for _, s in ipairs(musicSources) do s:setVolume((s.baseVolume or 1) * Game.musicVolume * Game.masterVolume) end
+  for _, s in ipairs(sfxSources) do
+    s:setVolume((s.baseVolume or 1) * Game.sfxVolume * Game.masterVolume)
+  end
+  for _, s in ipairs(musicSources) do
+    s:setVolume((s.baseVolume or 1) * Game.musicVolume * Game.masterVolume)
+  end
 end
 _G.updateAudioVolumes = updateAudioVolumes
 
@@ -243,15 +288,27 @@ _G.updateAudioVolumes = updateAudioVolumes
 -- ---------------------------------------------------------------------------
 local Starfield = require("src.starfield")
 local starfield
-local function initStarfield()  starfield = Starfield.new(200) end
-local function updateStarfield(dt) if starfield then starfield:update(dt) end end
-local function drawStarfield()     if starfield then starfield:draw()   end end
-_G.initStarfield, _G.updateStarfield, _G.drawStarfield = initStarfield, updateStarfield, drawStarfield
+local function initStarfield()
+  starfield = Starfield.new(200)
+end
+local function updateStarfield(dt)
+  if starfield then
+    starfield:update(dt)
+  end
+end
+local function drawStarfield()
+  if starfield then
+    starfield:draw()
+  end
+end
+_G.initStarfield, _G.updateStarfield, _G.drawStarfield =
+  initStarfield, updateStarfield, drawStarfield
 
 -- ---------------------------------------------------------------------------
 -- Expose init helpers (for hot-reload convenience)
 -- ---------------------------------------------------------------------------
-_G.initWindow, _G.loadFonts, _G.loadAudio, _G.initStates = initWindow, loadFonts, loadAudio, initStates
+_G.initWindow, _G.loadFonts, _G.loadAudio, _G.initStates =
+  initWindow, loadFonts, loadAudio, initStates
 
 -- ---------------------------------------------------------------------------
 -- Love2D callbacks
@@ -270,29 +327,42 @@ function love.load()
   -- Images / sprites loaded via AssetManager
   Game.playerShips = {
     alpha = AssetManager.getImage("assets/ships/ship_alpha@1024x1024.png"),
-    beta  = AssetManager.getImage("assets/ships/ship_beta@112x75.png"),
+    beta = AssetManager.getImage("assets/ships/ship_beta@112x75.png"),
     gamma = AssetManager.getImage("assets/ships/ship_gamma@98x75.png"),
   }
   Game.enemyShips = {
-    basic     = AssetManager.getImage("assets/enemies/enemy_basic_1.png"),
-    homing    = AssetManager.getImage("assets/enemies/enemy_homing_1.png"),
-    dive      = AssetManager.getImage("assets/enemies/enemy_dive_1.png"),
-    zigzag    = AssetManager.getImage("assets/enemies/enemy_zigzag_1.png"),
+    basic = AssetManager.getImage("assets/enemies/enemy_basic_1.png"),
+    homing = AssetManager.getImage("assets/enemies/enemy_homing_1.png"),
+    dive = AssetManager.getImage("assets/enemies/enemy_dive_1.png"),
+    zigzag = AssetManager.getImage("assets/enemies/enemy_zigzag_1.png"),
     formation = AssetManager.getImage("assets/enemies/enemy_formation_1.png"),
   }
-  Game.bossSprites   = {
+  Game.bossSprites = {
     AssetManager.getImage("assets/bosses/boss_01@97x84.png"),
     AssetManager.getImage("assets/bosses/boss_02@97x84.png"),
   }
   Game.bossSprite, Game.boss2Sprite = Game.bossSprites[1], Game.bossSprites[2]
 
   Game.availableShips = { "alpha", "beta", "gamma" }
-  Game.selectedShip   = "alpha"
-  Game.spriteScale    = 0.15
+  Game.selectedShip = "alpha"
+  Game.spriteScale = 0.15
 
   initStates()
   logger.info("Stellar Assault started")
-  stateManager:switch("loading", { nextState = "menu" })  -- NEW bootstrap flow
+  stateManager:switch("loading", { nextState = "menu" }) -- NEW bootstrap flow
 end
 
--- … (update/draw, input handlers, debug overlay, saveGame, checkCollision, love.quit, crash-log wrapper remain exactly as in the cleaned diff) …
+-- ---------------------------------------------------------------------------
+-- Crash-log wrapper for love.run
+-- ---------------------------------------------------------------------------
+do
+  local originalRun = love.run
+  ---@diagnostic disable-next-line: duplicate-set-field
+  function love.run(...)
+    local ok, err = xpcall(originalRun, debug.traceback, ...)
+    if not ok then
+      local stamp = os.date("%Y%m%d_%H%M%S")
+      love.filesystem.write(string.format("crash_%s.log", stamp), err)
+    end
+  end
+end
