@@ -264,15 +264,15 @@ constants.audio = {
 local soundsFromFile = loadJson("data/sounds.json")
 
 constants.sounds = next(soundsFromFile) and soundsFromFile or {
-  laser        = "assets/sfx/laser.ogg",
-  explosion    = "assets/sfx/explosion.ogg",
-  powerup      = "assets/sfx/powerup.ogg",
-  shield_break = "assets/sfx/shield_break.ogg",
-  gameover     = "assets/sfx/gameover.ogg",
-  menu         = "assets/sfx/menu.ogg",
-  victory      = "assets/sfx/victory.ogg",
-  background   = "assets/sfx/background.ogg",
-  boss         = "assets/sfx/boss.ogg",
+  laser        = "Sci-Fi Sounds/Audio/laserLarge_000.ogg",
+  explosion    = "Sci-Fi Sounds/Audio/explosionCrunch_000.ogg",
+  powerup      = "Sci-Fi Sounds/Audio/slime_000.ogg",
+  shield_break = "Sci-Fi Sounds/Audio/impactMetal_000.ogg",
+  gameover     = "Sci-Fi Sounds/Audio/computerNoise_001.ogg",
+  menu         = "Sci-Fi Sounds/Audio/computerNoise_000.ogg",
+  victory      = "Sci-Fi Sounds/Audio/computerNoise_003.ogg",
+  background   = "Sci-Fi Sounds/Audio/computerNoise_004.ogg",
+  boss         = "Sci-Fi Sounds/Audio/computerNoise_002.ogg",
 }
 
 -- ---------------------------------------------------------------------------
