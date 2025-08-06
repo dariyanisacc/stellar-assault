@@ -15,19 +15,26 @@ if not package.path:match("src/%.lua") then
 end
 
 -- ---------------------------------------------------------------------------
--- Core modules
+-- Core modules (wrapped in error handler)
 -- ---------------------------------------------------------------------------
-local StateManager = require("src.core.statemachine")
-local Helpers = require("src.core.helpers")
-local constants = require("src.constants")
-local DebugConsole = require("src.debugconsole")
-local CONFIG = require("src.config")
-local logger = require("src.logger")
-local Persistence = require("src.persistence")
-local UIManager = require("src.uimanager")
-local AudioPool = require("src.audiopool")
-local Game = require("src.game")
-local AssetManager = require("src.asset_manager") -- NEW
+local function abort(msg)
+  io.stderr:write(msg.."\n"..debug.traceback("",2).."\n")
+  love.event.quit(1)
+end
+
+xpcall(function()
+  StateManager = require("src.core.statemachine")
+  Helpers = require("src.core.helpers")
+  constants = require("src.constants")
+  DebugConsole = require("src.debugconsole")
+  CONFIG = require("src.config")
+  logger = require("src.logger")
+  Persistence = require("src.persistence")
+  UIManager = require("src.uimanager")
+  AudioPool = require("src.audiopool")
+  Game = require("src.game")
+  AssetManager = require("src.asset_manager") -- NEW
+end, abort)
 
 -- ---------------------------------------------------------------------------
 -- Cached Love2D handles & fixed-timestep vars

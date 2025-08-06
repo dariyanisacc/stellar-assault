@@ -20,11 +20,17 @@ local AssetManager = {
 -- ---------------------------------------------------------------------------
 local function norm(path)      return path:gsub("\\","/"):lower() end
 local function cache(tbl,k,f)  k = norm(k); if not tbl[k] then tbl[k] = f() end; return tbl[k] end
+local function assertFile(path, what)
+  if not love.filesystem.getInfo(path, "file") then
+    error(("%s not found: %s"):format(what or "File", path), 2)
+  end
+end
 
 -- ---------------------------------------------------------------------------
 -- Public getters
 -- ---------------------------------------------------------------------------
 function AssetManager.getImage(path)
+  assertFile(path, "Image")
   return cache(AssetManager.images, path, function() return lg.newImage(path) end)
 end
 
