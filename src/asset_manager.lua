@@ -46,6 +46,10 @@ function AssetManager.getFont(arg1, size)
 end
 
 function AssetManager.getSound(path, kind)
+  if not love.filesystem.getInfo(path, "file") then
+    print("Warning: Sound file not found: "..path)
+    return nil
+  end
   kind = kind or "static"
   local key = path .. ":" .. kind
   return cache(AssetManager.sounds, key, function() return la.newSource(path, kind) end)

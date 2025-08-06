@@ -328,25 +328,24 @@ function love.load()
 
   loadFonts()
   loadAudio()
-  loadSettings()
-  applyWindowMode()
+ 
 
   -- Images / sprites loaded via AssetManager
   Game.playerShips = {
-    alpha = AssetManager.getImage("assets/ships/ship_alpha@1024x1024.png"),
-    beta = AssetManager.getImage("assets/ships/ship_beta@112x75.png"),
-    gamma = AssetManager.getImage("assets/ships/ship_gamma@98x75.png"),
+    alpha = AssetManager.getImage("assets/gfx/ship_alpha@1024x1024.png"),
+    beta = AssetManager.getImage("assets/gfx/Player Ship Beta.png"),
+    gamma = AssetManager.getImage("assets/gfx/Player Ship Gamma.png"),
   }
   Game.enemyShips = {
-    basic = AssetManager.getImage("assets/enemies/enemy_basic_1.png"),
-    homing = AssetManager.getImage("assets/enemies/enemy_homing_1.png"),
-    dive = AssetManager.getImage("assets/enemies/enemy_dive_1.png"),
-    zigzag = AssetManager.getImage("assets/enemies/enemy_zigzag_1.png"),
-    formation = AssetManager.getImage("assets/enemies/enemy_formation_1.png"),
+    basic = AssetManager.getImage("assets/gfx/Enemy Basic.png"),
+    homing = AssetManager.getImage("assets/gfx/Enemy Homing.png"),
+    dive = AssetManager.getImage("assets/gfx/Enemy Dive.png"),
+    zigzag = AssetManager.getImage("assets/gfx/Enemy ZigZag.png"),
+    formation = AssetManager.getImage("assets/gfx/Enemy Formation.png"),
   }
   Game.bossSprites = {
-    AssetManager.getImage("assets/bosses/boss_01@97x84.png"),
-    AssetManager.getImage("assets/bosses/boss_02@97x84.png"),
+    AssetManager.getImage("assets/gfx/Boss 1.png"),
+    AssetManager.getImage("assets/gfx/Boss 2.png"),
   }
   Game.bossSprite, Game.boss2Sprite = Game.bossSprites[1], Game.bossSprites[2]
 
