@@ -518,23 +518,24 @@ function WaveManager:draw()
   for _, enemy in ipairs(self.enemies) do
     -- Get appropriate sprite based on behavior
     local sprite = nil
-    if enemyShips then
+    local ships = Game and Game.enemyShips
+    if ships then
       if enemy.behaviorName == "homing" or enemy.behaviorName == "move_to_player" then
-        sprite = enemyShips.homing
+        sprite = ships.homing
       elseif enemy.behaviorName == "dive_attack" then
-        sprite = enemyShips.dive
+        sprite = ships.dive
       elseif enemy.behaviorName == "zigzag" then
-        sprite = enemyShips.zigzag
+        sprite = ships.zigzag
       elseif enemy.behaviorName == "formation" then
-        sprite = enemyShips.formation
+        sprite = ships.formation
       else
-        sprite = enemyShips.basic
+        sprite = ships.basic
       end
     end
 
     -- Draw sprite if available, otherwise fall back to rectangles
     if sprite then
-      love.graphics.setColor(Game.palette.enemy)
+      love.graphics.setColor((Game and Game.palette and Game.palette.enemy) or {1,1,1})
       -- Calculate scale to fit enemy dimensions * 4
       local scaleX = (enemy.width / sprite:getWidth()) * 4
       local scaleY = (enemy.height / sprite:getHeight()) * 4
@@ -551,7 +552,7 @@ function WaveManager:draw()
       )
     else
       -- Fallback to colored rectangles if sprites not loaded
-      love.graphics.setColor(Game.palette.enemy)
+      love.graphics.setColor((Game and Game.palette and Game.palette.enemy) or {1,1,1})
       love.graphics.rectangle("fill", enemy.x, enemy.y, enemy.width, enemy.height)
     end
 

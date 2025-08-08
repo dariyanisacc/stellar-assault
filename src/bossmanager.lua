@@ -5,6 +5,7 @@
 -- previous implementation was a bare table without any constructor,
 -- which caused `BossManager:new()` calls to fail in `playing.lua`.
 
+local Game = require("src.game")
 local BossManager = {}
 BossManager.__index = BossManager
 
@@ -24,6 +25,26 @@ end
 function BossManager:spawn(level)
   local Boss = require("src.entities.boss")
   self.activeBoss = Boss.new(level or 1)
+end
+
+--- Spawn a boss by type and position, injecting sprite from Game.bossSprites.
+-- @param kind string|nil Logical boss kind (unused for sprite selection for now)
+-- @param x    number
+-- @param y    number
+function BossManager:spawnBoss(kind, x, y)
+  local Boss = require("src.entities.boss")
+  local level = (_G.currentLevel or 1)
+  -- Choose sprite by current level index if available; cycle if needed
+  local available = Game and Game.bossSprites or {}
+  local count = 0
+  for i = 1, math.huge do
+    if available[i] then count = count + 1 else break end
+  end
+  local idx = (count > 0) and (((level - 1) % count) + 1) or 1
+  local sprite = available[idx]
+
+  self.activeBoss = Boss.new(level, { sprite = sprite, x = x, y = y, name = kind })
+  return self.activeBoss
 end
 
 --- Update the active boss, if any.

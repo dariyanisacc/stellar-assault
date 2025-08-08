@@ -209,6 +209,8 @@ local function initWindow()
   Game.sfxVolume    = settings.sfxVolume or Game.sfxVolume
   Game.musicVolume  = settings.musicVolume or Game.musicVolume
   Game.displayMode  = settings.displayMode or Game.displayMode or "fullscreen"
+  Game.selectedShip = settings.selectedShip or Game.selectedShip or "alpha"
+  _G.selectedShip   = Game.selectedShip
   Game.fontScale    = settings.fontScale or Game.fontScale or 1
   Game.highContrast = settings.highContrast or false
   Game.paletteName  = settings.palette or Game.paletteName or constants.defaultPalette
@@ -419,6 +421,14 @@ function love.load()
 
   -- Make AssetManager globally reachable for other systems that hot-reload
   Game.assetManager = AssetManager
+  -- Optional sprite manager for audits
+  local SpriteManager = require("src.sprite_manager")
+  Game.sprites = SpriteManager.load("assets/gfx")
+  _G.reportUnusedSprites = function()
+    if Game and Game.sprites and Game.sprites.reportUsage then
+      Game.sprites:reportUsage()
+    end
+  end
 
   loadFonts()
   loadAudio()
@@ -431,27 +441,53 @@ function love.load()
     initStarfield()
   end
 
-  -- Images / sprites loaded via AssetManager
-  Game.playerShips = {
-    alpha = AssetManager.getImage("assets/gfx/ship_alpha@1024x1024.png"),
-    beta = AssetManager.getImage("assets/gfx/Player Ship Beta.png"),
-    gamma = AssetManager.getImage("assets/gfx/Player Ship Gamma.png"),
-  }
-  Game.enemyShips = {
-    basic = AssetManager.getImage("assets/gfx/Enemy Basic.png"),
-    homing = AssetManager.getImage("assets/gfx/Enemy Homing.png"),
-    dive = AssetManager.getImage("assets/gfx/Enemy Dive.png"),
-    zigzag = AssetManager.getImage("assets/gfx/Enemy ZigZag.png"),
-    formation = AssetManager.getImage("assets/gfx/Enemy Formation.png"),
-  }
-  Game.bossSprites = {
-    AssetManager.getImage("assets/gfx/Boss 1.png"),
-    AssetManager.getImage("assets/gfx/Boss 2.png"),
-  }
-  Game.bossSprite, Game.boss2Sprite = Game.bossSprites[1], Game.bossSprites[2]
+  -- Images / sprites: scan assets/gfx and populate Game sprite tables
+  local lf = love.filesystem
+  local function keyForPng(filename)
+    local base = filename:gsub("%.png$", "")
+    local k = base:lower():gsub("%s+", "_")
+    if k:find("^player_ship_") then
+      k = k:gsub("^player_ship_", "player_")
+    elseif k:find("^ship_alpha") then
+      k = "player_alpha"
+    end
+    return k
+  end
+
+  Game.playerShips, Game.enemyShips, Game.bossSprites = {}, {}, {}
+  Game.spriteByKey = {}
+  if lf.getInfo("assets/gfx", "directory") then
+    for _, name in ipairs(lf.getDirectoryItems("assets/gfx")) do
+      if name:lower():sub(-4) == ".png" then
+        local key = keyForPng(name)
+        local img = AssetManager.getImage("assets/gfx/" .. name)
+        if img then
+          Game.spriteByKey[key] = img
+          if key:find("^player_") then
+            local ship = key:match("^player_(.+)$")
+            if ship then Game.playerShips[ship] = img end
+          elseif key:find("^enemy_") then
+            local etype = key:match("^enemy_(.+)$")
+            if etype then Game.enemyShips[etype] = img end
+          elseif key:find("^boss_") then
+            local id = tonumber(key:match("^boss_(%d+)$") or "")
+            if id then Game.bossSprites[id] = img end
+          end
+        end
+      end
+    end
+  end
+
+  -- Back-compat globals for modules expecting these names
+  _G.playerShips = Game.playerShips
+  _G.enemyShips  = Game.enemyShips
+  _G.bossSprites = Game.bossSprites
+  _G.bossSprite  = Game.bossSprites[1]
+  _G.boss2Sprite = Game.bossSprites[2]
 
   Game.availableShips = { "alpha", "beta", "gamma" }
-  Game.selectedShip = "alpha"
+  Game.selectedShip = Game.selectedShip or "alpha"
+  _G.selectedShip = Game.selectedShip
   Game.spriteScale = 0.15
 
   initStates()

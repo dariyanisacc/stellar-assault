@@ -10,16 +10,27 @@ local BULLET_COOLDOWN = 1.5 -- seconds between volleys
 local Boss   = {}
 Boss.__index = Boss
 
-function Boss.new(level)
+function Boss.new(level, opts)
   local self = setmetatable({}, Boss)
 
-  -- sprite path matches assets/bosses used elsewhere
-  local path   = string.format("assets/bosses/boss_%02d@97x84.png", level)
-  self.sprite  = AssetManager.getImage(path)
+  opts = opts or {}
+  -- Prefer injected sprite; otherwise fall back to a reasonable default if present
+  if opts.sprite then
+    self.sprite = opts.sprite
+  else
+    if love.filesystem.getInfo("assets/gfx/Boss 1.png") then
+      self.sprite = AssetManager.getImage("assets/gfx/Boss 1.png")
+    else
+      -- Final fallback: a 1x1 white image to avoid crashes
+      local imgdata = love.image and love.image.newImageData(1,1)
+      if imgdata then imgdata:setPixel(0,0,1,1,1,1) end
+      self.sprite = lg.newImage(imgdata or love.graphics.newCanvas(1,1):newImageData())
+    end
+  end
 
   -- starting position (scroll in from top centre)
-  self.x = lg.getWidth()  / 2
-  self.y = -self.sprite:getHeight()
+  self.x = (opts.x or (lg.getWidth()  / 2))
+  self.y = (opts.y or (-self.sprite:getHeight()))
 
   -- stats scale with level
   self.maxHP = 250 + level * 50

@@ -233,7 +233,7 @@ function PlayerControl.shoot(state, dt)
     return
   end
 
-  local shipId = _G.selectedShip or "alpha"
+  local shipId = (Game and Game.selectedShip) or _G.selectedShip or "alpha"
   local shipCfg = constants.ships[shipId] or constants.ships.alpha
   local spread  = shipCfg.spread or 0
   if not state.laserPool or not state.laserPool.get then return end

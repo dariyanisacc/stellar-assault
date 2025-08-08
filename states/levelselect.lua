@@ -275,9 +275,10 @@ function LevelSelectState:drawShipSelection()
   local shipY = y + 60
   lg.setFont(Game.uiFont)
 
-  for i, shipName in ipairs(availableShips) do
+  local shipsList = Game.availableShips or { "alpha", "beta", "gamma" }
+  for i, shipName in ipairs(shipsList) do
     local isUnlocked = Persistence.isShipUnlocked(shipName)
-    local isSelected = selectedShip == shipName
+    local isSelected = (Game and Game.selectedShip) == shipName
     local shipConfig = constants.ships[shipName]
 
     -- Background for current ship
@@ -297,8 +298,8 @@ function LevelSelectState:drawShipSelection()
       lg.print(shipConfig.name, x + 20, shipY)
 
       -- Ship sprite
-      if playerShips and playerShips[shipName] then
-        local sprite = playerShips[shipName]
+      if Game.playerShips and Game.playerShips[shipName] then
+        local sprite = Game.playerShips[shipName]
         local scale = 40 / math.max(sprite:getWidth(), sprite:getHeight())
         lg.setColor(1, 1, 1)
         lg.draw(
@@ -377,10 +378,12 @@ function LevelSelectState:mousepressed(x, y, button)
     -- Ship selection
     if self.shipSelectOpen then
       local shipY = 160
-      for i, shipName in ipairs(availableShips) do
+      local shipsList = Game.availableShips or { "alpha", "beta", "gamma" }
+      for i, shipName in ipairs(shipsList) do
         if y >= shipY - 5 and y <= shipY + 80 and x >= 30 and x <= 310 then
           if Persistence.isShipUnlocked(shipName) then
-            selectedShip = shipName
+            Game.selectedShip = shipName
+            _G.selectedShip = shipName
             Persistence.updateSettings({ selectedShip = shipName })
             if menuConfirmSound then
               menuConfirmSound:stop()

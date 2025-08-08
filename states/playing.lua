@@ -165,7 +165,8 @@ function PlayingState:initializeGame()
   self.screenHeight = lg.getHeight()
 
   -- Player initialization with ship-specific stats
-  local shipConfig = constants.ships[selectedShip] or constants.ships.alpha
+  local shipId = (Game and Game.selectedShip) or _G.selectedShip or "alpha"
+  local shipConfig = constants.ships[shipId] or constants.ships.alpha
 
   -- Apply shop upgrades
   local speedUpgrade = 1 + (Persistence.getUpgradeLevel("speedMultiplier") or 0)
@@ -1556,15 +1557,16 @@ function PlayingState:drawBar(x, y, w, h, percent, color, label)
   end
 end
 
--- Helper function to draw life icons
+  -- Helper function to draw life icons
 function PlayingState:drawLifeIcons(x, y, count, size)
   for i = 1, count do
     local iconX = x + (i - 1) * (size + 5)
-
-    if playerShips and playerShips[selectedShip] then
+    local ships = Game and Game.playerShips
+    local shipId = (Game and Game.selectedShip) or _G.selectedShip
+    if ships and shipId and ships[shipId] then
       -- Draw ship sprite
       lg.setColor(1, 1, 1, 1)
-      local sprite = playerShips[selectedShip]
+      local sprite = ships[shipId]
       local scale = size / max(sprite:getWidth(), sprite:getHeight())
       lg.draw(sprite, iconX, y, 0, scale, scale, sprite:getWidth() / 2, sprite:getHeight() / 2)
     else
@@ -1664,16 +1666,19 @@ function PlayingState:drawPlayer()
   end
 
   -- Draw player ship sprite if available, otherwise fall back to rectangle
-  if playerShips and playerShips[selectedShip] then
+  local ships = Game and Game.playerShips
+  local shipId = (Game and Game.selectedShip) or _G.selectedShip
+  local scale = (Game and Game.spriteScale) or spriteScale or 0.15
+  if ships and shipId and ships[shipId] then
     lg.setColor(1, 1, 1)
-    local sprite = playerShips[selectedShip]
+    local sprite = ships[shipId]
     lg.draw(
       sprite,
-      player.x - sprite:getWidth() * spriteScale / 2,
-      player.y - sprite:getHeight() * spriteScale / 2,
+      player.x - sprite:getWidth() * scale / 2,
+      player.y - sprite:getHeight() * scale / 2,
       0,
-      spriteScale,
-      spriteScale
+      scale,
+      scale
     )
   else
     -- Fallback to rectangle if no sprite
@@ -1707,16 +1712,17 @@ end
 
 function PlayingState:drawAliens()
   for _, alien in ipairs(self.scene.aliens) do
-    local sprite = enemyShips and enemyShips[alien.type or "basic"]
+    local ships = Game and Game.enemyShips
+    local sprite = ships and ships[alien.type or "basic"]
     if sprite then
       lg.setColor(1, 1, 1, 1)
       lg.draw(
         sprite,
-        alien.x - sprite:getWidth() * spriteScale / 2,
-        alien.y - sprite:getHeight() * spriteScale / 2,
+        alien.x - sprite:getWidth() * ((Game and Game.spriteScale) or spriteScale or 0.15) / 2,
+        alien.y - sprite:getHeight() * ((Game and Game.spriteScale) or spriteScale or 0.15) / 2,
         0,
-        spriteScale,
-        spriteScale
+        ((Game and Game.spriteScale) or spriteScale or 0.15),
+        ((Game and Game.spriteScale) or spriteScale or 0.15)
       )
     else
       -- Fallback to pink rectangle if sprite not loaded
@@ -2115,15 +2121,9 @@ function PlayingState:spawnBoss()
   end
 
   boss = self.bossManager:spawnBoss(bossType, self.screenWidth / 2, -100)
-  -- Assign sprite based on level index if available
-  if boss then
-    if bossSprites and bossSprites[currentLevel] then
-      boss.sprite = bossSprites[currentLevel]
-    elseif currentLevel == 2 and boss2Sprite then
-      boss.sprite = boss2Sprite
-    else
-      boss.sprite = bossSprite
-    end
+  -- BossManager now injects sprite; keep safeguard fallback
+  if boss and (not boss.sprite) and Game and Game.bossSprites then
+    boss.sprite = Game.bossSprites[currentLevel] or Game.bossSprites[1]
   end
   bossSpawned = true
   self.bossDefeatNotified = false
@@ -2451,7 +2451,7 @@ function PlayingState:saveGameStats()
     local stats = {
       totalPlayTime = sessionTime,
       totalEnemiesDefeated = self.sessionEnemiesDefeated,
-      favoriteShip = selectedShip,
+      favoriteShip = (Game and Game.selectedShip) or _G.selectedShip,
     }
 
     -- Only increment deaths if the game wasn't completed
