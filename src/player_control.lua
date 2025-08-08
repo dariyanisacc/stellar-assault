@@ -42,6 +42,12 @@ end
 ---@param state table  -- current game‑state table
 ---@param dt    number -- fixed delta‑time from main loop
 function PlayerControl.update(state, dt)
+  -- Defensive guards so update can be called during partial init
+  state = state or {}
+  state.keys = state.keys or {}
+  if not _G.player then
+    return
+  end
   --------------------------------------------------------------------
   -- Scene‑scoped references (supporting new scene/EC‑style infra) ---
   --------------------------------------------------------------------
@@ -122,11 +128,14 @@ function PlayerControl.update(state, dt)
     state.shootCooldown = math.max(0, state.shootCooldown - dt)
   end
 
-  if state.keys.shoot and state.shootCooldown <= 0
-     and player.overheatTimer <= 0 and #lasers >= 95 then
+  -- Prevent laser pool starvation on extreme burst: proactively recycle
+  if state.keys.shoot and (state.shootCooldown or 0) <= 0
+     and (player.overheatTimer or 0) <= 0 and #lasers >= (constants.balance.laserWarningThreshold or 90) then
     local old = table.remove(lasers, 1)
     if old and state.laserGrid then state.laserGrid:remove(old) end
-    state.laserPool:release(old)
+    if old and state.laserPool and state.laserPool.release then
+      state.laserPool:release(old)
+    end
   end
 
   if player.heat > 0 then
@@ -172,22 +181,24 @@ function PlayerControl.shoot(state, dt)
   local lasers         = scene.lasers         or _G.lasers         or {}
   local activePowerups = scene.activePowerups or _G.activePowerups or {}
 
-  if (state.shootCooldown and state.shootCooldown > 0) or player.overheatTimer > 0 then
+  -- Gating: cooldown and overheat
+  if (state.shootCooldown and state.shootCooldown > 0) or (player.overheatTimer or 0) > 0 then
     return
   end
-  if player.heat >= player.maxHeat then
+  if (player.heat or 0) >= (player.maxHeat or 100) then
     player.overheatTimer = player.overheatPenalty
-    if playPositionalSound and explosionSound then
-      playPositionalSound(explosionSound, player.x, player.y)
-    end
+    -- Use pooled audio if available; otherwise skip silently
+    if _G.Game and Game.audioPool then Game.audioPool:play("explosion", player.x, player.y) end
     if state.showDebug then
       print("OVERHEAT! Starting cooldown period")
     end
     return
   end
 
-  local shipCfg = constants.ships[selectedShip] or constants.ships.alpha
+  local shipId = _G.selectedShip or "alpha"
+  local shipCfg = constants.ships[shipId] or constants.ships.alpha
   local spread  = shipCfg.spread or 0
+  if not state.laserPool or not state.laserPool.get then return end
   local laser   = state.laserPool:get()
   if not laser then
     if state.showDebug then
@@ -230,13 +241,14 @@ function PlayerControl.shoot(state, dt)
   end
 
   local weaponPU = activePowerups.rapid or activePowerups.multiShot or activePowerups.spread
+  -- Heat accrues only on non-rapid/multi/spread powerups; clamp defensively
   if not weaponPU then
-    player.heat = math.min(player.maxHeat, player.heat + player.heatRate * dt)
+    local maxHeat = player.maxHeat or 100
+    local heatRate = player.heatRate or 5
+    player.heat = math.min(maxHeat, math.max(0, (player.heat or 0) + heatRate * dt))
   end
 
-  if laserSound and playPositionalSound then
-    playPositionalSound(laserSound, player.x, player.y)
-  end
+  if _G.Game and Game.audioPool then Game.audioPool:play("laser", player.x, player.y) end
 
   local baseCD = activePowerups.rapid and 0.1 or shipCfg.fireRate
   state.shootCooldown = baseCD * (player.fireRateMultiplier or 1)

@@ -6,8 +6,11 @@ function EnemyAI.homingMovement(alien, dt, state)
   if not player then
     return
   end
-  local dx = (player.x + player.width / 2) - (alien.x + alien.width / 2)
-  local dy = (player.y + player.height / 2) - (alien.y + alien.height / 2)
+  -- Be defensive if player width/height are not initialized yet
+  local pw = player.width or 0
+  local ph = player.height or 0
+  local dx = (player.x + pw / 2) - (alien.x + (alien.width or 0) / 2)
+  local dy = (player.y + ph / 2) - (alien.y + (alien.height or 0) / 2)
   local dist = math.sqrt(dx * dx + dy * dy)
   if dist > 0 then
     alien.x = alien.x + (dx / dist) * constants.alien.speed * dt
@@ -29,6 +32,8 @@ function EnemyAI.updateAsteroids(state, dt)
   local baseSpeed = constants.asteroid.baseSpeed
   local speedIncrease = constants.asteroid.speedIncrease
   local levelMultiplier = constants.levels.asteroidSpeedMultiplier[math.min(currentLevel, 5)]
+  local screenW = state.screenWidth or (love.graphics and select(1, love.graphics.getDimensions())) or 800
+  local screenH = state.screenHeight or (love.graphics and select(2, love.graphics.getDimensions())) or 600
 
   for i = #asteroids, 1, -1 do
     local asteroid = asteroids[i]
@@ -36,8 +41,8 @@ function EnemyAI.updateAsteroids(state, dt)
       asteroid.x = asteroid.x + asteroid.vx * dt
       asteroid.vx = asteroid.vx * math.pow(0.98, dt * 60)
       if asteroid.x < -asteroid.size then
-        asteroid.x = state.screenWidth + asteroid.size
-      elseif asteroid.x > state.screenWidth + asteroid.size then
+        asteroid.x = screenW + asteroid.size
+      elseif asteroid.x > screenW + asteroid.size then
         asteroid.x = -asteroid.size
       end
     end
@@ -51,7 +56,7 @@ function EnemyAI.updateAsteroids(state, dt)
     if state.entityGrid then
       state.entityGrid:update(asteroid)
     end
-    if asteroid.y > state.screenHeight + asteroid.size then
+    if asteroid.y > screenH + asteroid.size then
       if state.entityGrid then
         state.entityGrid:remove(asteroid)
       end
@@ -64,6 +69,8 @@ function EnemyAI.updateAliens(state, dt)
   local scene = state.scene or state
   local aliens = scene.aliens or _G.aliens
   local alienLasers = scene.alienLasers or _G.alienLasers
+  local screenW = state.screenWidth or (love.graphics and select(1, love.graphics.getDimensions())) or 800
+  local screenH = state.screenHeight or (love.graphics and select(2, love.graphics.getDimensions())) or 600
   for i = #aliens, 1, -1 do
     local alien = aliens[i]
     -- Choose movement based on behavior
@@ -97,10 +104,10 @@ function EnemyAI.updateAliens(state, dt)
       state.entityGrid:update(alien)
     end
     if
-      alien.y > state.screenHeight + alien.height
-      or alien.y < -alien.height
-      or alien.x > state.screenWidth + alien.width
-      or alien.x < -alien.width
+      alien.y > screenH + (alien.height or 0)
+      or alien.y < -(alien.height or 0)
+      or alien.x > screenW + (alien.width or 0)
+      or alien.x < -(alien.width or 0)
     then
       if state.entityGrid then
         state.entityGrid:remove(alien)
@@ -111,7 +118,13 @@ function EnemyAI.updateAliens(state, dt)
 end
 
 function EnemyAI.alienShoot(state, alien)
+  if not state or not state.laserPool then
+    return
+  end
   local laser = state.laserPool:get()
+  if not laser then
+    return
+  end
   laser.x = alien.x
   laser.y = alien.y + alien.height / 2
   laser.speed = constants.laser.speed * constants.balance.alienLaserSpeedMultiplier

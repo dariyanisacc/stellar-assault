@@ -109,4 +109,57 @@ function Collision.sweptAABB(ax, ay, aw, ah, avx, avy, bx, by, bw, bh)
 end
 
 ---------------------------------------------------------------------
+-- Oriented rectangle overlap (SAT) ---------------------------------
+---------------------------------------------------------------------
+-- Checks two rectangles with center x,y, size w,h and rotation (radians)
+-- using a Separating Axis Test on the 4 unique axes.
+--- Return true if two oriented rectangles overlap (center-based)
+-- @param ax, ay, aw, ah, arot  first rect center, size and rotation
+-- @param bx, by, bw, bh, brot  second rect center, size and rotation
+function Collision.obb(ax, ay, aw, ah, arot, bx, by, bw, bh, brot)
+  local ahw, ahh = aw * 0.5, ah * 0.5
+  local bhw, bhh = bw * 0.5, bh * 0.5
+
+  local acr, asr = math.cos(arot), math.sin(arot)
+  local bcr, bsr = math.cos(brot), math.sin(brot)
+
+  -- Oriented axes in world space
+  local axx, axy = acr, asr
+  local ayx, ayy = -asr, acr
+  local bxx, bxy = bcr, bsr
+  local byx, byy = -bsr, bcr
+
+  -- Vector between centers
+  local dx, dy = bx - ax, by - ay
+
+  -- Test 4 axes: A.x, A.y, B.x, B.y
+  -- Helper to test a single axis
+  local function separatedOn(lx, ly)
+    local dist = math.abs(dx * lx + dy * ly)
+    -- Projection radii for each box against axis (lx, ly)
+    local ra = math.abs(lx * axx + ly * axy) * ahw + math.abs(lx * ayx + ly * ayy) * ahh
+    local rb = math.abs(lx * bxx + ly * bxy) * bhw + math.abs(lx * byx + ly * byy) * bhh
+    return dist > (ra + rb)
+  end
+
+  if separatedOn(axx, axy) then return false end
+  if separatedOn(ayx, ayy) then return false end
+  if separatedOn(bxx, bxy) then return false end
+  if separatedOn(byx, byy) then return false end
+  return true
+end
+
+--- Convenience wrapper using tables with x,y,width,height,rotation (radians)
+function Collision.obbTables(a, b)
+  local acx = a.cx or (a.x + (a.width or a.w) * 0.5)
+  local acy = a.cy or (a.y + (a.height or a.h) * 0.5)
+  local bcx = b.cx or (b.x + (b.width or b.w) * 0.5)
+  local bcy = b.cy or (b.y + (b.height or b.h) * 0.5)
+  local aw, ah = a.width or a.w, a.height or a.h
+  local bw, bh = b.width or b.w, b.height or b.h
+  local ar, br = a.rotation or 0, b.rotation or 0
+  return Collision.obb(acx, acy, aw, ah, ar, bcx, bcy, bw, bh, br)
+end
+
+---------------------------------------------------------------------
 return Collision
