@@ -21,9 +21,32 @@ function pause:draw()
   lg.setColor(0, 0, 0, 0.5)
   lg.rectangle("fill", 0, 0, w, h)
 
-  -- Panel
-  local panelW, panelH = math.min(420, w * 0.8), 220
+  -- Fonts and layout metrics
+  local title = "Paused"
+  local titleFont = Game and Game.titleFont or lg.newFont(32)
+  local itemFont  = Game and Game.menuFont  or lg.newFont(22)
+  local itemCount = #menuItems
+  local titleGap    = 24
+  local itemSpacing = 36
+  local vPad        = 24
+  local hPad        = 32
+
+  -- Compute panel size based on text metrics
+  local titleH  = titleFont:getHeight()
+  local itemH   = itemFont:getHeight()
+  local contentH = titleH + titleGap + (itemCount - 1) * itemSpacing + itemH
+  local panelH   = contentH + 2 * vPad
+
+  -- Compute width via longest line (min 420, max 90% screen)
+  local maxTextW = titleFont:getWidth(title)
+  for _, item in ipairs(menuItems) do
+    local wtxt = itemFont:getWidth(item)
+    if wtxt > maxTextW then maxTextW = wtxt end
+  end
+  local panelW = math.min(math.max(420, maxTextW + 2 * hPad), w * 0.9)
   local panelX, panelY = (w - panelW) / 2, (h - panelH) / 2
+
+  -- Draw panel
   lg.setColor(0.1, 0.1, 0.15, 0.9)
   lg.rectangle("fill", panelX, panelY, panelW, panelH, 8, 8)
   lg.setColor(1, 1, 1, 0.2)
@@ -31,23 +54,21 @@ function pause:draw()
 
   -- Title
   lg.setColor(1, 1, 1)
-  local title = "Paused"
-  local titleFont = Game and Game.titleFont or lg.newFont(32)
   lg.setFont(titleFont)
-  local tw = lg.getFont():getWidth(title)
-  lg.print(title, panelX + (panelW - tw) / 2, panelY + 16)
+  local tw = titleFont:getWidth(title)
+  lg.print(title, panelX + (panelW - tw) / 2, panelY + vPad)
 
   -- Menu items
-  lg.setFont(Game and Game.menuFont or lg.newFont(22))
-  local startY = panelY + 70
+  lg.setFont(itemFont)
+  local startY = panelY + vPad + titleH + titleGap
   for i, item in ipairs(menuItems) do
     if i == selected then
       lg.setColor(1, 1, 0)
     else
       lg.setColor(0.8, 0.9, 1)
     end
-    local iw = lg.getFont():getWidth(item)
-    lg.print(item, panelX + (panelW - iw) / 2, startY + (i - 1) * 36)
+    local iwtxt = itemFont:getWidth(item)
+    lg.print(item, panelX + (panelW - iwtxt) / 2, startY + (i - 1) * itemSpacing)
   end
 end
 
