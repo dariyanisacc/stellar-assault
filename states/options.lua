@@ -37,6 +37,7 @@ function OptionsState:enter(params)
   -- New: Display mode options as list
   self.displayModes = { "windowed", "fullscreen", "borderless" }
   self.fontScaleRange = { min = 0.8, max = 1.3 }
+  self.fontSteps = 10
 
   -- Find current index (default to 3 for borderless if not set)
   local dmValue = 3 -- Default to borderless
@@ -49,6 +50,20 @@ function OptionsState:enter(params)
 
   local settings = Persistence.getSettings()
   local fontValue = settings.fontScale or 1
+  -- Helpers for mapping between discrete step and actual scale
+  local function scaleToStep(scale)
+    local t = (scale - self.fontScaleRange.min) / (self.fontScaleRange.max - self.fontScaleRange.min)
+    if t ~= t then t = 0 end
+    t = math.max(0, math.min(1, t))
+    return math.max(1, math.min(self.fontSteps, math.floor(t * (self.fontSteps - 1) + 1)))
+  end
+  local function stepToScale(step)
+    local f = (step - 1) / (self.fontSteps - 1)
+    return self.fontScaleRange.min + f * (self.fontScaleRange.max - self.fontScaleRange.min)
+  end
+  self._scaleToStep = scaleToStep
+  self._stepToScale = stepToScale
+  local fontStep = scaleToStep(fontValue)
 
   self.paletteNames = {
     constants.palettes.default.name,
@@ -71,7 +86,7 @@ function OptionsState:enter(params)
     { name = "Music Volume", type = "slider", value = Game.musicVolume or 0.2 },
     { name = "Palette", type = "list", value = paletteIndex },
     { name = "High Contrast", type = "toggle", value = settings.highContrast or false },
-    { name = "Font Size", type = "slider", value = fontValue },
+    { name = "Font Size", type = "slider", value = fontStep },
     { name = "Controls", type = "button" },
     { name = "Apply", type = "button" },
     { name = "Back", type = "button" },
@@ -90,10 +105,13 @@ function OptionsState:update(dt)
   -- Smooth volume adjustment when holding keys
   local item = self.menuItems[self.selection]
   if item.type == "slider" then
-    if self.keys.left then
-      self:adjustValue(-constants.audio.volumeAdjustRate * dt)
-    elseif self.keys.right then
-      self:adjustValue(constants.audio.volumeAdjustRate * dt)
+    -- Continuous adjust for volume sliders; Font Size steps per keypress only
+    if item.name ~= "Font Size" then
+      if self.keys.left then
+        self:adjustValue(-constants.audio.volumeAdjustRate * dt)
+      elseif self.keys.right then
+        self:adjustValue(constants.audio.volumeAdjustRate * dt)
+      end
     end
   end
 
@@ -191,7 +209,9 @@ function OptionsState:draw()
         text = text .. ": " .. self.paletteNames[item.value]
       end
     elseif item.type == "slider" then
-      text = text .. ": " .. math.floor(item.value * 100) .. "%"
+      if item.name ~= "Font Size" then
+        text = text .. ": " .. math.floor(item.value * 100) .. "%"
+      end
     elseif item.type == "toggle" then
       text = text .. ": " .. (item.value and "On" or "Off")
     end
@@ -210,22 +230,35 @@ function OptionsState:draw()
       lg.setColor(0.3, 0.3, 0.3)
       lg.rectangle("fill", barX, barY, barWidth, barHeight)
 
-      -- Fill
-      local fillValue = item.value
       if item.name == "Font Size" then
-        fillValue = (item.value - self.fontScaleRange.min)
-          / (self.fontScaleRange.max - self.fontScaleRange.min)
-      end
-      if Game.highContrast then
-        lg.setColor(1, 1, 1, 1)
+        -- Discrete ticks for font size
+        local steps = self.fontSteps
+        local tickH = 18
+        for i = 1, steps do
+          local t = (i - 1) / (steps - 1)
+          local tx = barX + t * barWidth
+          if i == item.value then
+            lg.setColor(1, 1, 0)
+          else
+            lg.setColor(1, 1, 1)
+          end
+          lg.rectangle("fill", tx - 1, barY - 4, 2, tickH)
+        end
+        -- Draw baseline
+        lg.setColor(1, 1, 1, 0.3)
+        lg.rectangle("fill", barX, barY + barHeight/2 - 1, barWidth, 2)
       else
-        lg.setColor(0, 1, 1, 1)
+        -- Continuous fill for volume sliders
+        local fillValue = item.value
+        if Game.highContrast then
+          lg.setColor(1, 1, 1, 1)
+        else
+          lg.setColor(0, 1, 1, 1)
+        end
+        lg.rectangle("fill", barX, barY, barWidth * fillValue, barHeight)
+        lg.setColor(1, 1, 1)
+        lg.rectangle("line", barX, barY, barWidth, barHeight)
       end
-      lg.rectangle("fill", barX, barY, barWidth * fillValue, barHeight)
-
-      -- Border
-      lg.setColor(1, 1, 1)
-      lg.rectangle("line", barX, barY, barWidth, barHeight)
 
       y = y + 20
     end
@@ -275,12 +308,12 @@ function OptionsState:keypressed(key)
     end
   elseif key == "left" then
     self.keys.left = true
-    if item.type == "list" or item.type == "toggle" then
+    if item.type == "list" or item.type == "toggle" or (item.type == "slider" and item.name == "Font Size") then
       self:adjustValue(-1)
     end
   elseif key == "right" then
     self.keys.right = true
-    if item.type == "list" or item.type == "toggle" then
+    if item.type == "list" or item.type == "toggle" or (item.type == "slider" and item.name == "Font Size") then
       self:adjustValue(1)
     end
   elseif key == "return" or key == "space" then
@@ -358,42 +391,42 @@ function OptionsState:adjustValue(direction)
       Persistence.updateSettings({ highContrast = Game.highContrast })
     end
   elseif item.type == "slider" then
-    -- For continuous adjustment, direction is already scaled by dt
-    local newVal
     if item.name == "Font Size" then
-      newVal = item.value + direction * (math.abs(direction) < 1 and 0.05 or 0.1)
-      newVal = math.max(self.fontScaleRange.min, math.min(self.fontScaleRange.max, newVal))
+      -- Discrete steps; direction expected as -1 or +1 from keypress
+      local step = math.max(1, math.min(self.fontSteps, item.value + (direction < 0 and -1 or 1)))
+      if step ~= item.value then
+        item.value = step
+        Game.fontScale = self._stepToScale(step)
+        applyFontScale()
+        Persistence.updateSettings({ fontScale = Game.fontScale })
+      end
     else
+      -- Continuous percentages for audio sliders
+      local newVal
       if math.abs(direction) < 1 then
         newVal = math.max(0, math.min(1, item.value + direction))
       else
         newVal = math.max(0, math.min(1, item.value + direction * 0.1))
       end
-    end
-    item.value = newVal
+      item.value = newVal
 
-    -- Update global values
-    if item.name == "Master Volume" then
-      Game.masterVolume = item.value
-      if Game.mixer then
-        Game.mixer:setMasterVolume("master", Game.masterVolume)
+      if item.name == "Master Volume" then
+        Game.masterVolume = item.value
+        if Game.mixer then
+          Game.mixer:setMasterVolume("master", Game.masterVolume)
+        end
+      elseif item.name == "SFX Volume" then
+        Game.sfxVolume = item.value
+        if Game.mixer then
+          Game.mixer:setMasterVolume("sfx", Game.sfxVolume)
+        end
+      elseif item.name == "Music Volume" then
+        Game.musicVolume = item.value
+        if Game.mixer then
+          Game.mixer:setMasterVolume("music", Game.musicVolume)
+        end
       end
-    elseif item.name == "SFX Volume" then
-      Game.sfxVolume = item.value
-      if Game.mixer then
-        Game.mixer:setMasterVolume("sfx", Game.sfxVolume)
-      end
-    elseif item.name == "Music Volume" then
-      Game.musicVolume = item.value
-      if Game.mixer then
-        Game.mixer:setMasterVolume("music", Game.musicVolume)
-      end
-    elseif item.name == "Font Size" then
-      Game.fontScale = item.value
-      applyFontScale()
-      Persistence.updateSettings({ fontScale = Game.fontScale })
     end
-
     -- Apply audio changes immediately (handled by mixer)
   end
 end
@@ -455,7 +488,7 @@ function OptionsState:applySettings()
   local hcItem = self.menuItems[7]
   local fsItem = self.menuItems[8]
   Game.highContrast = hcItem.value
-  Game.fontScale = fsItem.value
+  Game.fontScale = self._stepToScale(fsItem.value)
   applyFontScale()
 
   Game.paletteName = self.paletteNames[paletteItem.value]:lower()
