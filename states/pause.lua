@@ -21,54 +21,42 @@ function pause:draw()
   lg.setColor(0, 0, 0, 0.5)
   lg.rectangle("fill", 0, 0, w, h)
 
-  -- Fonts and layout metrics
-  local title = "Paused"
-  local titleFont = Game and Game.titleFont or lg.newFont(32)
-  local itemFont  = Game and Game.menuFont  or lg.newFont(22)
-  local itemCount = #menuItems
-  local titleGap    = 24
-  local itemSpacing = 36
-  local vPad        = 24
-  local hPad        = 32
-
-  -- Compute panel size based on text metrics
-  local titleH  = titleFont:getHeight()
-  local itemH   = itemFont:getHeight()
-  local contentH = titleH + titleGap + (itemCount - 1) * itemSpacing + itemH
-  local panelH   = contentH + 2 * vPad
-
-  -- Compute width via longest line (min 420, max 90% screen)
-  local maxTextW = titleFont:getWidth(title)
-  for _, item in ipairs(menuItems) do
-    local wtxt = itemFont:getWidth(item)
-    if wtxt > maxTextW then maxTextW = wtxt end
+  -- Panel and title
+  local panelW = math.min(600, w * 0.85)
+  local panelH = math.min(360, h * 0.70)
+  local panelX = (w - panelW) / 2
+  local panelY = (h - panelH) / 2 - 20
+  if Game and Game.uiManager and Game.uiManager.drawPanel then
+    Game.uiManager:drawPanel(panelX, panelY, panelW, panelH)
+  else
+    lg.setColor(0.1, 0.1, 0.15, 0.9)
+    lg.rectangle("fill", panelX, panelY, panelW, panelH, 8, 8)
+    lg.setColor(1, 1, 1, 0.2)
+    lg.rectangle("line", panelX, panelY, panelW, panelH, 8, 8)
   end
-  local panelW = math.min(math.max(420, maxTextW + 2 * hPad), w * 0.9)
-  local panelX, panelY = (w - panelW) / 2, (h - panelH) / 2
 
-  -- Draw panel
-  lg.setColor(0.1, 0.1, 0.15, 0.9)
-  lg.rectangle("fill", panelX, panelY, panelW, panelH, 8, 8)
-  lg.setColor(1, 1, 1, 0.2)
-  lg.rectangle("line", panelX, panelY, panelW, panelH, 8, 8)
-
-  -- Title
+  local title = "Paused"
+  lg.setFont((Game and Game.titleFont) or lg.newFont(32))
   lg.setColor(1, 1, 1)
-  lg.setFont(titleFont)
-  local tw = titleFont:getWidth(title)
-  lg.print(title, panelX + (panelW - tw) / 2, panelY + vPad)
+  local tw = lg.getFont():getWidth(title)
+  lg.print(title, panelX + (panelW - tw) / 2, panelY + 20)
 
-  -- Menu items
-  lg.setFont(itemFont)
-  local startY = panelY + vPad + titleH + titleGap
+  -- Buttons
+  local scale = (Game and Game.uiScale) or 1
+  local bw, bh = math.floor(360 * scale), math.floor(42 * scale)
+  local spacing = math.floor(10 * scale)
+  local startY = panelY + 80
   for i, item in ipairs(menuItems) do
-    if i == selected then
-      lg.setColor(1, 1, 0)
+    local y = startY + (i - 1) * (bh + spacing)
+    local x = panelX + (panelW - bw) / 2
+    if Game and Game.uiManager and Game.uiManager.drawButton then
+      Game.uiManager:drawButton(x, y, bw, bh, item, i == selected)
     else
-      lg.setColor(0.8, 0.9, 1)
+      lg.setFont((Game and Game.menuFont) or lg.newFont(22))
+      if i == selected then lg.setColor(1, 1, 0) else lg.setColor(0.85, 0.9, 1) end
+      local iwtxt = lg.getFont():getWidth(item)
+      lg.print(item, x + (bw - iwtxt) / 2, y + (bh - lg.getFont():getHeight()) / 2)
     end
-    local iwtxt = itemFont:getWidth(item)
-    lg.print(item, panelX + (panelW - iwtxt) / 2, startY + (i - 1) * itemSpacing)
   end
 end
 
@@ -81,9 +69,12 @@ function pause:keypressed(key)
   end
   if key == "up" then
     selected = (selected - 2) % #menuItems + 1
+    if Game and Game.menuSelectSound then Game.menuSelectSound:play() end
   elseif key == "down" then
     selected = selected % #menuItems + 1
+    if Game and Game.menuSelectSound then Game.menuSelectSound:play() end
   elseif key == "return" or key == "space" then
+    if Game and Game.menuConfirmSound then Game.menuConfirmSound:play() end
     if menuItems[selected] == "Resume" then
       if _G.Game and Game.resume then Game:resume() end
       stateManager:pop()

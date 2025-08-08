@@ -48,9 +48,17 @@ function GameOverState:draw()
         drawStarfield()
     end
     
-    -- Darken background
-    lg.setColor(0, 0, 0, 0.7)
+    -- Dim background
+    lg.setColor(0, 0, 0, 0.6)
     lg.rectangle("fill", 0, 0, self.screenWidth, self.screenHeight)
+    -- Panel behind the content (uses UIManager if available)
+    if Game and Game.uiManager and Game.uiManager.drawPanel then
+        local panelW = math.min(600, self.screenWidth * 0.85)
+        local panelH = math.min(480, self.screenHeight * 0.75)
+        local panelX = (self.screenWidth  - panelW) / 2
+        local panelY = (self.screenHeight - panelH) / 2 - 40
+        Game.uiManager:drawPanel(panelX, panelY, panelW, panelH)
+    end
     
     -- Game Over title
     lg.setFont(Game.titleFont or lg.newFont(48))
@@ -69,20 +77,20 @@ function GameOverState:draw()
         lg.print(highScoreText, self.screenWidth/2 - hsWidth/2, 200)
     end
     
-    -- Stats
+    -- Stats ----------------------------------------------------------
     lg.setFont(Game.menuFont or lg.newFont(24))
 
     local killText = "Enemies Defeated: " .. tostring(self.killCount)
-    local minutes = math.floor(self.playTime / 60)
-    local seconds = math.floor(self.playTime % 60)
+    local minutes  = math.floor(self.playTime / 60)
+    local seconds  = math.floor(self.playTime % 60)
     local timeText = string.format("Time Survived: %02d:%02d", minutes, seconds)
 
     local stats = {
-        "Final Score: " .. string.format("%d", self.finalScore),
-        "High Score: " .. string.format("%d", self.highScore),
-        "Level Reached: " .. self.levelReached,
+        ("Final Score: %d"):format(self.finalScore),
+        ("High Score: %d"):format(self.highScore),
+        ("Level Reached: %s"):format(self.levelReached),
         killText,
-        timeText
+        timeText,
     }
     
     -- Add completion status if game was completed
@@ -91,6 +99,7 @@ function GameOverState:draw()
     end
 
     local y = self.isNewHighScore and 260 or 250
+    local lineStep = 40
     for _, stat in ipairs(stats) do
         local color = {1, 1, 1, self.textAlpha}
         if stat == killText and self.newBestKill then
@@ -103,27 +112,35 @@ function GameOverState:draw()
         lg.setColor(color)
         local statWidth = lg.getFont():getWidth(stat)
         lg.print(stat, self.screenWidth/2 - statWidth/2, y)
-        y = y + 40
+        y = y + lineStep
     end
     
-    -- Menu options
+    -- Menu options (start AFTER the stats) ---------------------------
     local options = {"Restart Level", "Main Menu", "Leaderboard"}
-    
-    y = self.isNewHighScore and 420 or 400
+    local optionsTop = y + 24 -- margin below last stat
+    local scale = (Game and Game.uiScale) or 1
+    local bw, bh = math.floor(360 * scale), math.floor(42 * scale)
     for i, option in ipairs(options) do
-        if i == self.selection then
-            lg.setColor(1, 1, 0, self.textAlpha)
+        local drawY = optionsTop + (i - 1) * (bh + 10)
+        local bx = (self.screenWidth - bw) / 2
+        local selected = (i == self.selection)
+
+        if Game and Game.uiManager and Game.uiManager.drawButton then
+            Game.uiManager:drawButton(bx, drawY, bw, bh, option, selected)
         else
-            lg.setColor(0.7, 0.7, 0.7, self.textAlpha)
+            -- Fallback text-only rendering
+            if selected then
+                lg.setColor(1, 1, 0, self.textAlpha)
+            else
+                lg.setColor(0.7, 0.7, 0.7, self.textAlpha)
+            end
+            local optionWidth = lg.getFont():getWidth(option)
+            lg.print(option, self.screenWidth/2 - optionWidth/2, drawY)
         end
-        
-        local optionWidth = lg.getFont():getWidth(option)
-        lg.print(option, self.screenWidth/2 - optionWidth/2, y)
-        y = y + 50
     end
     
     -- Instructions
-    lg.setFont(smallFont or lg.newFont(14))
+    lg.setFont(Game.smallFont or lg.newFont(14))
     lg.setColor(0.5, 0.5, 0.5)
     local instructions = "Arrow Keys: Navigate | Enter: Select"
     local instructWidth = lg.getFont():getWidth(instructions)

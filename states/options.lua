@@ -179,10 +179,24 @@ function OptionsState:draw()
   local titleColor = Game.highContrast and { 1, 1, 1 } or { 0, 1, 1 }
   Game.uiManager:drawMessage("OPTIONS", self.screenWidth / 2, 80, titleColor, Game.titleFont)
 
+  -- Panel behind options
+  local panelW = math.min(720, self.screenWidth * 0.9)
+  local panelH = math.min(540, self.screenHeight * 0.75)
+  local panelX = (self.screenWidth - panelW) / 2
+  local panelY = 120
+  if Game and Game.uiManager and Game.uiManager.drawPanel then
+    Game.uiManager:drawPanel(panelX, panelY, panelW, panelH)
+  else
+    lg.setColor(0.1, 0.1, 0.15, 0.9)
+    lg.rectangle("fill", panelX, panelY, panelW, panelH, 8, 8)
+    lg.setColor(1, 1, 1, 0.2)
+    lg.rectangle("line", panelX, panelY, panelW, panelH, 8, 8)
+  end
+
   -- Draw menu items
   lg.setFont(Game.menuFont or lg.newFont(24))
 
-  local y = 200
+  local y = panelY + 40
   for i, item in ipairs(self.menuItems) do
     local isSelected = i == self.selection
 
@@ -219,7 +233,25 @@ function OptionsState:draw()
     end
 
     local textWidth = lg.getFont():getWidth(text)
-    lg.print(text, self.screenWidth / 2 - textWidth / 2, y)
+    local lineX = self.screenWidth / 2 - textWidth / 2
+
+    if item.type == "button" then
+      -- Render as a centered button
+      local scale = (Game and Game.uiScale) or 1
+      local bw, bh = math.floor(360 * scale), math.floor(42 * scale)
+      local bx = panelX + (panelW - bw) / 2
+      if Game and Game.uiManager and Game.uiManager.drawButton then
+        Game.uiManager:drawButton(bx, y - 6, bw, bh, item.name, isSelected)
+      else
+        if isSelected then lg.setColor(1, 1, 0) else lg.setColor(0.85, 0.9, 1) end
+        lg.rectangle("line", bx, y - 6, bw, bh)
+        local txw = lg.getFont():getWidth(item.name)
+        lg.print(item.name, bx + (bw - txw) / 2, y - 6 + (bh - lg.getFont():getHeight()) / 2)
+      end
+    else
+      -- Text entry (list, slider, toggle)
+      lg.print(text, lineX, y)
+    end
 
     -- Draw slider bar if applicable
     if item.type == "slider" and isSelected then
@@ -265,7 +297,11 @@ function OptionsState:draw()
       y = y + 20
     end
 
-    y = y + 50
+    if item.type == "button" then
+      y = y + 52
+    else
+      y = y + 50
+    end
   end
 
   -- Instructions
@@ -572,6 +608,20 @@ function OptionsState:drawControlsMenu()
   local titleWidth = lg.getFont():getWidth(title)
   lg.print(title, self.screenWidth / 2 - titleWidth / 2, 50)
 
+  -- Panel behind controls
+  local panelW = math.min(700, self.screenWidth * 0.9)
+  local panelH = math.min(520, self.screenHeight * 0.75)
+  local panelX = (self.screenWidth - panelW) / 2
+  local panelY = 100
+  if Game and Game.uiManager and Game.uiManager.drawPanel then
+    Game.uiManager:drawPanel(panelX, panelY, panelW, panelH)
+  else
+    lg.setColor(0.1, 0.1, 0.15, 0.9)
+    lg.rectangle("fill", panelX, panelY, panelW, panelH, 8, 8)
+    lg.setColor(1, 1, 1, 0.2)
+    lg.rectangle("line", panelX, panelY, panelW, panelH, 8, 8)
+  end
+
   -- If remapping, show overlay
   if self.remappingKey then
     lg.setColor(0, 0, 0, 0.8)
@@ -592,7 +642,7 @@ function OptionsState:drawControlsMenu()
   end
 
   -- Draw menu items
-  local y = 130
+  local y = panelY + 30
   local itemHeight = 35
 
   for i, item in ipairs(self.controlsMenuItems) do

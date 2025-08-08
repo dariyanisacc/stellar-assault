@@ -51,6 +51,7 @@ xpcall(function()
   Persistence = require("src.persistence")
   UIManager = require("src.uimanager")
   AudioPool = require("src.audiopool")
+  Mixer = require("src.Mixer")
   Game = require("src.game")
   AssetManager = require("src.asset_manager") -- NEW
 end, abort)
@@ -94,6 +95,7 @@ Game.displayMode = "borderless"
 Game.currentResolution = 1
 Game.highContrast = false
 Game.fontScale = 1
+Game.uiScale = 1
 Game.paletteName = constants.defaultPalette
 Game.palette = constants.palettes[Game.paletteName]
 
@@ -169,6 +171,14 @@ local function setWindowFromGame()
   end
 end
 
+-- Compute UI scale based on window size to keep UI readable
+local function updateUiScale()
+  local w, h = lg.getWidth(), lg.getHeight()
+  local sx = w / 1280
+  local sy = h / 720
+  Game.uiScale = math.max(0.75, math.min(1.35, math.min(sx, sy)))
+end
+
 -- Toggle between fullscreen and windowed, then persist settings
 local function toggleFullscreen()
   if Game.displayMode == "windowed" then
@@ -222,17 +232,34 @@ local function initWindow()
   lg.setDefaultFilter("nearest", "nearest")
   lg.setBackgroundColor(0.05, 0.05, 0.10)
   setWindowFromGame()
+  updateUiScale()
 end
 
 -- ---------------------------------------------------------------------------
 -- Font loading (now via AssetManager)
 -- ---------------------------------------------------------------------------
 local function loadFonts()
-  Game.titleFont = AssetManager.getFont(48)
-  Game.menuFont = AssetManager.getFont(24)
-  Game.uiFont = AssetManager.getFont(18)
-  Game.smallFont = AssetManager.getFont(14)
-  Game.mediumFont = AssetManager.getFont(20)
+  -- Prefer Kenney Sci‑Fi font if available
+  local kenney = "assets/kenny assets/UI Pack - Sci-fi/Fonts/kenvector_future.ttf"
+  if lf.getInfo(kenney, "file") then
+    Game.fontPath = kenney
+    Game.titleFont = AssetManager.getFont(kenney, 48)
+    Game.menuFont  = AssetManager.getFont(kenney, 24)
+    Game.uiFont    = AssetManager.getFont(kenney, 18)
+    Game.smallFont = AssetManager.getFont(kenney, 14)
+  else
+    Game.fontPath = nil
+    Game.titleFont = AssetManager.getFont(48)
+    Game.menuFont  = AssetManager.getFont(24)
+    Game.uiFont    = AssetManager.getFont(18)
+    Game.smallFont = AssetManager.getFont(14)
+  end
+  if Game.fontPath then
+    Game.mediumFont = AssetManager.getFont(Game.fontPath, 20)
+  else
+    Game.mediumFont = AssetManager.getFont(20)
+  end
+
   Game.uiManager = UIManager:new()
 
   -- Optional console font
@@ -309,27 +336,64 @@ end
 local function loadAudio()
   la.setDistanceModel("inverseclamped")
 
+  -- Mixer groups for live volume control
+  Game.mixer = Mixer.new()
+
   local sounds = constants.sounds or {}
+  local function findKenneySound(keyword)
+    local baseDir = "assets/kenny assets/Sci-Fi Sounds/Audio"
+    if not lf.getInfo(baseDir, "directory") then return nil end
+    local best
+    for _, f in ipairs(lf.getDirectoryItems(baseDir)) do
+      local lower = f:lower()
+      if lower:find(keyword:lower(), 1, true) and lower:sub(-4) == ".ogg" then
+        best = baseDir .. "/" .. f
+        if lower:find("000", 1, true) then break end -- prefer _000 if found
+      end
+    end
+    return best
+  end
   if sounds.laser then
-    Game.laserSound = registerSfx(sounds.laser, 0.5)
+    Game.laserSound = registerSfx(sounds.laser, 0.5) or (function()
+      local p = findKenneySound("laser")
+      if p then return registerSfx(p, 0.5) end
+    end)()
   end
   if sounds.explosion then
-    Game.explosionSound = registerSfx(sounds.explosion, 0.7)
+    Game.explosionSound = registerSfx(sounds.explosion, 0.7) or (function()
+      local p = findKenneySound("explosion")
+      if p then return registerSfx(p, 0.7) end
+    end)()
   end
   if sounds.powerup then
-    Game.powerupSound = registerSfx(sounds.powerup, 0.6)
+    Game.powerupSound = registerSfx(sounds.powerup, 0.6) or (function()
+      local p = findKenneySound("powerup") or findKenneySound("powerUp")
+      if p then return registerSfx(p, 0.6) end
+    end)()
   end
   if sounds.shield_break then
-    Game.shieldBreakSound = registerSfx(sounds.shield_break, 0.7)
+    Game.shieldBreakSound = registerSfx(sounds.shield_break, 0.7) or (function()
+      local p = findKenneySound("impact") or findKenneySound("metal")
+      if p then return registerSfx(p, 0.7) end
+    end)()
   end
   if sounds.gameover then
-    Game.gameOverSound = registerSfx(sounds.gameover, 0.8)
+    Game.gameOverSound = registerSfx(sounds.gameover, 0.8) or (function()
+      local p = findKenneySound("computerNoise_001") or findKenneySound("computerNoise")
+      if p then return registerSfx(p, 0.8) end
+    end)()
   end
   if sounds.menu then
-    Game.menuSelectSound = registerSfx(sounds.menu, 0.4)
+    Game.menuSelectSound = registerSfx(sounds.menu, 0.4) or (function()
+      local p = findKenneySound("computerNoise_000") or findKenneySound("computerNoise")
+      if p then return registerSfx(p, 0.4) end
+    end)()
   end
   if sounds.victory then
-    Game.victorySound = registerSfx(sounds.victory, 0.8)
+    Game.victorySound = registerSfx(sounds.victory, 0.8) or (function()
+      local p = findKenneySound("computerNoise_003") or findKenneySound("computerNoise")
+      if p then return registerSfx(p, 0.8) end
+    end)()
   end
 
   if Game.menuSelectSound then
@@ -341,9 +405,58 @@ local function loadAudio()
     table.insert(sfxSources, Game.menuConfirmSound)
   end
 
+  -- Helper to gather sibling variants (e.g., laser_1.ogg, laser2.ogg)
+  local function collectVariants(basePath)
+    local dir = basePath:match("^(.*)/[^/]+$") or "."
+    local base = basePath:match("([^/]+)%.%w+$") or basePath
+    local ext = basePath:match("%.(%w+)$") or "ogg"
+    local variants = {}
+    if lf.getInfo(dir, "directory") then
+      for _, f in ipairs(lf.getDirectoryItems(dir)) do
+        if f:lower() ~= (base .. "." .. ext):lower() then
+          local name = f:lower()
+          if name:match("^" .. base:lower():gsub("%s","%%s") .. "[_%-]?%d+")
+            or name:match("^" .. base:lower():gsub("%s","%%s") .. ".-%." .. ext:lower() .. "$")
+          then
+            if name:sub(-(#ext + 1)) == "." .. ext:lower() then
+              local full = dir .. "/" .. f
+              local s = AssetManager.getSound(full, "static")
+              if s then
+                s.baseVolume = (Game.laserSound and Game.laserSound.baseVolume) or 0.6
+                table.insert(variants, s)
+              end
+            end
+          end
+        end
+      end
+    end
+    return variants
+  end
+
   Game.audioPool = AudioPool:new(8, sfxSources)
-  Game.audioPool:register("laser", Game.laserSound)
-  Game.audioPool:register("explosion", Game.explosionSound)
+  -- Laser
+  local laserVariants = {}
+  if constants.sounds.laser then
+    laserVariants = collectVariants(constants.sounds.laser)
+  end
+  if #laserVariants > 0 and Game.laserSound then
+    table.insert(laserVariants, 1, Game.laserSound)
+    Game.audioPool:registerVariants("laser", laserVariants)
+  else
+    Game.audioPool:register("laser", Game.laserSound)
+  end
+  -- Explosion
+  local explosionVariants = {}
+  if constants.sounds.explosion then
+    explosionVariants = collectVariants(constants.sounds.explosion)
+  end
+  if #explosionVariants > 0 and Game.explosionSound then
+    table.insert(explosionVariants, 1, Game.explosionSound)
+    Game.audioPool:registerVariants("explosion", explosionVariants)
+  else
+    Game.audioPool:register("explosion", Game.explosionSound)
+  end
+  -- Others
   Game.audioPool:register("powerup", Game.powerupSound)
   Game.audioPool:register("shield_break", Game.shieldBreakSound)
   Game.audioPool:register("gameover", Game.gameOverSound)
@@ -353,9 +466,19 @@ local function loadAudio()
 
   if sounds.background then
     Game.backgroundMusic = registerMusic(sounds.background, 1.0, true)
+      or (function() local p = findKenneySound("computerNoise_004") or findKenneySound("computerNoise"); if p then return registerMusic(p, 1.0, true) end end)()
   end
   if sounds.boss then
     Game.bossMusic = registerMusic(sounds.boss, 0.8, true)
+      or (function() local p = findKenneySound("computerNoise_002") or findKenneySound("computerNoise"); if p then return registerMusic(p, 0.8, true) end end)()
+  end
+
+  -- Register all sources with Mixer groups (after AudioPool created clones)
+  for _, s in ipairs(sfxSources) do
+    Game.mixer:register(s, "sfx")
+  end
+  for _, m in ipairs(musicSources) do
+    Game.mixer:register(m, "music")
   end
 end
 
@@ -363,11 +486,15 @@ end
 -- Settings helpers (font scaling, palette, saving, etc.)
 -- ---------------------------------------------------------------------------
 local function applyFontScale()
-  Game.titleFont = AssetManager.getFont(48 * Game.fontScale)
-  Game.menuFont = AssetManager.getFont(24 * Game.fontScale)
-  Game.uiFont = AssetManager.getFont(18 * Game.fontScale)
-  Game.smallFont = AssetManager.getFont(14 * Game.fontScale)
-  Game.mediumFont = AssetManager.getFont(20 * Game.fontScale)
+  local path = Game.fontPath -- may be nil
+  local function gf(sz)
+    if path then return AssetManager.getFont(path, sz) else return AssetManager.getFont(sz) end
+  end
+  Game.titleFont = gf(48 * Game.fontScale)
+  Game.menuFont  = gf(24 * Game.fontScale)
+  Game.uiFont    = gf(18 * Game.fontScale)
+  Game.smallFont = gf(14 * Game.fontScale)
+  Game.mediumFont = gf(20 * Game.fontScale)
 end
 _G.applyFontScale = applyFontScale
 
@@ -439,6 +566,7 @@ function love.load()
   if applyFontScale then applyFontScale() end
   if applyPalette then applyPalette() end
   if updateAudioVolumes then updateAudioVolumes() end
+  updateUiScale()
   -- Background
   if initStarfield then
     initStarfield()
@@ -601,6 +729,7 @@ function love.update(dt)
     if Game and Game.debugConsole and Game.debugConsole.update then
       Game.debugConsole:update(FIXED_DT)
     end
+    if updateUiScale then updateUiScale() end
     accumulator = accumulator - FIXED_DT
   end
 end
@@ -614,6 +743,14 @@ function love.draw()
   end
   if Game and Game.debugConsole and Game.debugConsole.draw then
     Game.debugConsole:draw()
+  end
+  -- Minimal input hint bar in menus and overlays
+  local allowed = {
+    menu = true, pause = true, options = true, options_controls = true,
+    levelselect = true, leaderboard = true, gameover = true,
+  }
+  if Game and Game.uiManager and (allowed[(stateManager and stateManager.currentName) or ""] == true) then
+    Game.uiManager:drawInputHints()
   end
 end
 
@@ -686,6 +823,7 @@ function love.resize(w, h)
   if stateManager and stateManager.resize then
     stateManager:resize(w, h)
   end
+  updateUiScale()
 end
 
 -- Clear held inputs on focus loss to avoid sticky movement/shoot

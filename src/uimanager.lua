@@ -2,6 +2,7 @@
 local constants = require("src.constants")
 local lg = love.graphics
 local Game = require("src.game")
+local AssetManager = require("src.asset_manager")
 
 local function setColorContrast(normal, contrast)
   local c = normal
@@ -242,6 +243,129 @@ function UIManager:drawWarning(text, severity)
 
   local width = lg.getFont():getWidth(text)
   lg.print(text, lg.getWidth() / 2 - width / 2, 150)
+end
+
+-- Input hint bar ------------------------------------------------------------
+function UIManager:drawInputHints()
+  local w, h = love.graphics.getWidth(), love.graphics.getHeight()
+  local scale = (Game and Game.uiScale) or 1
+  local padY = math.floor(10 * scale)
+  local barH = math.floor(28 * scale)
+  local y = h - barH - padY
+
+  local hints = (Game and Game.inputHints and Game.inputHints[Game.lastInputType])
+    or { navigate = "Arrows", select = "Enter", back = "ESC" }
+  local text = string.format(
+    "Navigate: %s  •  Select: %s  •  Back: %s",
+    hints.navigate or "Arrows",
+    hints.select or "Enter",
+    hints.back or "ESC"
+  )
+
+  love.graphics.setColor(0, 0, 0, Game.highContrast and 0.8 or 0.5)
+  love.graphics.rectangle("fill", 0, y, w, barH)
+  love.graphics.setColor(1, 1, 1, Game.highContrast and 1 or 0.8)
+  love.graphics.setFont(Game.smallFont or love.graphics.newFont(14))
+  local tw = love.graphics.getFont():getWidth(text)
+  love.graphics.print(text, (w - tw) / 2, y + (barH - love.graphics.getFont():getHeight()) / 2)
+end
+
+-- Kenney UI helpers (3-slice bars) -----------------------------------------
+-- These functions gracefully fallback to simple rects if assets are missing.
+local function getKenneyPieces()
+  if Game._kenneyUI ~= nil then return Game._kenneyUI end
+  local base = "assets/kenny assets/UI Pack - Sci-fi/PNG/Blue/Double/"
+  local lf = love.filesystem
+  local ok = lf.getInfo(base, "directory") ~= nil
+  if not ok then
+    Game._kenneyUI = false -- mark as unavailable
+    return false
+  end
+  local function try(path)
+    if lf.getInfo(path, "file") then
+      local ok2, img = pcall(function() return AssetManager.getImage(path) end)
+      return ok2 and img or nil
+    end
+    return nil
+  end
+  local pieces = {
+    L   = try(base .. "bar_square_gloss_large_l.png"),
+    M   = try(base .. "bar_square_gloss_large_m.png"),
+    R   = try(base .. "bar_square_gloss_large_r.png"),
+    btnL= try(base .. "bar_square_gloss_small_l.png"),
+    btnM= try(base .. "bar_square_gloss_small_m.png"),
+    btnR= try(base .. "bar_square_gloss_small_r.png"),
+  }
+  -- If any critical piece missing, treat as unavailable
+  if not (pieces.L and pieces.M and pieces.R and pieces.btnL and pieces.btnM and pieces.btnR) then
+    Game._kenneyUI = false
+    return false
+  end
+  Game._kenneyUI = pieces
+  return pieces
+end
+
+local function draw3slice(L, M, R, x, y, w, h)
+  local th = M:getHeight()
+  local sy = h / th
+  local lw = L:getWidth() * sy
+  local rw = R:getWidth() * sy
+  -- left
+  lg.draw(L, x, y, 0, sy, sy)
+  -- middle (tiled)
+  local mx = x + lw
+  local mmw = M:getWidth() * sy
+  local avail = math.max(0, w - lw - rw)
+  local tiles = math.ceil(avail / mmw)
+  for i = 1, tiles do
+    local dx = mx + (i - 1) * mmw
+    if dx + mmw > x + w - rw then
+      -- clip last tile
+      local over = dx + mmw - (x + w - rw)
+      local quadW = M:getWidth() - (over / sy)
+      local quad = love.graphics.newQuad(0, 0, quadW, M:getHeight(), M:getDimensions())
+      lg.draw(M, quad, dx, y, 0, sy, sy)
+    else
+      lg.draw(M, dx, y, 0, sy, sy)
+    end
+  end
+  -- right
+  lg.draw(R, x + w - rw, y, 0, sy, sy)
+end
+
+function UIManager:drawPanel(x, y, w, h)
+  local ui = getKenneyPieces()
+  if ui and ui ~= false then
+    draw3slice(ui.L, ui.M, ui.R, x, y, w, h)
+  else
+    -- Fallback: simple rounded rectangle
+    lg.setColor(0, 0, 0, Game.highContrast and 0.8 or 0.5)
+    lg.rectangle("fill", x, y, w, h, 6)
+    lg.setColor(1, 1, 1, Game.highContrast and 1 or 0.6)
+    lg.rectangle("line", x, y, w, h, 6)
+  end
+end
+
+function UIManager:drawButton(x, y, w, h, label, highlighted)
+  local ui = getKenneyPieces()
+  if ui and ui ~= false then
+    draw3slice(ui.btnL, ui.btnM, ui.btnR, x, y, w, h)
+    lg.setFont(Game.menuFont or lg.newFont(24))
+    if highlighted then lg.setColor(1, 1, 0) else lg.setColor(0.85, 0.9, 1) end
+    local tw = lg.getFont():getWidth(label)
+    local th = lg.getFont():getHeight()
+    lg.print(label, x + (w - tw) / 2, y + (h - th) / 2)
+  else
+    -- Fallback: flat button
+    lg.setColor(0.1, 0.1, 0.15, 0.85)
+    lg.rectangle("fill", x, y, w, h, 4)
+    if highlighted then lg.setColor(1, 1, 0, 1) else lg.setColor(0.9, 0.9, 0.9, 1) end
+    lg.rectangle("line", x, y, w, h, 4)
+    lg.setFont(Game.menuFont or lg.newFont(24))
+    local tw = lg.getFont():getWidth(label)
+    local th = lg.getFont():getHeight()
+    lg.print(label, x + (w - tw) / 2, y + (h - th) / 2)
+  end
 end
 
 -- Mini-map (for larger levels)

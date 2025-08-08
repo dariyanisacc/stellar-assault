@@ -140,11 +140,17 @@ function PlayingState:enter(params)
   self.newHighScore = false
   self.previousHighScore = Persistence.getHighScore()
 
-  -- Start background music
-  if backgroundMusic then
-    backgroundMusic:setLooping(true)
-    backgroundMusic:setVolume(musicVolume * masterVolume)
-    backgroundMusic:play()
+  -- Start background music (via Game.* with simple crossfade system)
+  self.music = {
+    bg = (Game and Game.backgroundMusic) or nil,
+    boss = (Game and Game.bossMusic) or nil,
+    bgFactor = 1,
+    bossFactor = 0,
+    fade = nil, -- { to = "boss"|"bg", t = 0, d = 0.8 }
+  }
+  if self.music.bg then
+    self.music.bg:setLooping(true)
+    self.music.bg:play()
   end
 
   -- Level 1 background preference: PNG (scrolling) > video > fallback
@@ -191,9 +197,8 @@ end
 
 function PlayingState:leave()
   -- Clean up
-  if backgroundMusic then
-    backgroundMusic:stop()
-  end
+  if Game and Game.backgroundMusic then Game.backgroundMusic:stop() end
+  if Game and Game.bossMusic then Game.bossMusic:stop() end
 
   -- Stop background video if active
   if self.bgVideo then
@@ -358,6 +363,9 @@ function PlayingState:update(dt)
 
   self:checkGameConditions()
 
+  -- Update crossfade if active
+  if self.updateMusic then self:updateMusic(dt) end
+
   -- Update background scroll if using PNG on level 1
   if currentLevel == 1 and self.bgImage then
     local iw, ih = self.bgImage:getWidth(), self.bgImage:getHeight()
@@ -458,6 +466,52 @@ function PlayingState:updateWaveManager(dt)
       enemy.vy = nil
     end
   end
+end
+
+-- Music crossfade helpers ---------------------------------------------------
+function PlayingState:updateMusic(dt)
+  if not self.music or not (self.music.bg or self.music.boss) then return end
+  -- Advance fade animation
+  local f = self.music
+  if f.fade then
+    f.fade.t = math.min(f.fade.d, (f.fade.t or 0) + dt)
+    local k = (f.fade.t / f.fade.d)
+    if f.fade.to == "boss" then
+      f.bgFactor = 1 - k
+      f.bossFactor = k
+      if f.boss and not f._bossPlaying then f.boss:setLooping(true); f.boss:play(); f._bossPlaying = true end
+    else -- to bg
+      f.bgFactor = k
+      f.bossFactor = 1 - k
+      if f.bg and not f._bgPlaying then f.bg:setLooping(true); f.bg:play(); f._bgPlaying = true end
+    end
+    if f.fade.t >= f.fade.d then
+      f.fade = nil
+      -- Stop the other track when crossfade completes
+      if f.bg and f.bgFactor >= 0.99 and f.boss then f.boss:stop() end
+      if f.boss and f.bossFactor >= 0.99 and f.bg then f.bg:stop() end
+    end
+  end
+  -- Apply volumes (Mixer sets master/music; we modulate by factor)
+  local function applyVol(src, factor)
+    if not src then return end
+    local base = (src.baseVolume or 1)
+    local mv = (Game and Game.musicVolume) or 1
+    local mas = (Game and Game.masterVolume) or 1
+    src:setVolume(base * mv * mas * factor)
+  end
+  applyVol(f.bg, f.bgFactor or 0)
+  applyVol(f.boss, f.bossFactor or 0)
+end
+
+function PlayingState:musicToBoss()
+  if not self.music then return end
+  self.music.fade = { to = "boss", t = 0, d = 0.8 }
+end
+
+function PlayingState:musicToBackground()
+  if not self.music then return end
+  self.music.fade = { to = "bg", t = 0, d = 0.8 }
 end
 
 function PlayingState:processCollisions()
@@ -722,17 +776,7 @@ function PlayingState:checkPlayerCollisions()
           local _ = self:findEntityIndex(self.waveManager.enemies, entity)
           self.scene.activePowerups.shield = nil
           if Game and Game.audioPool then
-            Game.audioPool:play(
-              "shield_break",
-              entity.x + entity.width / 2,
-              entity.y + entity.height / 2
-            )
-          elseif shieldBreakSound and playPositionalSound then
-            playPositionalSound(
-              shieldBreakSound,
-              entity.x + entity.width / 2,
-              entity.y + entity.height / 2
-            )
+            Game.audioPool:play("shield_break", entity.x + entity.width / 2, entity.y + entity.height / 2)
           end
         else
           self:playerHit()
@@ -771,17 +815,7 @@ function PlayingState:checkPlayerCollisions()
           table.remove(self.waveManager.enemies, i)
           self.scene.activePowerups.shield = nil
           if Game and Game.audioPool then
-            Game.audioPool:play(
-              "shield_break",
-              enemy.x + enemy.width / 2,
-              enemy.y + enemy.height / 2
-            )
-          elseif shieldBreakSound and playPositionalSound then
-            playPositionalSound(
-              shieldBreakSound,
-              enemy.x + enemy.width / 2,
-              enemy.y + enemy.height / 2
-            )
+            Game.audioPool:play("shield_break", enemy.x + enemy.width / 2, enemy.y + enemy.height / 2)
           end
         else
           -- Player takes damage
@@ -830,12 +864,8 @@ function PlayingState:checkLaserCollisions()
               entity.y + entity.height / 2,
               enemySize
             )
-            if explosionSound and playPositionalSound then
-              playPositionalSound(
-                explosionSound,
-                entity.x + entity.width / 2,
-                entity.y + entity.height / 2
-              )
+            if Game and Game.audioPool then
+              Game.audioPool:play("explosion", entity.x + entity.width / 2, entity.y + entity.height / 2)
             end
             local enemyScore = 50 * currentLevel
             score = score + enemyScore
@@ -935,9 +965,7 @@ function PlayingState:checkPowerupCollisions()
         self:showNewHighScoreNotification()
       end
 
-      if powerupSound and playPositionalSound then
-        playPositionalSound(powerupSound, powerup.x, powerup.y)
-      end
+      if Game and Game.audioPool then Game.audioPool:play("powerup", powerup.x, powerup.y) end
 
       -- Create floating text
       self:createPowerupText(powerup.description, powerup.x, powerup.y, powerup.color)
@@ -1372,9 +1400,7 @@ function PlayingState:createExplosion(x, y, size)
     table.insert(self.scene.explosions, particle)
   end
 
-  if explosionSound and playPositionalSound then
-    playPositionalSound(explosionSound, x, y)
-  end
+  if Game and Game.audioPool then Game.audioPool:play("explosion", x, y) end
 end
 
 function PlayingState:createHitEffect(x, y)
@@ -1416,12 +1442,9 @@ function PlayingState:playerHit()
 
     gameState = "gameOver"
     levelAtDeath = currentLevel
-    if gameOverSound and playPositionalSound then
-      playPositionalSound(gameOverSound, player.x, player.y)
-    end
-    if backgroundMusic then
-      backgroundMusic:stop()
-    end
+    if Game and Game.audioPool then Game.audioPool:play("gameover", player.x, player.y) end
+    if Game and Game.backgroundMusic then Game.backgroundMusic:stop() end
+    if Game and Game.bossMusic then Game.bossMusic:stop() end
 
     -- Switch to game over state with new high score flag
     if stateManager then
@@ -1479,9 +1502,7 @@ function PlayingState:screenBomb()
   -- Big camera shake for bomb
   self.camera:shake(0.5, 10)
 
-  if explosionSound and playPositionalSound then
-    playPositionalSound(explosionSound, player.x, player.y)
-  end
+  if Game and Game.audioPool then Game.audioPool:play("explosion", player.x, player.y) end
 end
 
 function PlayingState:createPowerupText(text, x, y, color)
@@ -2304,14 +2325,9 @@ function PlayingState:spawnBoss()
   self.bossDefeatNotified = false
   logger.info("Boss spawned: %s at level %d", bossType, currentLevel)
 
-  -- Play boss music if available
-  if bossMusic then
-    if backgroundMusic then
-      backgroundMusic:stop()
-    end
-    bossMusic:setLooping(true)
-    bossMusic:setVolume(musicVolume * masterVolume)
-    bossMusic:play()
+  -- Crossfade to boss music if available
+  if self.music and self.music.boss then
+    self:musicToBoss()
   end
 end
 
@@ -2429,9 +2445,7 @@ function PlayingState:executeBossAttack(attackType, dt)
         local angle = i * angleStep
         self:createBossLaser(boss.x, boss.y + boss.size / 2, angle)
       end
-      if laserSound and playPositionalSound then
-        playPositionalSound(laserSound, boss.x, boss.y + boss.size / 2)
-      end
+      if Game and Game.audioPool then Game.audioPool:play("laser", boss.x, boss.y + boss.size / 2) end
     end
     if boss.attackTimer > 0.5 then
       self:endBossAttack(2)
@@ -2587,9 +2601,8 @@ function PlayingState:checkGameConditions()
     logger.info("Level %d started", currentLevel)
 
     -- Return to normal music
-    if bossMusic and backgroundMusic then
-      bossMusic:stop()
-      backgroundMusic:play()
+    if self.music and self.music.bg and self.music.boss then
+      self:musicToBackground()
     end
 
     -- If we just left level 1, stop the video background
@@ -2613,12 +2626,9 @@ function PlayingState:checkGameConditions()
     self:saveGameStats()
 
     gameState = "gameOver"
-    if victorySound and playPositionalSound then
-      playPositionalSound(victorySound, player.x, player.y)
-    end
-    if backgroundMusic then
-      backgroundMusic:stop()
-    end
+    if Game and Game.audioPool then Game.audioPool:play("victory", player.x, player.y) end
+    if Game and Game.backgroundMusic then Game.backgroundMusic:stop() end
+    if Game and Game.bossMusic then Game.bossMusic:stop() end
 
     -- Switch to game over state with new high score flag
     if stateManager then
@@ -2663,9 +2673,7 @@ function PlayingState:showNewHighScoreNotification()
   })
 
   -- Play a special sound if available
-  if powerupSound and playPositionalSound then
-    playPositionalSound(powerupSound, self.screenWidth / 2, 200)
-  end
+  if Game and Game.audioPool then Game.audioPool:play("powerup", self.screenWidth / 2, 200) end
 end
 
 function PlayingState:updatePerformanceMetrics()
