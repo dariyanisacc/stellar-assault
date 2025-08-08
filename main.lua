@@ -5,14 +5,18 @@
 --   * Uses AssetManager for all fonts, images and sounds
 ------------------------------------------------------------------------------
 
--- Add ./src/ to Lua’s module search path BEFORE any require calls
-if not package.path:match("src/%.lua") then
-  package.path = table.concat({
-    package.path,
-    "src/?.lua", -- e.g. src/lunajson.lua
-    "src/?/init.lua", -- e.g. src/lunajson/init.lua
-  }, ";")
+-- Make module resolution robust across environments. We support both
+-- `require("src.*")` and plain `require("states.*")` by ensuring the
+-- root ("?.lua"/"?/init.lua") is present, as well as the "src/" forms.
+local function ensure_path(p)
+  if not package.path:find(p, 1, true) then
+    package.path = p .. ";" .. package.path
+  end
 end
+ensure_path("?.lua")
+ensure_path("?/init.lua")
+ensure_path("src/?.lua")
+ensure_path("src/?/init.lua")
 
 -- ---------------------------------------------------------------------------
 -- Core modules (wrapped in error handler)
@@ -328,7 +332,10 @@ function love.load()
 
   loadFonts()
   loadAudio()
- 
+  -- Background
+  if initStarfield then
+    initStarfield()
+  end
 
   -- Images / sprites loaded via AssetManager
   Game.playerShips = {
@@ -370,5 +377,79 @@ do
       local stamp = os.date("%Y%m%d_%H%M%S")
       love.filesystem.write(string.format("crash_%s.log", stamp), err)
     end
+  end
+end
+
+-- ---------------------------------------------------------------------------
+-- Frame loop and input routing
+-- ---------------------------------------------------------------------------
+function love.update(dt)
+  -- Fixed timestep update for deterministic simulation
+  accumulator = accumulator + dt
+  while accumulator >= FIXED_DT do
+    if stateManager and stateManager.update then
+      stateManager:update(FIXED_DT)
+    end
+    if updateStarfield then
+      updateStarfield(FIXED_DT)
+    end
+    if Game and Game.debugConsole and Game.debugConsole.update then
+      Game.debugConsole:update(FIXED_DT)
+    end
+    accumulator = accumulator - FIXED_DT
+  end
+end
+
+function love.draw()
+  if drawStarfield then
+    drawStarfield()
+  end
+  if stateManager and stateManager.draw then
+    stateManager:draw()
+  end
+  if Game and Game.debugConsole and Game.debugConsole.draw then
+    Game.debugConsole:draw()
+  end
+end
+
+function love.keypressed(key, scancode, isrepeat)
+  updateInputType("keyboard")
+  local consumed = false
+  if Game and Game.debugConsole and Game.debugConsole.keypressed then
+    consumed = Game.debugConsole:keypressed(key, scancode, isrepeat) or false
+  end
+  if not consumed and stateManager and stateManager.keypressed then
+    stateManager:keypressed(key, scancode, isrepeat)
+  end
+end
+
+function love.textinput(t)
+  if Game and Game.debugConsole and Game.debugConsole.textinput then
+    Game.debugConsole:textinput(t)
+  end
+end
+
+function love.gamepadpressed(joystick, button)
+  updateInputType("gamepad")
+  if stateManager and stateManager.gamepadpressed then
+    stateManager:gamepadpressed(joystick, button)
+  end
+end
+
+function love.gamepadreleased(joystick, button)
+  if stateManager and stateManager.gamepadreleased then
+    stateManager:gamepadreleased(joystick, button)
+  end
+end
+
+function love.mousepressed(x, y, button, istouch, presses)
+  if stateManager and stateManager.mousepressed then
+    stateManager:mousepressed(x, y, button, istouch, presses)
+  end
+end
+
+function love.resize(w, h)
+  if stateManager and stateManager.resize then
+    stateManager:resize(w, h)
   end
 end

@@ -7,7 +7,11 @@ local LoadingState = {}
 function LoadingState:enter(params)
   self.nextState = params and params.nextState or "intro"
   self.done = false
-  Game.assetManager.load()
+  -- Preload all discoverable assets. This is safe to call even if
+  -- some asset folders are missing; the AssetManager checks existence.
+  if Game.assetManager and Game.assetManager.loadAll then
+    Game.assetManager.loadAll()
+  end
   self.done = true
   self.timer = 0.2
 end
