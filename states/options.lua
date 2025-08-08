@@ -86,6 +86,8 @@ function OptionsState:enter(params)
     { name = "Music Volume", type = "slider", value = Game.musicVolume or 0.2 },
     { name = "Palette", type = "list", value = paletteIndex },
     { name = "High Contrast", type = "toggle", value = settings.highContrast or false },
+    { name = "BG Parallax", type = "toggle", value = (Persistence.getSettings().bgParallax ~= false) },
+    { name = "BG Dim", type = "toggle", value = (Persistence.getSettings().bgDim ~= false) },
     { name = "Font Size", type = "slider", value = fontStep },
     { name = "Controls", type = "button" },
     { name = "Apply", type = "button" },
@@ -389,6 +391,12 @@ function OptionsState:adjustValue(direction)
     if item.name == "High Contrast" then
       Game.highContrast = item.value
       Persistence.updateSettings({ highContrast = Game.highContrast })
+    elseif item.name == "BG Parallax" then
+      Game.bgParallax = item.value
+      Persistence.updateSettings({ bgParallax = Game.bgParallax })
+    elseif item.name == "BG Dim" then
+      Game.bgDim = item.value
+      Persistence.updateSettings({ bgDim = Game.bgDim })
     end
   elseif item.type == "slider" then
     if item.name == "Font Size" then
@@ -432,13 +440,18 @@ function OptionsState:adjustValue(direction)
 end
 
 function OptionsState:applySettings()
+  local function itemByName(name)
+    for _, it in ipairs(self.menuItems) do
+      if it.name == name then return it end
+    end
+  end
   -- Apply resolution
-  local resItem = self.menuItems[1]
+  local resItem = itemByName("Resolution") or self.menuItems[1]
   local resolution = self.resolutions[resItem.value]
   Game.currentResolution = resItem.value
 
   -- Apply display mode
-  local modeItem = self.menuItems[2]
+  local modeItem = itemByName("Display Mode") or self.menuItems[2]
   Game.displayMode = self.displayModes[modeItem.value]
 
   -- Apply window settings based on mode
@@ -484,15 +497,21 @@ function OptionsState:applySettings()
     initStarfield()
   end
 
-  local paletteItem = self.menuItems[6]
-  local hcItem = self.menuItems[7]
-  local fsItem = self.menuItems[8]
-  Game.highContrast = hcItem.value
-  Game.fontScale = self._stepToScale(fsItem.value)
+  local paletteItem = itemByName("Palette")
+  local hcItem = itemByName("High Contrast")
+  local fsItem = itemByName("Font Size")
+  local parItem = itemByName("BG Parallax")
+  local dimItem = itemByName("BG Dim")
+  Game.highContrast = hcItem and hcItem.value or Game.highContrast
+  if fsItem then Game.fontScale = self._stepToScale(fsItem.value) end
   applyFontScale()
 
-  Game.paletteName = self.paletteNames[paletteItem.value]:lower()
+  if paletteItem then
+    Game.paletteName = self.paletteNames[paletteItem.value]:lower()
+  end
   applyPalette()
+  if parItem then Game.bgParallax = parItem.value end
+  if dimItem then Game.bgDim = dimItem.value end
 
   -- Save settings
   self:saveSettings()
@@ -509,6 +528,8 @@ function OptionsState:saveSettings()
     fontScale = Game.fontScale,
     palette = Game.paletteName,
     resolutionIndex = Game.currentResolution,
+    bgParallax = Game.bgParallax,
+    bgDim = Game.bgDim,
   })
 end
 

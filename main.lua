@@ -215,6 +215,9 @@ local function initWindow()
   Game.highContrast = settings.highContrast or false
   Game.paletteName  = settings.palette or Game.paletteName or constants.defaultPalette
   Game.currentResolution = settings.resolutionIndex or Game.currentResolution or 3
+  -- Background visual toggles
+  Game.bgParallax   = (settings.bgParallax == nil) and true or settings.bgParallax
+  Game.bgDim        = (settings.bgDim == nil) and true or settings.bgDim
 
   lg.setDefaultFilter("nearest", "nearest")
   lg.setBackgroundColor(0.05, 0.05, 0.10)

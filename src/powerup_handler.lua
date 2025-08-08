@@ -6,9 +6,21 @@ function PowerupHandler.update(state, dt)
   local scene = state.scene or state
   local powerups = scene.powerups or _G.powerups
   local powerupTexts = scene.powerupTexts or _G.powerupTexts
+  local activePowerups = scene.activePowerups or _G.activePowerups or {}
   for i = #powerups, 1, -1 do
     local powerup = powerups[i]
     powerup:update(dt)
+    -- Magnet field: attract powerups toward player while keeping downward drift
+    if activePowerups.magnet and _G.player then
+      local dx = player.x - powerup.x
+      local dy = player.y - powerup.y
+      local dist = math.sqrt(dx * dx + dy * dy)
+      if dist > 0 then
+        local pull = 140 -- attraction speed in px/s
+        powerup.x = powerup.x + (dx / dist) * pull * dt
+        powerup.y = powerup.y + (dy / dist) * pull * dt
+      end
+    end
     if state.entityGrid then
       state.entityGrid:update(powerup)
     end
@@ -86,6 +98,7 @@ function PowerupHandler.spawn(state, x, y, forceType)
   if currentLevel >= 2 then
     table.insert(types, "boost")
     table.insert(types, "coolant")
+    table.insert(types, "magnet")
   end
   if currentLevel >= 3 then
     table.insert(types, "bomb")

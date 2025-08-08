@@ -417,6 +417,18 @@ function PlayingState:handleTimers(dt)
   if self.bossHitFlash > 0 then
     self.bossHitFlash = self.bossHitFlash - dt * 6
   end
+
+  -- Tick down active powerup timers
+  if self.scene and self.scene.activePowerups then
+    for key, t in pairs(self.scene.activePowerups) do
+      t = (t or 0) - dt
+      if t <= 0 then
+        self.scene.activePowerups[key] = nil
+      else
+        self.scene.activePowerups[key] = t
+      end
+    end
+  end
 end
 
 function PlayingState:updateEntities(dt)
@@ -933,7 +945,10 @@ function PlayingState:checkPowerupCollisions()
       if self.entityGrid then
         self.entityGrid:remove(powerup)
       end
-      local _ = self:findEntityIndex(self.scene.powerups, powerup)
+      local idx = self:findEntityIndex(self.scene.powerups, powerup)
+      if idx then
+        table.remove(self.scene.powerups, idx)
+      end
     end
   end
 end
@@ -1119,6 +1134,7 @@ function PlayingState:handleAlienDestruction(alien, index)
     local powerupTypes = { "shield", "rapidFire", "multiShot" }
     if currentLevel >= 2 then
       table.insert(powerupTypes, "boost")
+      table.insert(powerupTypes, "magnet")
     end
     if currentLevel >= 3 then
       table.insert(powerupTypes, "bomb")
@@ -1135,6 +1151,7 @@ function PlayingState:handleAlienDestruction(alien, index)
       boost = "boost",
       bomb = "bomb",
       health = "health",
+      magnet = "magnet",
     }
 
     local oldType = powerupTypes[random(#powerupTypes)]
@@ -1743,6 +1760,18 @@ function PlayingState:drawBackground()
     lg.setColor(1, 1, 1, 1)
     lg.draw(self.bgImage, dx, y1, 0, scale, scale)
     lg.draw(self.bgImage, dx, y2, 0, scale, scale)
+    -- Parallax layer and dim are user-toggleable
+    if Game and Game.bgParallax then
+      local py = (offset * 0.5) % dh
+      local py2 = py - dh
+      lg.setColor(1, 1, 1, 0.35)
+      lg.draw(self.bgImage, dx, py, 0, scale * 1.02, scale * 1.02)
+      lg.draw(self.bgImage, dx, py2, 0, scale * 1.02, scale * 1.02)
+    end
+    if Game and Game.bgDim then
+      lg.setColor(0, 0, 0, 0.18)
+      lg.rectangle("fill", 0, 0, sw, sh)
+    end
     return
   elseif currentLevel == 1 and self.bgVideo then
     local sw, sh = self.screenWidth, self.screenHeight
@@ -1804,6 +1833,13 @@ function PlayingState:drawPlayer()
     lg.setColor(0, 1, 1, 0.3)
     lg.circle("line", player.x, player.y, player.width)
   end
+
+  -- Magnet radius indicator (subtle)
+  if self.scene.activePowerups.magnet then
+    lg.setColor(0.8, 0.2, 1.0, 0.15)
+    local r = 160
+    lg.circle("line", player.x, player.y, r)
+  end
 end
 
 function PlayingState:drawAsteroids()
@@ -1856,6 +1892,9 @@ end
 function PlayingState:drawLasers()
   local playerLaserImg = Game and Game.laserSpritePlayer
   local alienLaserImg = Game and Game.laserSpriteAlien
+  -- Additive blend for a subtle glow
+  local prevBlend, prevAlpha = love.graphics.getBlendMode()
+  love.graphics.setBlendMode("add")
   for _, laser in ipairs(self.scene.lasers) do
     if playerLaserImg then
       lg.setColor(1, 1, 1, 1)
@@ -1918,6 +1957,7 @@ function PlayingState:drawLasers()
     t.pool = self.trailPool
     table.insert(self.scene.explosions, t)
   end
+  love.graphics.setBlendMode(prevBlend or "alpha", prevAlpha)
 end
 
 function PlayingState:drawExplosions()
@@ -1942,13 +1982,16 @@ function PlayingState:drawExplosions()
         end
         lg.pop()
       elseif explosion.isSpark then
-        -- Draw sparks as lines showing motion
+        -- Draw sparks as lines showing motion (additive blend for bright glint)
+        local prevBlend, prevAlpha = lg.getBlendMode()
+        lg.setBlendMode("add")
         lg.setColor(explosion.color[1], explosion.color[2], explosion.color[3], alpha)
         local vx = explosion.vx / 10
         local vy = explosion.vy / 10
         lg.setLineWidth(explosion.size)
         lg.line(explosion.x, explosion.y, explosion.x - vx, explosion.y - vy)
         lg.setLineWidth(1)
+        lg.setBlendMode(prevBlend or "alpha", prevAlpha)
       else
         -- Regular particles
         lg.setColor(explosion.color[1], explosion.color[2], explosion.color[3], alpha)
@@ -2128,6 +2171,7 @@ function PlayingState:drawUI()
         multiShot = { 1, 0.5, 0 },
         boost = { 0, 1, 0 },
         coolant = { 0, 0.5, 1 },
+        magnet = { 0.8, 0.2, 1.0 },
       }
 
       local color = colors[powerup] or { 1, 1, 1 }

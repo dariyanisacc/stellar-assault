@@ -50,6 +50,12 @@ local POWERUP_TYPES = {
     duration = 10, -- cooling boost duration
     description = "Heat Coolant",
   },
+  magnet = {
+    color = { 0.8, 0.2, 1.0 }, -- purple
+    icon = "M",
+    duration = 8,
+    description = "Magnet Field",
+  },
   homingMissile = {
     color = { 1, 1, 1 }, -- white
     icon = "M",
