@@ -22,8 +22,23 @@ ensure_path("src/?/init.lua")
 -- Core modules (wrapped in error handler)
 -- ---------------------------------------------------------------------------
 local function abort(msg)
-  io.stderr:write(msg.."\n"..debug.traceback("",2).."\n")
-  love.event.quit(1)
+  local full = (tostring(msg) or "") .. "\n" .. debug.traceback("", 2) .. "\n"
+  -- Try to persist an early crash log to the save directory
+  local ok, err = pcall(function()
+    local stamp = os.date("%Y%m%d_%H%M%S")
+    local filename = string.format("crash_%s.log", stamp)
+    if love and love.filesystem and love.filesystem.write then
+      love.filesystem.write(filename, full)
+    end
+  end)
+  if not ok then
+    -- If filesystem write fails, still print to stderr
+    full = full .. "\n(log write failed: " .. tostring(err) .. ")\n"
+  end
+  io.stderr:write(full)
+  if love and love.event and love.event.quit then
+    love.event.quit(1)
+  end
 end
 
 xpcall(function()
@@ -372,11 +387,17 @@ do
   local originalRun = love.run
   ---@diagnostic disable-next-line: duplicate-set-field
   function love.run(...)
-    local ok, err = xpcall(originalRun, debug.traceback, ...)
+    local ok, res = xpcall(originalRun, debug.traceback, ...)
     if not ok then
       local stamp = os.date("%Y%m%d_%H%M%S")
-      love.filesystem.write(string.format("crash_%s.log", stamp), err)
+      love.filesystem.write(string.format("crash_%s.log", stamp), res)
+      -- Exit cleanly after logging instead of returning nil
+      return function()
+        return 1
+      end
     end
+    -- On success, return the function that Love expects and provided
+    return res
   end
 end
 
