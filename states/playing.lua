@@ -1037,8 +1037,12 @@ function PlayingState:handleAsteroidDestruction(asteroid, index)
         isFragment = true, -- Mark as fragment for special handling
         tag = "asteroid",
       }
-      -- Keep the same sprite as the parent when available
-      if asteroid.sprite then fragment.sprite = asteroid.sprite end
+      -- Randomize fragment sprite for variety; fallback to parent sprite
+      if Game and Game.asteroidSprites and #Game.asteroidSprites > 0 then
+        fragment.sprite = Game.asteroidSprites[random(#Game.asteroidSprites)]
+      elseif asteroid.sprite then
+        fragment.sprite = asteroid.sprite
+      end
       table.insert(self.scene.asteroids, fragment)
     end
 
@@ -1311,12 +1315,17 @@ function PlayingState:createExplosion(x, y, size)
     particle.rotation = random() * pi * 2
     particle.rotationSpeed = (random() - 0.5) * 5
     particle.isDebris = true -- Mark as debris for special rendering
-    particle.color = {
-      random(0.4, 0.7), -- Grayish colors for rock debris
-      random(0.4, 0.7),
-      random(0.4, 0.7),
-      1,
-    }
+    if Game and Game.debrisSprites and #Game.debrisSprites > 0 then
+      particle.sprite = Game.debrisSprites[random(#Game.debrisSprites)]
+      particle.color = { 1, 1, 1, 1 }
+    else
+      particle.color = {
+        random(0.4, 0.7), -- Grayish colors for rock debris
+        random(0.4, 0.7),
+        random(0.4, 0.7),
+        1,
+      }
+    end
     particle.pool = self.debrisPool
     table.insert(self.scene.explosions, particle)
     explosion.debrisSpawned = explosion.debrisSpawned + 1
@@ -1855,8 +1864,8 @@ function PlayingState:drawLasers()
       local sy = (laser.height or 16) / math.max(1, ih)
       local angle = 0
       if laser.vx and laser.vy then
-        -- Align roughly with velocity; assume texture is vertical
-        angle = math.atan2(laser.vy, laser.vx) - math.pi / 2
+        -- Align with velocity; assume texture is vertical. LuaJIT supports atan(y, x).
+        angle = (math.atan2 and math.atan2(laser.vy, laser.vx) or math.atan(laser.vy, laser.vx)) - math.pi / 2
       end
       lg.draw(playerLaserImg, laser.x, laser.y, angle, sx, sy, iw / 2, ih / 2)
     else
@@ -1887,7 +1896,7 @@ function PlayingState:drawLasers()
       local sy = (laser.height or 16) / math.max(1, ih)
       local angle = 0
       if laser.vx and laser.vy then
-        angle = math.atan2(laser.vy, laser.vx) - math.pi / 2
+        angle = (math.atan2 and math.atan2(laser.vy, laser.vx) or math.atan(laser.vy, laser.vx)) - math.pi / 2
       end
       lg.draw(alienLaserImg, laser.x, laser.y, angle, sx, sy, iw / 2, ih / 2)
     else
@@ -1918,18 +1927,19 @@ function PlayingState:drawExplosions()
       local alpha = explosion.color and explosion.color[4] or (explosion.life / explosion.maxLife)
 
       if explosion.isDebris then
-        -- Draw debris as rotating rectangles
+        -- Draw debris as small bursts; prefer Kenny burst sprites if available
         lg.push()
         lg.translate(explosion.x, explosion.y)
         lg.rotate(explosion.rotation or 0)
-        lg.setColor(explosion.color[1], explosion.color[2], explosion.color[3], alpha)
-        lg.rectangle(
-          "fill",
-          -explosion.size / 2,
-          -explosion.size / 2,
-          explosion.size,
-          explosion.size
-        )
+        if explosion.sprite then
+          local iw, ih = explosion.sprite:getWidth(), explosion.sprite:getHeight()
+          local s = (explosion.size * 2) / math.max(1, math.max(iw, ih))
+          lg.setColor(1, 1, 1, alpha)
+          lg.draw(explosion.sprite, 0, 0, 0, s, s, iw / 2, ih / 2)
+        else
+          lg.setColor(explosion.color[1], explosion.color[2], explosion.color[3], alpha)
+          lg.rectangle("fill", -explosion.size / 2, -explosion.size / 2, explosion.size, explosion.size)
+        end
         lg.pop()
       elseif explosion.isSpark then
         -- Draw sparks as lines showing motion
@@ -1968,7 +1978,12 @@ function PlayingState:drawExplosions()
         d.rotation = random() * pi * 2
         d.rotationSpeed = (random() - 0.5) * 5
         d.isDebris = true
-        d.color = { 1, random(0.5, 1), 0 }
+        if Game and Game.debrisSprites and #Game.debrisSprites > 0 then
+          d.sprite = Game.debrisSprites[random(#Game.debrisSprites)]
+          d.color = { 1, 1, 1, 1 }
+        else
+          d.color = { 1, random(0.5, 1), 0 }
+        end
         d.pool = self.debrisPool
         table.insert(self.scene.explosions, d)
         explosion.debrisSpawned = explosion.debrisSpawned + 1

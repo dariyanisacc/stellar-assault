@@ -518,6 +518,28 @@ function love.load()
     end
   end
 
+  -- Debris shards: load Kenny burst sprites for explosion particles
+  do
+    Game.debrisSprites = {}
+    local names = {
+      "laserBlue_burst.png",
+      "laserPink_burst.png",
+      "laserGreen_burst.png",
+      "laserYellow_burst.png",
+      "laserBeige_burst.png",
+    }
+    for _, n in ipairs(names) do
+      local p = "assets/kenny assets/Lasers/" .. n
+      if lf.getInfo(p, "file") then
+        local ok, img = pcall(function() return AssetManager.getImage(p) end)
+        if ok and img then
+          if img.setFilter then img:setFilter("linear", "linear") end
+          table.insert(Game.debrisSprites, img)
+        end
+      end
+    end
+  end
+
   -- Back-compat globals for modules expecting these names
   _G.playerShips = Game.playerShips
   _G.enemyShips  = Game.enemyShips
