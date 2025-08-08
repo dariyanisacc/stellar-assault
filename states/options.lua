@@ -6,7 +6,9 @@ local Game = require("src.game")
 
 local OptionsState = {}
 
-function OptionsState:enter()
+function OptionsState:enter(params)
+  -- Remember where to return when opened from another state (e.g., pause)
+  self.returnTo = type(params) == 'table' and params.returnTo or nil
   self.selection = 1
   self.screenWidth = lg.getWidth()
   self.screenHeight = lg.getHeight()
@@ -290,16 +292,27 @@ function OptionsState:keypressed(key)
       if item.name == "Apply" then
         self:applySettings()
       elseif item.name == "Back" then
-        saveSettings()
-        stateManager:switch("menu")
+        self:saveSettings()
+        if self.returnTo then
+          -- Return to the state that opened Options
+          stateManager:pop()
+        else
+          -- Default behavior: go back to main menu
+          stateManager:switch("menu")
+        end
       elseif item.name == "Controls" then
-        stateManager:switch("options_controls")
+        stateManager:push("options_controls")
       end
     elseif item.type == "toggle" or item.type == "list" then
       self:adjustValue(1)
     end
   elseif key == "escape" then
-    stateManager:switch("menu")
+    self:saveSettings()
+    if self.returnTo then
+      stateManager:pop()
+    else
+      stateManager:switch("menu")
+    end
   end
 end
 
@@ -449,11 +462,20 @@ function OptionsState:applySettings()
   applyPalette()
 
   -- Save settings
-  saveSettings()
+  self:saveSettings()
+end
+
+-- Persist current global settings to disk
+function OptionsState:saveSettings()
   Persistence.updateSettings({
+    masterVolume = Game.masterVolume,
+    sfxVolume = Game.sfxVolume,
+    musicVolume = Game.musicVolume,
+    displayMode = Game.displayMode,
     highContrast = Game.highContrast,
     fontScale = Game.fontScale,
     palette = Game.paletteName,
+    resolutionIndex = Game.currentResolution,
   })
 end
 

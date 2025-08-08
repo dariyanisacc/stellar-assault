@@ -5,6 +5,11 @@ local Game = {
   isPaused = false,
   isGameOver = false,
   overReason = nil,
+  -- Input tuning (used by PlayerControl and main callbacks)
+  gamepadDeadzone = 0.35,           -- analog stick magnitude threshold
+  gamepadTriggerThreshold = 0.75,   -- right-trigger fire threshold
+  gamepadActiveTimer = 0,           -- seconds remaining that stick is considered active
+  gamepadActiveTimeout = 1.0,       -- how long after movement we trust the stick
 }
 
 function Game:reset()

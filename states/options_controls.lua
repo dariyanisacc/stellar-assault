@@ -187,14 +187,14 @@ function OptionsControls:keypressed(key)
           Game.menuConfirmSound:play()
         end
       elseif item.name == "Back" then
-        stateManager:switch("options")
+        stateManager:pop()
         if Game.menuSelectSound then
           Game.menuSelectSound:play()
         end
       end
     end
   elseif key == "escape" then
-    stateManager:switch("options")
+    stateManager:pop()
   end
 end
 

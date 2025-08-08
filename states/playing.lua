@@ -2055,6 +2055,12 @@ function PlayingState:drawUI()
 end
 
 function PlayingState:keypressed(key, scancode, isrepeat)
+  -- Pause toggle via configured binding (default: escape)
+  if self.keyBindings and key == (self.keyBindings.pause or "escape") then
+    if Game and Game.pause then Game:pause() end
+    stateManager:push("pause")
+    return
+  end
   if self.input then
     self.input:keypressed(key, scancode, isrepeat)
   end
@@ -2067,6 +2073,12 @@ function PlayingState:keyreleased(key, scancode)
 end
 
 function PlayingState:gamepadpressed(joystick, button)
+  -- Pause with gamepad binding (default: start)
+  if self.gamepadBindings and button == (self.gamepadBindings.pause or "start") then
+    if Game and Game.pause then Game:pause() end
+    stateManager:push("pause")
+    return
+  end
   if self.input then
     self.input:gamepadpressed(joystick, button)
   end

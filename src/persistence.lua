@@ -91,7 +91,8 @@ local defaultSaveData = {
     sfxVolume     = 1.0,
     musicVolume   = 0.2,
     selectedShip  = "alpha",
-    displayMode   = "windowed",
+    displayMode   = "fullscreen",   -- default first run: fullscreen
+    resolutionIndex = 3,             -- default 1280x720 for windowed/fullscreen
     highContrast  = false,
     palette       = constants.defaultPalette,
   },

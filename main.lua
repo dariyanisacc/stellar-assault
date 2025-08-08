@@ -119,6 +119,74 @@ Game.inputHints = {
   },
 }
 
+-- Common resolution list used by window helpers
+local RES_LIST = {
+  { 800, 600 },
+  { 1024, 768 },
+  { 1280, 720 },
+  { 1366, 768 },
+  { 1920, 1080 },
+  { 2560, 1440 },
+}
+
+-- Helper: apply Game.displayMode and Game.currentResolution to window
+local function setWindowFromGame()
+  local minw, minh = constants.window.minWidth, constants.window.minHeight
+  local mode = Game.displayMode or "fullscreen"
+  if mode == "borderless" then
+    local dw, dh = lw.getDesktopDimensions()
+    lw.setMode(dw, dh, {
+      fullscreen = false,
+      borderless = true,
+      resizable = false,
+      vsync = 1,
+      display = 1,
+      minwidth = minw,
+      minheight = minh,
+    })
+    lw.setPosition(0, 0)
+    lw.maximize()
+  elseif mode == "fullscreen" then
+    local idx = math.max(1, math.min(#RES_LIST, Game.currentResolution or 3))
+    local rw, rh = RES_LIST[idx][1], RES_LIST[idx][2]
+    lw.setMode(rw, rh, {
+      fullscreen = true,
+      fullscreentype = "exclusive",
+      resizable = false,
+      minwidth = minw,
+      minheight = minh,
+    })
+  else -- windowed
+    local idx = math.max(1, math.min(#RES_LIST, Game.currentResolution or 3))
+    local rw, rh = RES_LIST[idx][1], RES_LIST[idx][2]
+    lw.setMode(rw, rh, {
+      fullscreen = false,
+      borderless = false,
+      resizable = true,
+      minwidth = minw,
+      minheight = minh,
+    })
+  end
+end
+
+-- Toggle between fullscreen and windowed, then persist settings
+local function toggleFullscreen()
+  if Game.displayMode == "windowed" then
+    Game.displayMode = "fullscreen"
+  else
+    -- Treat both fullscreen and borderless as fullscreen for toggling
+    Game.displayMode = "windowed"
+  end
+  setWindowFromGame()
+  if Persistence and Persistence.updateSettings then
+    Persistence.updateSettings({
+      displayMode = Game.displayMode,
+      resolutionIndex = Game.currentResolution,
+    })
+  end
+end
+_G.toggleFullscreen = toggleFullscreen
+
 -- ---------------------------------------------------------------------------
 -- Helper: track last input device
 -- ---------------------------------------------------------------------------
@@ -134,14 +202,21 @@ end
 -- ---------------------------------------------------------------------------
 local function initWindow()
   lw.setTitle("Stellar Assault")
-  lw.setMode(800, 600, {
-    fullscreen = false,
-    resizable = true,
-    minwidth = constants.window.minWidth,
-    minheight = constants.window.minHeight,
-  })
+
+  -- Load saved settings to decide display mode
+  local settings = Persistence and Persistence.getSettings and Persistence.getSettings() or {}
+  Game.masterVolume = settings.masterVolume or Game.masterVolume
+  Game.sfxVolume    = settings.sfxVolume or Game.sfxVolume
+  Game.musicVolume  = settings.musicVolume or Game.musicVolume
+  Game.displayMode  = settings.displayMode or Game.displayMode or "fullscreen"
+  Game.fontScale    = settings.fontScale or Game.fontScale or 1
+  Game.highContrast = settings.highContrast or false
+  Game.paletteName  = settings.palette or Game.paletteName or constants.defaultPalette
+  Game.currentResolution = settings.resolutionIndex or Game.currentResolution or 3
+
   lg.setDefaultFilter("nearest", "nearest")
   lg.setBackgroundColor(0.05, 0.05, 0.10)
+  setWindowFromGame()
 end
 
 -- ---------------------------------------------------------------------------
@@ -347,6 +422,10 @@ function love.load()
 
   loadFonts()
   loadAudio()
+  -- Apply saved preferences to fonts, palette, and audio volumes
+  if applyFontScale then applyFontScale() end
+  if applyPalette then applyPalette() end
+  if updateAudioVolumes then updateAudioVolumes() end
   -- Background
   if initStarfield then
     initStarfield()
@@ -406,6 +485,10 @@ end
 -- ---------------------------------------------------------------------------
 function love.update(dt)
   -- Fixed timestep update for deterministic simulation
+  -- Also decay any recent gamepad axis activity timer
+  if Game and Game.gamepadActiveTimer and Game.gamepadActiveTimer > 0 then
+    Game.gamepadActiveTimer = math.max(0, Game.gamepadActiveTimer - dt)
+  end
   accumulator = accumulator + dt
   while accumulator >= FIXED_DT do
     if stateManager and stateManager.update then
@@ -435,12 +518,30 @@ end
 
 function love.keypressed(key, scancode, isrepeat)
   updateInputType("keyboard")
+  -- Global fullscreen toggle
+  if key == "f11" then
+    toggleFullscreen()
+    return
+  end
   local consumed = false
   if Game and Game.debugConsole and Game.debugConsole.keypressed then
     consumed = Game.debugConsole:keypressed(key, scancode, isrepeat) or false
   end
   if not consumed and stateManager and stateManager.keypressed then
     stateManager:keypressed(key, scancode, isrepeat)
+  end
+end
+
+-- Key release routing was missing, causing "stuck" inputs.
+function love.keyreleased(key, scancode)
+  updateInputType("keyboard")
+  -- Debug console typically ignores key releases, but keep the hook symmetrical.
+  local consumed = false
+  if Game and Game.debugConsole and Game.debugConsole.keyreleased then
+    consumed = Game.debugConsole:keyreleased(key, scancode) or false
+  end
+  if not consumed and stateManager and stateManager.keyreleased then
+    stateManager:keyreleased(key, scancode)
   end
 end
 
@@ -463,6 +564,17 @@ function love.gamepadreleased(joystick, button)
   end
 end
 
+-- Track analog stick activity to suppress drift unless there is recent input
+function love.gamepadaxis(joystick, axis, value)
+  local dz = (Game and Game.gamepadDeadzone) or 0.35
+  if math.abs(value or 0) > dz then
+    updateInputType("gamepad")
+    if Game then
+      Game.gamepadActiveTimer = (Game.gamepadActiveTimeout or 1.0)
+    end
+  end
+end
+
 function love.mousepressed(x, y, button, istouch, presses)
   if stateManager and stateManager.mousepressed then
     stateManager:mousepressed(x, y, button, istouch, presses)
@@ -472,5 +584,13 @@ end
 function love.resize(w, h)
   if stateManager and stateManager.resize then
     stateManager:resize(w, h)
+  end
+end
+
+-- Clear held inputs on focus loss to avoid sticky movement/shoot
+function love.focus(f)
+  if not f and stateManager and stateManager.current and stateManager.current.keys then
+    local keys = stateManager.current.keys
+    for k in pairs(keys) do keys[k] = false end
   end
 end

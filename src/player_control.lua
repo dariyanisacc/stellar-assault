@@ -48,6 +48,27 @@ function PlayerControl.update(state, dt)
   if not _G.player then
     return
   end
+  
+  -- Sticky-key guard: if a key is latched in state.keys but the
+  -- physical key isn't held anymore (missed keyreleased or focus
+  -- change), clear it to prevent perpetual movement/shooting.
+  if love and love.keyboard and love.keyboard.isDown then
+    local b = kbd()
+    local function clearIfReleased(action, keyname)
+      local k = keyname
+      if state.keys[action] and type(k) == "string" and k ~= "" then
+        if not love.keyboard.isDown(k) then
+          state.keys[action] = false
+        end
+      end
+    end
+    clearIfReleased("left",  b.left)
+    clearIfReleased("right", b.right)
+    clearIfReleased("up",    b.up)
+    clearIfReleased("down",  b.down)
+    clearIfReleased("shoot", b.shoot)
+    clearIfReleased("boost", b.boost)
+  end
   --------------------------------------------------------------------
   -- Scene‑scoped references (supporting new scene/EC‑style infra) ---
   --------------------------------------------------------------------
@@ -58,26 +79,43 @@ function PlayerControl.update(state, dt)
   --------------------------------------------------------------------
   -- Aggregate input -------------------------------------------------
   --------------------------------------------------------------------
+  -- Aggregate keyboard input first
   local dx, dy = 0, 0
-  if state.keys.left  then dx = dx - 1 end
-  if state.keys.right then dx = dx + 1 end
-  if state.keys.up    then dy = dy - 1 end
-  if state.keys.down  then dy = dy + 1 end
+  local kb_dx, kb_dy = 0, 0
+  if state.keys.left  then kb_dx = kb_dx - 1 end
+  if state.keys.right then kb_dx = kb_dx + 1 end
+  if state.keys.up    then kb_dy = kb_dy - 1 end
+  if state.keys.down  then kb_dy = kb_dy + 1 end
 
   -- Left‑stick on first connected game‑pad
-  local joysticks = love.joystick.getJoysticks()
-  if #joysticks > 0 then
-    local js = joysticks[1]
-    if js:isGamepad() then
-      local jx, jy = js:getGamepadAxis("leftx"), js:getGamepadAxis("lefty")
-      if math.abs(jx) > 0.2 then dx = dx + jx end
-      if math.abs(jy) > 0.2 then dy = dy + jy end
+  -- Only consider analog axes if the gamepad was recently active to avoid drift
+  local useGamepad = _G.Game and Game.lastInputType == "gamepad" and ((Game.gamepadActiveTimer or 0) > 0)
+  local stick_dx, stick_dy = 0, 0
+  if useGamepad and love.joystick and love.joystick.getJoysticks then
+    local joysticks = love.joystick.getJoysticks()
+    if #joysticks > 0 then
+      local js = joysticks[1]
+      if js:isGamepad() then
+        local deadzone = (Game and Game.gamepadDeadzone) or 0.3
+        local fireThresh = (Game and Game.gamepadTriggerThreshold) or 0.75
+        local jx, jy = js:getGamepadAxis("leftx") or 0, js:getGamepadAxis("lefty") or 0
+        if math.abs(jx) > deadzone then stick_dx = jx end
+        if math.abs(jy) > deadzone then stick_dy = jy end
 
-      -- Hold right trigger for continuous fire
-      if js:getGamepadAxis("triggerright") > 0.5 then
-        PlayerControl.shoot(state, dt)
+        -- Hold right trigger for continuous fire (higher threshold to avoid noise)
+        local rt = js:getGamepadAxis("triggerright") or 0
+        if rt > fireThresh then
+          PlayerControl.shoot(state, dt)
+        end
       end
     end
+  end
+
+  -- Keyboard input has priority when pressed; otherwise use stick
+  if kb_dx ~= 0 or kb_dy ~= 0 then
+    dx, dy = kb_dx, kb_dy
+  else
+    dx, dy = stick_dx, stick_dy
   end
 
   --------------------------------------------------------------------
