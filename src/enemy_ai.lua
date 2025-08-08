@@ -170,9 +170,14 @@ function EnemyAI.spawnAsteroid(state)
     width = size * 2,
     height = size * 2,
     rotation = math.random() * math.pi * 2,
-    rotationSpeed = math.random() - 0.5,
+    rotationSpeed = (math.random() - 0.5) * 1.5,
+    vx = (math.random() - 0.5) * 80, -- slight horizontal drift
     tag = "asteroid",
   }
+  -- Assign a random asteroid sprite if available
+  if _G.Game and Game.asteroidSprites and #Game.asteroidSprites > 0 then
+    asteroid.sprite = Game.asteroidSprites[math.random(#Game.asteroidSprites)]
+  end
   table.insert(scene.asteroids or _G.asteroids, asteroid)
   if state.entityGrid then
     state.entityGrid:insert(asteroid)

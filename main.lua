@@ -478,6 +478,46 @@ function love.load()
     end
   end
 
+  -- Kenny assets: load nicer laser sprites if available
+  do
+    local function tryLaser(path)
+      if lf.getInfo(path, "file") then
+        local ok, img = pcall(function() return AssetManager.getImage(path) end)
+        if ok and img and img.setFilter then img:setFilter("linear", "linear") end
+        return ok and img or nil
+      end
+      return nil
+    end
+    Game.laserSpritePlayer =
+      tryLaser("assets/kenny assets/Lasers/laserBlue2.png")
+      or tryLaser("assets/kenny assets/Lasers/laserBlue3.png")
+      or nil
+    Game.laserSpriteAlien =
+      tryLaser("assets/kenny assets/Lasers/laserPink2.png")
+      or tryLaser("assets/kenny assets/Lasers/laserPink3.png")
+      or tryLaser("assets/kenny assets/Lasers/laserGreen2.png")
+      or nil
+  end
+
+  -- Asteroids: load up to three variant sprites if available
+  do
+    local paths = {
+      "assets/gfx/asteroid 1.png",
+      "assets/gfx/asteroid 2.png",
+      "assets/gfx/asteroid 3.png",
+    }
+    Game.asteroidSprites = {}
+    for _, p in ipairs(paths) do
+      if lf.getInfo(p, "file") then
+        local ok, img = pcall(function() return AssetManager.getImage(p) end)
+        if ok and img then
+          if img.setFilter then img:setFilter("linear", "linear") end
+          table.insert(Game.asteroidSprites, img)
+        end
+      end
+    end
+  end
+
   -- Back-compat globals for modules expecting these names
   _G.playerShips = Game.playerShips
   _G.enemyShips  = Game.enemyShips

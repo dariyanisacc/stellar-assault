@@ -21,7 +21,8 @@ function PowerupHandler.update(state, dt)
   end
   for i = #powerupTexts, 1, -1 do
     local text = powerupTexts[i]
-    text.y = text.y - 50 * dt
+    -- Float text downward as requested
+    text.y = text.y + 50 * dt
     text.life = text.life - dt
     if text.life <= 0 then
       table.remove(powerupTexts, i)

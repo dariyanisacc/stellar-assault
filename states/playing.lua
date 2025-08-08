@@ -7,6 +7,7 @@ local logger = require("src.logger")
 local Powerup = require("src.entities.powerup")
 local Persistence = require("src.persistence")
 local Game = require("src.game")
+local AssetManager = require("src.asset_manager")
 
 ------------------------------------------------------------------
 -- 🔧 BACKWARD-COMPATIBILITY PATCH
@@ -145,6 +146,47 @@ function PlayingState:enter(params)
     backgroundMusic:setVolume(musicVolume * masterVolume)
     backgroundMusic:play()
   end
+
+  -- Level 1 background preference: PNG (scrolling) > video > fallback
+  self.bgImage, self.bgVideo = nil, nil
+  self.bgOffsetY, self.bgScale, self.bgDrawW, self.bgDrawH = 0, 1, 0, 0
+  self.bgScrollSpeed = 30 -- px/s slow drift
+  if currentLevel == 1 then
+    local pngPath = "assets/gfx/background space vid loop.png"
+    if love.filesystem.getInfo(pngPath, "file") then
+      local ok, imgOrErr = pcall(function()
+        return AssetManager.getImage(pngPath)
+      end)
+      if ok and imgOrErr then
+        self.bgImage = imgOrErr
+        if self.bgImage.setFilter then self.bgImage:setFilter("linear", "linear") end
+      else
+        logger.warn("Failed to load background image: %s", pngPath)
+      end
+    else
+      -- Fallback to the video if PNG isn't present
+      local vidPath = "assets/gfx/background space vid loop.ogv"
+      local info = love.filesystem.getInfo(vidPath, "file")
+      if info then
+        local ok, vidOrErr = pcall(function()
+          return AssetManager.getVideo(vidPath)
+        end)
+        if ok and vidOrErr then
+          self.bgVideo = vidOrErr
+          if self.bgVideo.setFilter then self.bgVideo:setFilter("linear", "linear") end
+          if self.bgVideo.setLooping then self.bgVideo:setLooping(true) end
+          if self.bgVideo.getSource then
+            local src = self.bgVideo:getSource()
+            if src and src.setVolume then src:setVolume(0) end
+            if src and src.setLooping then src:setLooping(true) end
+          end
+          if self.bgVideo.play then self.bgVideo:play() end
+        else
+          logger.warn("Failed to load background video: %s", vidPath)
+        end
+      end
+    end
+  end
 end
 
 function PlayingState:leave()
@@ -152,6 +194,15 @@ function PlayingState:leave()
   if backgroundMusic then
     backgroundMusic:stop()
   end
+
+  -- Stop background video if active
+  if self.bgVideo then
+    if self.bgVideo.pause then self.bgVideo:pause() end
+    if self.bgVideo.rewind then self.bgVideo:rewind() end
+    self.bgVideo = nil
+  end
+  -- Clear background image refs
+  self.bgImage = nil
 
   -- Release all pooled objects
   if self.scene then
@@ -306,6 +357,18 @@ function PlayingState:update(dt)
   end
 
   self:checkGameConditions()
+
+  -- Update background scroll if using PNG on level 1
+  if currentLevel == 1 and self.bgImage then
+    local iw, ih = self.bgImage:getWidth(), self.bgImage:getHeight()
+    local sw, sh = self.screenWidth, self.screenHeight
+    if iw > 0 and ih > 0 and sw and sh then
+      local scale = math.max(sw / iw, sh / ih)
+      self.bgScale = scale
+      self.bgDrawW, self.bgDrawH = iw * scale, ih * scale
+      self.bgOffsetY = (self.bgOffsetY + (self.bgScrollSpeed or 30) * dt) % (self.bgDrawH > 0 and self.bgDrawH or 1)
+    end
+  end
 end
 
 function PlayingState:handleTimers(dt)
@@ -972,7 +1035,10 @@ function PlayingState:handleAsteroidDestruction(asteroid, index)
         vx = math.cos(angle) * speed,
         vy = math.sin(angle) * speed,
         isFragment = true, -- Mark as fragment for special handling
+        tag = "asteroid",
       }
+      -- Keep the same sprite as the parent when available
+      if asteroid.sprite then fragment.sprite = asteroid.sprite end
       table.insert(self.scene.asteroids, fragment)
     end
 
@@ -1655,7 +1721,39 @@ function PlayingState:drawDebugOverlay()
 end
 
 function PlayingState:drawBackground()
-  -- This would normally draw the starfield
+  -- If on level 1 and a PNG is loaded, draw it scrolling; else try video; else fallback
+  if currentLevel == 1 and self.bgImage then
+    local sw, sh = self.screenWidth, self.screenHeight
+    local dw, dh = self.bgDrawW or sw, self.bgDrawH or sh
+    local scale = self.bgScale or 1
+    local dx = (sw - dw) * 0.5
+    -- Two-tile vertical wrap (scroll downward)
+    local offset = self.bgOffsetY or 0
+    local y1 = offset % dh
+    local y2 = y1 - dh
+    lg.setColor(1, 1, 1, 1)
+    lg.draw(self.bgImage, dx, y1, 0, scale, scale)
+    lg.draw(self.bgImage, dx, y2, 0, scale, scale)
+    return
+  elseif currentLevel == 1 and self.bgVideo then
+    local sw, sh = self.screenWidth, self.screenHeight
+    local vw, vh = 0, 0
+    if self.bgVideo.getDimensions then
+      vw, vh = self.bgVideo:getDimensions()
+    elseif self.bgVideo.getWidth and self.bgVideo.getHeight then
+      vw, vh = self.bgVideo:getWidth(), self.bgVideo:getHeight()
+    end
+    if vw > 0 and vh > 0 then
+      local scale = math.max(sw / vw, sh / vh)
+      local dx = (sw - vw * scale) * 0.5
+      local dy = (sh - vh * scale) * 0.5
+      lg.setColor(1, 1, 1, 1)
+      lg.draw(self.bgVideo, dx, dy, 0, scale, scale)
+      return
+    end
+  end
+
+  -- Fallback simple background tint
   lg.setColor(0.1, 0.1, 0.2)
   lg.rectangle("fill", 0, 0, self.screenWidth, self.screenHeight)
 end
@@ -1700,12 +1798,19 @@ function PlayingState:drawPlayer()
 end
 
 function PlayingState:drawAsteroids()
-  lg.setColor(0.7, 0.5, 0.3)
   for _, asteroid in ipairs(self.scene.asteroids) do
     lg.push()
     lg.translate(asteroid.x, asteroid.y)
     lg.rotate(asteroid.rotation)
-    lg.circle("fill", 0, 0, asteroid.size)
+    if asteroid.sprite then
+      local iw, ih = asteroid.sprite:getWidth(), asteroid.sprite:getHeight()
+      local scale = (asteroid.size * 2) / math.max(1, math.max(iw, ih))
+      lg.setColor(1, 1, 1, 1)
+      lg.draw(asteroid.sprite, 0, 0, 0, scale, scale, iw / 2, ih / 2)
+    else
+      lg.setColor(0.7, 0.5, 0.3, 1)
+      lg.circle("fill", 0, 0, asteroid.size)
+    end
     lg.pop()
   end
 end
@@ -1740,24 +1845,29 @@ function PlayingState:drawAliens()
 end
 
 function PlayingState:drawLasers()
+  local playerLaserImg = Game and Game.laserSpritePlayer
+  local alienLaserImg = Game and Game.laserSpriteAlien
   for _, laser in ipairs(self.scene.lasers) do
-    if laser.isAlien then
-      lg.setColor(constants.laser.alienColor)
+    if playerLaserImg then
+      lg.setColor(1, 1, 1, 1)
+      local iw, ih = playerLaserImg:getWidth(), playerLaserImg:getHeight()
+      local sx = (laser.width or 6) / math.max(1, iw)
+      local sy = (laser.height or 16) / math.max(1, ih)
+      local angle = 0
+      if laser.vx and laser.vy then
+        -- Align roughly with velocity; assume texture is vertical
+        angle = math.atan2(laser.vy, laser.vx) - math.pi / 2
+      end
+      lg.draw(playerLaserImg, laser.x, laser.y, angle, sx, sy, iw / 2, ih / 2)
     else
       lg.setColor(constants.laser.playerColor)
+      lg.rectangle("fill", laser.x - laser.width / 2, laser.y - laser.height / 2, laser.width, laser.height)
     end
-    lg.rectangle(
-      "fill",
-      laser.x - laser.width / 2,
-      laser.y - laser.height / 2,
-      laser.width,
-      laser.height
-    )
 
     -- Emit trail particle
     local t = self.trailPool:get()
     t.x = laser.x
-    t.y = laser.y + laser.height / 2
+    t.y = laser.y + (laser.height or 12) / 2
     t.vx = 0
     t.vy = 30
     t.life = 0.3
@@ -1770,19 +1880,25 @@ function PlayingState:drawLasers()
   end
 
   for _, laser in ipairs(self.scene.alienLasers) do
-    lg.setColor(constants.laser.alienColor)
-    lg.rectangle(
-      "fill",
-      laser.x - laser.width / 2,
-      laser.y - laser.height / 2,
-      laser.width,
-      laser.height
-    )
+    if alienLaserImg then
+      lg.setColor(1, 1, 1, 1)
+      local iw, ih = alienLaserImg:getWidth(), alienLaserImg:getHeight()
+      local sx = (laser.width or 6) / math.max(1, iw)
+      local sy = (laser.height or 16) / math.max(1, ih)
+      local angle = 0
+      if laser.vx and laser.vy then
+        angle = math.atan2(laser.vy, laser.vx) - math.pi / 2
+      end
+      lg.draw(alienLaserImg, laser.x, laser.y, angle, sx, sy, iw / 2, ih / 2)
+    else
+      lg.setColor(constants.laser.alienColor)
+      lg.rectangle("fill", laser.x - laser.width / 2, laser.y - laser.height / 2, laser.width, laser.height)
+    end
 
-    -- Emit trail particle for alien self.scene.lasers
+    -- Emit trail particle for alien lasers
     local t = self.trailPool:get()
     t.x = laser.x
-    t.y = laser.y - laser.height / 2
+    t.y = laser.y - (laser.height or 12) / 2
     t.vx = 0
     t.vy = -30
     t.life = 0.3
@@ -2415,6 +2531,17 @@ function PlayingState:checkGameConditions()
     if bossMusic and backgroundMusic then
       bossMusic:stop()
       backgroundMusic:play()
+    end
+
+    -- If we just left level 1, stop the video background
+    if currentLevel > 1 then
+      if self.bgVideo then
+        if self.bgVideo.pause then self.bgVideo:pause() end
+        if self.bgVideo.rewind then self.bgVideo:rewind() end
+        self.bgVideo = nil
+      end
+      self.bgImage = nil
+      self.bgOffsetY = 0
     end
   end
 

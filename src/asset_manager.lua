@@ -13,6 +13,7 @@ local AssetManager = {
   fonts   = {},   -- [key]            = love.Font          (key = "<path|default>:<size>")
   sounds  = {},   -- [key]            = love.Source        (key = "<path>:<static|stream>")
   atlases = {},   -- reserved for future use
+  videos  = {},   -- [normalizedPath] = love.Video
 }
 
 -- ---------------------------------------------------------------------------
@@ -55,6 +56,21 @@ function AssetManager.getSound(path, kind)
   return cache(AssetManager.sounds, key, function() return la.newSource(path, kind) end)
 end
 
+---Get and cache a video at `path`.
+---@param path string
+---@return love.Video
+function AssetManager.getVideo(path)
+  assertFile(path, "Video")
+  return cache(AssetManager.videos, path, function()
+    -- In LÖVE 11.x, videos are created via love.graphics.newVideo
+    local ok, vid = pcall(function() return lg.newVideo(path) end)
+    if not ok then
+      error("Failed to load video: " .. tostring(path) .. " (" .. tostring(vid) .. ")", 2)
+    end
+    return vid
+  end)
+end
+
 -- ---------------------------------------------------------------------------
 -- Bulk loader (optional—pre-caches everything in /assets)
 -- ---------------------------------------------------------------------------
@@ -62,6 +78,7 @@ local exts = {
   img  = { png=true, jpg=true, jpeg=true },
   sfx  = { ogg=true, wav=true, mp3=true, flac=true },
   font = { ttf=true, otf=true },
+  video= { ogv=true },
 }
 
 local function scanDir(dir)
@@ -83,6 +100,9 @@ local function scanDir(dir)
             elseif exts.sfx[ext] then
               local kind = (info.size and info.size > 256 * 1024) and "stream" or "static"
               AssetManager.getSound(path, kind)
+            elseif exts.video[ext] then
+              -- Videos are typically streamed by the GPU; just cache the handle
+              AssetManager.getVideo(path)
             end
           end
         end
