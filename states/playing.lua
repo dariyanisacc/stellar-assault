@@ -57,6 +57,63 @@ local sin = math.sin
 local cos = math.cos
 local pi = math.pi
 
+-- Collision helpers: normalize to top-left AABB regardless of origin
+local function _rectTopLeft(o)
+  local w = o.width or o.w or o.size or 0
+  local h = o.height or o.h or o.size or 0
+  if o.tag == "enemy" then
+    -- WaveManager enemies use top-left coordinates
+    return o.x, o.y, w, h
+  else
+    -- Most others (player, aliens, lasers, asteroids) are center-based
+    return (o.x - w * 0.5), (o.y - h * 0.5), w, h
+  end
+end
+
+local function aabbMixed(a, b)
+  local ax, ay, aw, ah = _rectTopLeft(a)
+  local bx, by, bw, bh = _rectTopLeft(b)
+  return ax < bx + bw and bx < ax + aw and ay < by + bh and by < ay + ah
+end
+
+-- Swept collision: moving rectangle (mover) vs static (static)
+local function sweptHit(mover, static)
+  local mw = mover.width or mover.w or mover.size or 0
+  local mh = mover.height or mover.h or mover.size or 0
+  if mw <= 0 or mh <= 0 then return false end
+  local prevX = mover.prevX or mover.x
+  local prevY = mover.prevY or mover.y
+  local ax = prevX - mw * 0.5
+  local ay = prevY - mh * 0.5
+  local avx = (mover.x or prevX) - prevX
+  local avy = (mover.y or prevY) - prevY
+  local sx, sy, sw, sh = _rectTopLeft(static)
+  if avx == 0 and avy == 0 then
+    -- Fallback to static AABB when not moving
+    return ax < sx + sw and sx < ax + mw and ay < sy + sh and sy < ay + mh
+  end
+  -- Handle single-axis motion robustly (avoid edge cases in library helper)
+  if avx == 0 then
+    -- Require x-overlap during the sweep
+    if not (ax + mw > sx and sx + sw > ax) then return false end
+    local startY, endY = ay, ay + avy
+    if startY > endY then startY, endY = endY, startY end
+    -- Expand static along Y by mover's height
+    local minY, maxY = sy - mh, sy + sh
+    return not (endY < minY or startY > maxY)
+  elseif avy == 0 then
+    -- Require y-overlap during the sweep
+    if not (ay + mh > sy and sy + sh > ay) then return false end
+    local startX, endX = ax, ax + avx
+    if startX > endX then startX, endX = endX, startX end
+    -- Expand static along X by mover's width
+    local minX, maxX = sx - mw, sx + sw
+    return not (endX < minX or startX > maxX)
+  end
+  local t0 = Collision.sweptAABB(ax, ay, mw, mh, avx, avy, sx, sy, sw, sh)
+  return t0 ~= nil
+end
+
 function PlayingState:enter(params)
   -- Check if we're resuming from pause
   if params and params.resume then
@@ -552,6 +609,8 @@ function PlayingState:updateLasers(dt)
     local laser = self.scene.lasers[i]
 
     -- Update position based on velocity if it exists (for spread shots)
+    -- Record previous position for swept collision tests
+    laser.prevX, laser.prevY = laser.x, laser.y
     if laser.vx and laser.vy then
       laser.x = laser.x + laser.vx * dt
       laser.y = laser.y + laser.vy * dt
@@ -586,6 +645,8 @@ function PlayingState:updateLasers(dt)
     local laser = self.scene.alienLasers[i]
 
     -- Update position based on velocity if it exists (for boss self.scene.lasers)
+    -- Record previous position for swept collision tests
+    laser.prevX, laser.prevY = laser.x, laser.y
     if laser.vx and laser.vy then
       laser.x = laser.x + laser.vx * dt
       laser.y = laser.y + laser.vy * dt
@@ -750,7 +811,7 @@ function PlayingState:checkPlayerCollisions()
   local grid = self.entityGrid
   for _, entity in ipairs(grid:getNearby(player)) do
     if entity.tag == "asteroid" then
-      if Collision.checkAABB(player, entity) then
+      if aabbMixed(player, entity) then
         local idx = self:findEntityIndex(self.scene.asteroids, entity)
         if self.scene.activePowerups.shield then
           self:handleShieldHit(entity, idx or 1)
@@ -759,7 +820,7 @@ function PlayingState:checkPlayerCollisions()
         end
       end
     elseif entity.tag == "alien" then
-      if Collision.checkAABB(player, entity) then
+      if aabbMixed(player, entity) then
         local idx = self:findEntityIndex(self.scene.aliens, entity)
         if self.scene.activePowerups.shield then
           self:handleShieldHit(entity, idx or 1, self.scene.aliens)
@@ -768,7 +829,7 @@ function PlayingState:checkPlayerCollisions()
         end
       end
     elseif entity.tag == "enemy" and self.waveManager then
-      if Collision.checkAABB(player, entity) then
+      if aabbMixed(player, entity) then
         if self.scene.activePowerups.shield then
           local enemySize = math.max(entity.width, entity.height)
           self:createExplosion(entity.x + entity.width / 2, entity.y + entity.height / 2, enemySize)
@@ -794,7 +855,7 @@ function PlayingState:checkPlayerCollisions()
   -- Player vs Alien Lasers
   for i = #self.scene.alienLasers, 1, -1 do
     local laser = self.scene.alienLasers[i]
-    if Collision.checkAABB(player, laser) then
+    if aabbMixed(player, laser) or sweptHit(laser, player) then
       if not self.scene.activePowerups.shield then
         self:playerHit()
       end
@@ -807,7 +868,7 @@ function PlayingState:checkPlayerCollisions()
   if self.waveManager then
     for i = #self.waveManager.enemies, 1, -1 do
       local enemy = self.waveManager.enemies[i]
-      if Collision.checkAABB(player, enemy) then
+      if aabbMixed(player, enemy) then
         if self.scene.activePowerups.shield then
           -- Destroy enemy and break shield
           local enemySize = math.max(enemy.width, enemy.height)
@@ -838,19 +899,19 @@ function PlayingState:checkLaserCollisions()
   for i = #self.scene.lasers, 1, -1 do
     local laser = self.scene.lasers[i]
     for _, entity in ipairs(entityGrid:getNearby(laser)) do
-      if entity.tag == "asteroid" and not laser._remove and Collision.checkAABB(laser, entity) then
+      if entity.tag == "asteroid" and not laser._remove and (aabbMixed(laser, entity) or sweptHit(laser, entity)) then
         self:createHitEffect(laser.x, laser.y)
         local idx = self:findEntityIndex(self.scene.asteroids, entity)
         self:handleAsteroidDestruction(entity, idx or 1)
         laser._remove = true
         break
-      elseif entity.tag == "alien" and not laser._remove and Collision.checkAABB(laser, entity) then
+      elseif entity.tag == "alien" and not laser._remove and (aabbMixed(laser, entity) or sweptHit(laser, entity)) then
         self:createHitEffect(laser.x, laser.y)
         local idx = self:findEntityIndex(self.scene.aliens, entity)
         self:handleAlienDestruction(entity, idx or 1)
         laser._remove = true
         break
-      elseif entity.tag == "enemy" and not laser._remove and Collision.checkAABB(laser, entity) then
+      elseif entity.tag == "enemy" and not laser._remove and (aabbMixed(laser, entity) or sweptHit(laser, entity)) then
         self:createHitEffect(laser.x, laser.y)
         entity.health = entity.health - 1
         laser._remove = true
@@ -994,7 +1055,7 @@ function PlayingState:checkBossCollisions()
   end
 
   -- Boss vs Player
-  if Collision.checkAABB(player, bossEntity) and invulnerableTime <= 0 then
+  if (aabbMixed(player, bossEntity)) and invulnerableTime <= 0 then
     if not self.scene.activePowerups.shield then
       self:playerHit()
     end
@@ -1003,7 +1064,7 @@ function PlayingState:checkBossCollisions()
   -- Boss vs Player Lasers
   for i = #self.scene.lasers, 1, -1 do
     local laser = self.scene.lasers[i]
-    if Collision.checkAABB(laser, bossEntity) then
+    if aabbMixed(laser, bossEntity) or sweptHit(laser, bossEntity) then
       self:createHitEffect(laser.x, laser.y) -- Add hit spark effect
       self:handleBossHit(laser)
       self.laserPool:release(laser)
