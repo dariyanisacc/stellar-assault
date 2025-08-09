@@ -1,0 +1,33 @@
+Stellar Assault — Fixes & Stability Checklist (P0)
+
+- [x] SA-001 — Game Over param mismatch & globals
+  - Done: gameover now consumes params table {score, level, kills, duration, reason, gameComplete}; callers updated; unit test added.
+  - Touched: states/gameover.lua, src/game.lua, states/playing.lua, tests/unit/gameover_params_spec.lua
+
+- [x] SA-002 — Unify SFX paths & make tests pass without external packs
+  - Done: switched to assets/sfx/*.ogg, added stub files, and gated/updated test to not depend on lfs.
+  - Touched: data/sounds.json, src/constants.lua, tests/unit/sounds_data_spec.lua, assets/sfx/
+
+- [ ] SA-003 — Add Persistence.getUpgradeLevel/setUpgradeLevel
+  - Touch: src/persistence.lua, states/playing.lua
+
+- [ ] SA-004 — De-duplicate swept collision
+  - Touch: src/collision.lua, states/playing.lua, new tests
+
+- [ ] SA-005 — Remove _G dependencies in gameplay
+  - Touch: states/playing.lua, src/player_control.lua, src/scene.lua, .luacheckrc
+
+- [ ] SA-006 — Make leaderboard real
+  - Touch: states/leaderboard.lua, states/gameover.lua, src/persistence.lua
+
+- [ ] SA-007 — Windows packaging actually builds an EXE
+  - Touch: build.bat, README.md
+
+- [ ] SA-008 — Options apply/save is consistent & immediate
+  - Touch: states/options.lua, src/asset_manager.lua, src/uimanager.lua, src/Mixer.lua, src/game.lua
+
+- [ ] SA-009 — Guard external asset test
+  - Touch: tests/unit/sounds_data_spec.lua, assets/sfx/
+
+- [ ] SA-010 — CI flakiness audit
+  - Touch: tests/mocks/love_mock.lua, any dt-sensitive specs

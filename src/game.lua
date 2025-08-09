@@ -26,11 +26,17 @@ function Game:resume()
   self.isPaused = false
 end
 
-function Game:gameOver(reason)
+function Game:gameOver(arg)
   self.isGameOver = true
-  self.overReason = reason
-  if _G.stateManager and stateManager.switch then
-    stateManager:switch("gameover", { reason = reason })
+  if type(arg) == "table" then
+    self.overReason = arg.reason
+  else
+    self.overReason = arg
+  end
+  local params = type(arg) == "table" and arg or { reason = arg }
+  local sm = self.stateManager or _G.stateManager
+  if sm and sm.switch then
+    sm:switch("gameover", params)
   end
 end
 

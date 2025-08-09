@@ -1522,10 +1522,18 @@ function PlayingState:playerHit()
     if Game and Game.backgroundMusic then Game.backgroundMusic:stop() end
     if Game and Game.bossMusic then Game.bossMusic:stop() end
 
-    -- Switch to game over state with new high score flag
+    -- Switch to game over state with params table (no globals dependency)
     if stateManager then
       local elapsed = love.timer.getTime() - self.sessionStartTime
-      stateManager:switch("gameover", self.newHighScore, self.sessionEnemiesDefeated, elapsed)
+      local params = {
+        score = score or 0,
+        level = currentLevel or 1,
+        kills = self.sessionEnemiesDefeated or 0,
+        duration = elapsed or 0,
+        reason = "death",
+        gameComplete = false,
+      }
+      stateManager:switch("gameover", params)
     end
   end
 end
@@ -2797,10 +2805,18 @@ function PlayingState:checkGameConditions()
     if Game and Game.backgroundMusic then Game.backgroundMusic:stop() end
     if Game and Game.bossMusic then Game.bossMusic:stop() end
 
-    -- Switch to game over state with new high score flag
+    -- Switch to game over state with params table (victory)
     if stateManager then
       local elapsed = love.timer.getTime() - self.sessionStartTime
-      stateManager:switch("gameover", self.newHighScore, self.sessionEnemiesDefeated, elapsed)
+      local params = {
+        score = score or 0,
+        level = currentLevel or 1,
+        kills = self.sessionEnemiesDefeated or 0,
+        duration = elapsed or 0,
+        reason = "victory",
+        gameComplete = true,
+      }
+      stateManager:switch("gameover", params)
     end
   end
 end

@@ -4,23 +4,31 @@ local Game = require("src.game")
 
 local GameOverState = {}
 
-function GameOverState:enter(isNewHighScore, kills, duration)
-    self.selection = 1 -- 1 = Restart Level, 2 = Main Menu
-    self.finalScore = score or 0
-    self.levelReached = levelAtDeath or currentLevel or 1
+-- Enter expects a params table:
+-- { score, level, kills, duration, reason, gameComplete }
+function GameOverState:enter(params)
+    params = params or {}
+    self.selection = 1 -- 1 = Restart Level, 2 = Main Menu, 3 = Leaderboard
+
+    -- Stats from params (no globals)
+    self.finalScore = tonumber(params.score) or 0
+    self.levelReached = tonumber(params.level) or 1
+    self.killCount = tonumber(params.kills) or 0
+    self.playTime = tonumber(params.duration) or 0
+    self.reason = params.reason or nil
+    self.gameComplete = params.gameComplete or false
+
     self.screenWidth = lg.getWidth()
     self.screenHeight = lg.getHeight()
-    self.isNewHighScore = isNewHighScore or false
-    self.killCount = kills or 0
-    self.playTime = duration or 0
 
     -- Animation timers
     self.animationTimer = 0
     self.textAlpha = 0
 
-    -- Get high score for display
+    -- High score and personal bests via Persistence
     local Persistence = require("src.persistence")
     self.highScore = Persistence.getHighScore()
+    self.isNewHighScore = (self.finalScore > (self.highScore or 0))
     self.bestKillCount = Persistence.getBestKillCount()
     self.bestSurvivalTime = Persistence.getBestSurvivalTime()
 
@@ -43,10 +51,7 @@ function GameOverState:update(dt)
 end
 
 function GameOverState:draw()
-    -- Draw starfield background
-    if drawStarfield then
-        drawStarfield()
-    end
+    -- Background is drawn by main; only draw overlay/panel here
     
     -- Dim background
     lg.setColor(0, 0, 0, 0.6)
@@ -63,7 +68,7 @@ function GameOverState:draw()
     -- Game Over title
     lg.setFont(Game.titleFont or lg.newFont(48))
     lg.setColor(1, 0, 0, self.textAlpha)
-    local title = gameComplete and "VICTORY!" or "GAME OVER"
+    local title = self.gameComplete and "VICTORY!" or "GAME OVER"
     local titleWidth = lg.getFont():getWidth(title)
     lg.print(title, self.screenWidth/2 - titleWidth/2, 150)
     
@@ -151,25 +156,46 @@ function GameOverState:keypressed(key)
     if key == "up" then
         self.selection = self.selection - 1
         if self.selection < 1 then self.selection = 3 end
-        if menuSelectSound then menuSelectSound:play() end
+        if Game and Game.audioPool then
+            Game.audioPool:play("menu_select")
+        elseif Game and Game.menuSelectSound and Game.menuSelectSound.play then
+            Game.menuSelectSound:play()
+        end
     elseif key == "down" then
         self.selection = self.selection + 1
         if self.selection > 3 then self.selection = 1 end
-        if menuSelectSound then menuSelectSound:play() end
+        if Game and Game.audioPool then
+            Game.audioPool:play("menu_select")
+        elseif Game and Game.menuSelectSound and Game.menuSelectSound.play then
+            Game.menuSelectSound:play()
+        end
     elseif key == "return" or key == "space" then
-        if menuConfirmSound then menuConfirmSound:play() end
+        if Game and Game.audioPool then
+            Game.audioPool:play("menu_confirm")
+        elseif Game and Game.menuConfirmSound and Game.menuConfirmSound.play then
+            Game.menuConfirmSound:play()
+        end
         
         if self.selection == 1 then
             -- Restart Level
-            currentLevel = self.levelReached
-            gameState = "playing"
-            stateManager:switch("playing")
+            if Game and Game.stateManager then
+                Game.stateManager:switch("playing")
+            elseif _G.stateManager then
+                stateManager:switch("playing")
+            end
         elseif self.selection == 2 then
             -- Main Menu
-            gameState = "menu"
-            stateManager:switch("menu")
+            if Game and Game.stateManager then
+                Game.stateManager:switch("menu")
+            elseif _G.stateManager then
+                stateManager:switch("menu")
+            end
         else
-            stateManager:switch("leaderboard", "menu")
+            if Game and Game.stateManager then
+                Game.stateManager:switch("leaderboard", "menu")
+            elseif _G.stateManager then
+                stateManager:switch("leaderboard", "menu")
+            end
         end
     end
 end

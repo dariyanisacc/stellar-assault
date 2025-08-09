@@ -1,11 +1,11 @@
 {
-  "laser": "assets/kenny assets/Sci-Fi Sounds/Audio/laserLarge_000.ogg",
-  "explosion": "assets/kenny assets/Sci-Fi Sounds/Audio/explosionCrunch_000.ogg",
-  "powerup": "assets/kenny assets/Sci-Fi Sounds/Audio/slime_000.ogg",
-  "shield_break": "assets/kenny assets/Sci-Fi Sounds/Audio/impactMetal_000.ogg",
-  "gameover": "assets/kenny assets/Sci-Fi Sounds/Audio/computerNoise_001.ogg",
-  "menu": "assets/kenny assets/Sci-Fi Sounds/Audio/computerNoise_000.ogg",
-  "victory": "assets/kenny assets/Sci-Fi Sounds/Audio/computerNoise_003.ogg",
-  "background": "assets/kenny assets/Sci-Fi Sounds/Audio/spaceEngine_001.ogg",
-  "boss": "assets/kenny assets/Sci-Fi Sounds/Audio/engineCircular_003.ogg"
+  "laser": "assets/sfx/laser.ogg",
+  "explosion": "assets/sfx/explosion.ogg",
+  "powerup": "assets/sfx/powerup.ogg",
+  "shield_break": "assets/sfx/shield_break.ogg",
+  "gameover": "assets/sfx/gameover.ogg",
+  "menu": "assets/sfx/menu.ogg",
+  "victory": "assets/sfx/victory.ogg",
+  "background": "assets/sfx/background.ogg",
+  "boss": "assets/sfx/boss.ogg"
 }
