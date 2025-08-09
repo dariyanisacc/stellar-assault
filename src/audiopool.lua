@@ -1,5 +1,6 @@
 local AudioPool = {}
 AudioPool.__index = AudioPool
+local AudioUtils = require("src.audioutils")
 
 function AudioPool:new(size, list)
   local obj = setmetatable({}, self)
@@ -25,7 +26,8 @@ function AudioPool:registerVariants(name, sources)
       local variant = { clones = {}, index = 1 }
       for i = 1, self.size do
         local c = src:clone()
-        c.baseVolume = src.baseVolume
+        -- Preserve base volume metadata for clones
+        AudioUtils.setBaseVolume(c, AudioUtils.getBaseVolume(src) or 1)
         table.insert(variant.clones, c)
         if self.list then table.insert(self.list, c) end
       end
@@ -58,7 +60,8 @@ function AudioPool:play(name, x, y)
     end
   end
   if _G.Game then
-    src:setVolume((src.baseVolume or 1) * Game.sfxVolume * Game.masterVolume)
+    local bv = AudioUtils.getBaseVolume(src) or 1
+    src:setVolume(bv * Game.sfxVolume * Game.masterVolume)
   end
   -- Apply subtle pitch jitter if only one variant to simulate variety
   if #entry.variants == 1 and src.setPitch then

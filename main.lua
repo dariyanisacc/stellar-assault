@@ -356,13 +356,15 @@ end
 -- ---------------------------------------------------------------------------
 -- Audio helpers (using AssetManager for sources)
 -- ---------------------------------------------------------------------------
+local AudioUtils = require("src.audioutils")
+
 local function registerSfx(path, base)
   local src = AssetManager.getSound(path, "static")
   if not src then
     return nil
   end
-  src.baseVolume = base
-  src:setVolume(base * Game.sfxVolume * Game.masterVolume)
+  AudioUtils.setBaseVolume(src, base)
+  src:setVolume((AudioUtils.getBaseVolume(src) or 1) * Game.sfxVolume * Game.masterVolume)
   table.insert(sfxSources, src)
   return src
 end
@@ -372,9 +374,9 @@ local function registerMusic(path, base, loop)
   if not src then
     return nil
   end
-  src.baseVolume = base
+  AudioUtils.setBaseVolume(src, base)
   src:setLooping(loop)
-  src:setVolume(base * Game.musicVolume * Game.masterVolume)
+  src:setVolume((AudioUtils.getBaseVolume(src) or 1) * Game.musicVolume * Game.masterVolume)
   table.insert(musicSources, src)
   return src
 end
@@ -444,9 +446,9 @@ local function loadAudio()
 
   if Game.menuSelectSound then
     Game.menuConfirmSound = Game.menuSelectSound:clone()
-    Game.menuConfirmSound.baseVolume = Game.menuSelectSound.baseVolume
+    AudioUtils.setBaseVolume(Game.menuConfirmSound, AudioUtils.getBaseVolume(Game.menuSelectSound))
     Game.menuConfirmSound:setVolume(
-      Game.menuConfirmSound.baseVolume * Game.sfxVolume * Game.masterVolume
+      (AudioUtils.getBaseVolume(Game.menuConfirmSound) or 1) * Game.sfxVolume * Game.masterVolume
     )
     table.insert(sfxSources, Game.menuConfirmSound)
   end
@@ -468,7 +470,8 @@ local function loadAudio()
               local full = dir .. "/" .. f
               local s = AssetManager.getSound(full, "static")
               if s then
-                s.baseVolume = (Game.laserSound and Game.laserSound.baseVolume) or 0.6
+                local bv = (Game.laserSound and AudioUtils.getBaseVolume(Game.laserSound)) or 0.6
+                AudioUtils.setBaseVolume(s, bv)
                 table.insert(variants, s)
               end
             end
@@ -556,10 +559,12 @@ _G.applyPalette = applyPalette
 
 local function updateAudioVolumes()
   for _, s in ipairs(sfxSources) do
-    s:setVolume((s.baseVolume or 1) * Game.sfxVolume * Game.masterVolume)
+    local bv = (AudioUtils.getBaseVolume(s) or 1)
+    s:setVolume(bv * Game.sfxVolume * Game.masterVolume)
   end
   for _, s in ipairs(musicSources) do
-    s:setVolume((s.baseVolume or 1) * Game.musicVolume * Game.masterVolume)
+    local bv = (AudioUtils.getBaseVolume(s) or 1)
+    s:setVolume(bv * Game.musicVolume * Game.masterVolume)
   end
 end
 _G.updateAudioVolumes = updateAudioVolumes

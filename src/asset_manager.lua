@@ -21,18 +21,26 @@ local AssetManager = {
 -- ---------------------------------------------------------------------------
 local function norm(path)      return path:gsub("\\","/"):lower() end
 local function cache(tbl,k,f)  k = norm(k); if not tbl[k] then tbl[k] = f() end; return tbl[k] end
-local function assertFile(path, what)
-  if not love.filesystem.getInfo(path, "file") then
-    error(("%s not found: %s"):format(what or "File", path), 2)
-  end
+local function hasFile(path)
+  return love.filesystem.getInfo(path, "file") ~= nil
 end
 
 -- ---------------------------------------------------------------------------
 -- Public getters
 -- ---------------------------------------------------------------------------
 function AssetManager.getImage(path)
-  assertFile(path, "Image")
-  return cache(AssetManager.images, path, function() return lg.newImage(path) end)
+  if not hasFile(path) then
+    print("[Image] File not found: " .. tostring(path))
+    return nil
+  end
+  return cache(AssetManager.images, path, function()
+    local ok, res = pcall(function() return lg.newImage(path) end)
+    if not ok then
+      print("[Image] Failed to load: " .. tostring(path) .. " (" .. tostring(res) .. ")")
+      return nil
+    end
+    return res
+  end)
 end
 
 ---@overload fun(size:number):love.Font
@@ -42,7 +50,18 @@ function AssetManager.getFont(arg1, size)
   size = size or 12
   local key = (path or "default") .. ":" .. tostring(size)
   return cache(AssetManager.fonts, key, function()
-    return path and lg.newFont(path, size) or lg.newFont(size)
+    if path then
+      if not hasFile(path) then
+        print("[Font] File not found: " .. tostring(path) .. "; falling back to default font")
+        return lg.newFont(size)
+      end
+      local ok, res = pcall(function() return lg.newFont(path, size) end)
+      if ok and res then return res end
+      print("[Font] Failed to load: " .. tostring(path) .. " (" .. tostring(res) .. ")")
+      return lg.newFont(size)
+    else
+      return lg.newFont(size)
+    end
   end)
 end
 
@@ -67,12 +86,15 @@ end
 ---@param path string
 ---@return love.Video
 function AssetManager.getVideo(path)
-  assertFile(path, "Video")
+  if not hasFile(path) then
+    print("[Video] File not found: " .. tostring(path))
+    return nil
+  end
   return cache(AssetManager.videos, path, function()
-    -- In LÖVE 11.x, videos are created via love.graphics.newVideo
     local ok, vid = pcall(function() return lg.newVideo(path) end)
     if not ok then
-      error("Failed to load video: " .. tostring(path) .. " (" .. tostring(vid) .. ")", 2)
+      print("[Video] Failed to load: " .. tostring(path) .. " (" .. tostring(vid) .. ")")
+      return nil
     end
     return vid
   end)

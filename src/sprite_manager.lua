@@ -1,5 +1,6 @@
 local lg = love.graphics
 local lf = love.filesystem
+local AssetManager = require("src.asset_manager")
 
 local SpriteManager = {}
 SpriteManager.__index = SpriteManager
@@ -12,10 +13,26 @@ function SpriteManager.load(path)
         misc = {}
     }}, SpriteManager)
 
+    -- Be defensive: skip if directory missing
+    if not lf.getInfo(path, "directory") then
+        return manager
+    end
+
     local files = lf.getDirectoryItems(path)
     for _, file in ipairs(files) do
         if file:match('%.png$') then
-            local image = lg.newImage(path .. '/' .. file)
+            -- Load with guard so a single corrupt image doesn’t crash startup
+            local image
+            do
+                local full = path .. '/' .. file
+                local ok, res = pcall(function() return AssetManager.getImage(full) end)
+                if ok then
+                    image = res
+                else
+                    print(string.format('[SpriteManager] Skipping bad image: %s (%s)', full, tostring(res)))
+                end
+            end
+            if not image then goto continue end
             local raw_key = file:gsub('%.png$', '')
             local lower_raw_key = raw_key:lower()
             local global_key = lower_raw_key:gsub('%s+', '_')
@@ -34,6 +51,7 @@ function SpriteManager.load(path)
             else
                 manager.categories.misc[global_key] = image
             end
+            ::continue::
         end
     end
 

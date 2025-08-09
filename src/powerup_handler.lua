@@ -1,5 +1,6 @@
 local Powerup = require("src.entities.powerup")
 local constants = require("src.constants")
+local Collision = require("src.collision")
 local PowerupHandler = {}
 
 function PowerupHandler.update(state, dt)

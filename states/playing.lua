@@ -495,7 +495,8 @@ function PlayingState:updateMusic(dt)
   -- Apply volumes (Mixer sets master/music; we modulate by factor)
   local function applyVol(src, factor)
     if not src then return end
-    local base = (src.baseVolume or 1)
+    local AudioUtils = require("src.audioutils")
+    local base = (AudioUtils.getBaseVolume(src) or 1)
     local mv = (Game and Game.musicVolume) or 1
     local mas = (Game and Game.masterVolume) or 1
     src:setVolume(base * mv * mas * factor)
