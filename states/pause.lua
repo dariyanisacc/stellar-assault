@@ -4,11 +4,12 @@ local pause = {}
 
 local lg = love.graphics
 local menuItems = { "Resume", "Restart Level", "Options", "Controls", "Quit to Menu" }
-local selected = 1
 
 -- Enter the pause state
 function pause:enter()
   if _G.Game and Game.pause then Game:pause() end
+  -- Reset selection each time we enter pause to keep highlight aligned
+  self.selected = 1
 end
 
 -- Update function (may not need much if fully paused)
@@ -50,10 +51,10 @@ function pause:draw()
     local y = startY + (i - 1) * (bh + spacing)
     local x = panelX + (panelW - bw) / 2
     if Game and Game.uiManager and Game.uiManager.drawButton then
-      Game.uiManager:drawButton(x, y, bw, bh, item, i == selected)
+      Game.uiManager:drawButton(x, y, bw, bh, item, i == (self.selected or 1))
     else
       lg.setFont((Game and Game.menuFont) or lg.newFont(22))
-      if i == selected then lg.setColor(1, 1, 0) else lg.setColor(0.85, 0.9, 1) end
+      if i == (self.selected or 1) then lg.setColor(1, 1, 0) else lg.setColor(0.85, 0.9, 1) end
       local iwtxt = lg.getFont():getWidth(item)
       lg.print(item, x + (bw - iwtxt) / 2, y + (bh - lg.getFont():getHeight()) / 2)
     end
@@ -68,24 +69,24 @@ function pause:keypressed(key)
     return
   end
   if key == "up" then
-    selected = (selected - 2) % #menuItems + 1
+    self.selected = ((self.selected or 1) - 2) % #menuItems + 1
     if Game and Game.menuSelectSound then Game.menuSelectSound:play() end
   elseif key == "down" then
-    selected = selected % #menuItems + 1
+    self.selected = (self.selected or 1) % #menuItems + 1
     if Game and Game.menuSelectSound then Game.menuSelectSound:play() end
   elseif key == "return" or key == "space" then
     if Game and Game.menuConfirmSound then Game.menuConfirmSound:play() end
-    if menuItems[selected] == "Resume" then
+    if menuItems[self.selected or 1] == "Resume" then
       if _G.Game and Game.resume then Game:resume() end
       stateManager:pop()
-    elseif menuItems[selected] == "Restart Level" then
+    elseif menuItems[self.selected or 1] == "Restart Level" then
       if _G.Game and Game.resume then Game:resume() end
       stateManager:switch("playing")
-    elseif menuItems[selected] == "Options" then
+    elseif menuItems[self.selected or 1] == "Options" then
       stateManager:push("options", { returnTo = "pause" })
-    elseif menuItems[selected] == "Controls" then
+    elseif menuItems[self.selected or 1] == "Controls" then
       stateManager:push("options_controls")
-    elseif menuItems[selected] == "Quit to Menu" then
+    elseif menuItems[self.selected or 1] == "Quit to Menu" then
       if _G.Game and Game.resume then Game:resume() end
       stateManager:switch("menu")
     end

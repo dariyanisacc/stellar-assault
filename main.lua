@@ -645,6 +645,14 @@ function love.load()
   Game.playerShips.beta  = tryImg("assets/gfx/Player Ship Beta.png")
   Game.playerShips.gamma = tryImg("assets/gfx/Player Ship Gamma.png")
 
+  -- Load enemy ship sprites by known filenames (fallback to rectangles if missing)
+  -- Keys match behavior/type used by WaveManager and PlayingState (basic, homing, zigzag, dive, formation)
+  Game.enemyShips.basic     = tryImg("assets/gfx/Enemy Basic.png")
+  Game.enemyShips.homing    = tryImg("assets/gfx/Enemy Homing.png")
+  Game.enemyShips.zigzag    = tryImg("assets/gfx/Enemy ZigZag.png")
+  Game.enemyShips.dive      = tryImg("assets/gfx/Enemy Dive.png")
+  Game.enemyShips.formation = tryImg("assets/gfx/Enemy Formation.png")
+
   -- Kenny assets: load nicer laser sprites if available
   do
     local function tryLaser(path)

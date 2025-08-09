@@ -349,6 +349,8 @@ end
 function UIManager:drawButton(x, y, w, h, label, highlighted)
   local ui = getKenneyPieces()
   if ui and ui ~= false then
+    -- Ensure button art isn't tinted by previous draw colors
+    lg.setColor(1, 1, 1, 1)
     draw3slice(ui.btnL, ui.btnM, ui.btnR, x, y, w, h)
     lg.setFont(Game.menuFont or lg.newFont(24))
     if highlighted then lg.setColor(1, 1, 0) else lg.setColor(0.85, 0.9, 1) end
