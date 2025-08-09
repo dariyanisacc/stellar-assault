@@ -510,6 +510,10 @@ local function loadAudio()
   Game.audioPool:register("menu_confirm", Game.menuConfirmSound)
   Game.audioPool:register("victory", Game.victorySound)
 
+  -- Back-compat: expose commonly used menu SFX as globals for legacy states
+  _G.menuSelectSound  = Game.menuSelectSound
+  _G.menuConfirmSound = Game.menuConfirmSound
+
   if sounds.background then
     Game.backgroundMusic = registerMusic(sounds.background, 1.0, true)
       or (function() local p = findKenneySound("computerNoise_004") or findKenneySound("computerNoise"); if p then return registerMusic(p, 1.0, true) end end)()

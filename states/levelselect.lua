@@ -134,7 +134,7 @@ function LevelSelectState:draw()
   lg.printf("SELECT LEVEL", 0, 50, lg.getWidth(), "center")
 
   -- Level buttons
-  lg.setFont(menuFont)
+  lg.setFont((Game and Game.menuFont) or lg.newFont(24))
   for _, button in ipairs(self.levelButtons) do
     local x, y = button.x, button.y
 
@@ -167,14 +167,14 @@ function LevelSelectState:draw()
       )
       lg.setColor(0, 1, 1, self.fadeIn)
       lg.printf(formatTime(stats.bestTime), x, y + button.height - 14, button.width, "center")
-      lg.setFont(menuFont)
+      lg.setFont((Game and Game.menuFont) or lg.newFont(24))
 
       -- Boss indicator
       if button.level % constants.levels.bossFrequency == 0 then
         lg.setColor(1, 0.5, 0.5, self.fadeIn)
         lg.setFont(Game.smallFont)
         lg.printf("BOSS", x, y + 45, button.width, "center")
-        lg.setFont(menuFont)
+        lg.setFont((Game and Game.menuFont) or lg.newFont(24))
       end
     else
       -- Locked level
@@ -241,7 +241,7 @@ function LevelSelectState:draw()
 
   -- Purchase message
   if self.purchaseMessage then
-    lg.setFont(menuFont)
+    lg.setFont((Game and Game.menuFont) or lg.newFont(24))
     local msgAlpha = math.min(self.purchaseMessageTimer * 2, 1)
     if self.purchaseMessage:find("Not enough") or self.purchaseMessage:find("Already") then
       lg.setColor(1, 0.3, 0.3, msgAlpha)
@@ -268,7 +268,7 @@ function LevelSelectState:drawShipSelection()
 
   -- Title
   lg.setColor(1, 1, 1)
-  lg.setFont(menuFont)
+  lg.setFont((Game and Game.menuFont) or lg.newFont(24))
   lg.printf("SELECT SHIP", x, y + 10, width, "center")
 
   -- Ship options
