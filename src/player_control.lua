@@ -258,7 +258,15 @@ function PlayerControl.shoot(state, dt)
 
   if activePowerups.homingMissile then
     missiles = missiles or {}
-    table.insert(missiles, { x = laser.x, y = laser.y, speed = 200 })
+    table.insert(missiles, {
+      x = laser.x,
+      y = laser.y,
+      width = 8,
+      height = 18,
+      speed = 240,
+      damage = 2,
+      ttl = 4.0,
+    })
   end
 
   if spread > 0 then

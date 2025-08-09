@@ -1,6 +1,7 @@
 local Powerup = require("src.entities.powerup")
 local constants = require("src.constants")
 local Collision = require("src.collision")
+local Game = require("src.game")
 local PowerupHandler = {}
 
 function PowerupHandler.update(state, dt)
@@ -84,7 +85,77 @@ function PowerupHandler.update(state, dt)
     m.x = m.x + (m.vx or 0) * dt
     m.y = m.y + (m.vy or -m.speed) * dt
 
-    if m.x < -20 or m.x > state.screenWidth + 20 or m.y < -20 or m.y > state.screenHeight + 20 then
+    -- Lifetime expiry
+    m.ttl = (m.ttl or 4) - dt
+
+    local hit = false
+    local function hitAABB(ax, ay, aw, ah, b)
+      local bx, by, bw, bh
+      if b.tag == "enemy" then
+        bx, by, bw, bh = b.x, b.y, b.width, b.height
+      else
+        bx = (b.x - (b.width or 0) * 0.5)
+        by = (b.y - (b.height or 0) * 0.5)
+        bw, bh = b.width or 0, b.height or 0
+      end
+      return Collision.aabb(ax, ay, aw, ah, bx, by, bw, bh)
+    end
+
+    -- Missile bounds (center -> top-left)
+    local mx, my = m.x - (m.width or 8) * 0.5, m.y - (m.height or 18) * 0.5
+    local mw, mh = m.width or 8, m.height or 18
+
+    -- Check aliens first
+    if not hit then
+      for ai = #scene.aliens, 1, -1 do
+        local a = scene.aliens[ai]
+        if hitAABB(mx, my, mw, mh, a) then
+          -- Destroy alien via state helper
+          if state.handleAlienDestruction then
+            state:handleAlienDestruction(a, ai)
+          else
+            table.remove(scene.aliens, ai)
+          end
+          hit = true
+          break
+        end
+      end
+    end
+
+    -- Check wave enemies (top-left coords)
+    if not hit and state.waveManager and state.waveManager.enemies then
+      for ei = #state.waveManager.enemies, 1, -1 do
+        local e = state.waveManager.enemies[ei]
+        if hitAABB(mx, my, mw, mh, e) then
+          e.health = (e.health or 1) - (m.damage or 1)
+          if e.health <= 0 then
+            e.active = false
+            if state.entityGrid then state.entityGrid:remove(e) end
+            if state.findEntityIndex then
+              local idx = state:findEntityIndex(state.waveManager.enemies, e) or ei
+              -- Explosion + score/music handled similar to lasers
+              if state.createExplosion then
+                local enemySize = math.max(e.width or 0, e.height or 0)
+                state:createExplosion(e.x + (e.width or 0) / 2, e.y + (e.height or 0) / 2, enemySize)
+              end
+              table.remove(state.waveManager.enemies, idx)
+            else
+              table.remove(state.waveManager.enemies, ei)
+            end
+          end
+          hit = true
+          break
+        end
+      end
+    end
+
+    if hit then
+      if state.laserPool and state.laserPool.release then
+        -- missiles are not pooled; just remove entry
+      end
+      if Game and Game.audioPool then Game.audioPool:play("explosion", m.x, m.y) end
+      table.remove(missiles, i)
+    elseif m.ttl <= 0 or m.x < -40 or m.x > state.screenWidth + 40 or m.y < -40 or m.y > state.screenHeight + 40 then
       table.remove(missiles, i)
     end
   end

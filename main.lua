@@ -672,6 +672,11 @@ function love.load()
       or tryLaser("assets/kenny assets/Lasers/laserPink3.png")
       or tryLaser("assets/kenny assets/Lasers/laserGreen2.png")
       or nil
+    -- Use a yellow laser as a missile sprite stand-in if available
+    Game.missileSprite =
+      tryLaser("assets/kenny assets/Lasers/laserYellow3.png")
+      or tryLaser("assets/kenny assets/Lasers/laserYellow2.png")
+      or nil
   end
 
   -- Asteroids: load up to three variant sprites if available

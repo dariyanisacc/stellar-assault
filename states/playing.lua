@@ -984,11 +984,11 @@ function PlayingState:checkPowerupCollisions()
           if powerup.enhanced then
             self:createPowerupText("SUPER RAPID FIRE!", powerup.x, powerup.y, { 1, 1, 0 })
           end
-        elseif result.type == "spread" then
-          -- Spread shot will be handled in shootLaser
-          self.scene.activePowerups.multiShot = duration -- Map to existing multiShot
-          if powerup.enhanced then
-            self:createPowerupText("MEGA SPREAD!", powerup.x, powerup.y, { 1, 0.5, 0 })
+      elseif result.type == "spread" then
+        -- Spread shot will be handled in shootLaser
+        self.scene.activePowerups.multiShot = duration -- Map to existing multiShot
+        if powerup.enhanced then
+          self:createPowerupText("MEGA SPREAD!", powerup.x, powerup.y, { 1, 0.5, 0 })
           end
         elseif result.type == "boost" then
           -- Speed boost will be handled in updatePlayer
@@ -998,11 +998,17 @@ function PlayingState:checkPowerupCollisions()
         elseif result.type == "coolant" then
           -- Reset heat immediately and boost cooling
           player.heat = 0
+          -- Activate coolant multiplier for duration
+          self.scene.activePowerups.coolant = duration
           if powerup.enhanced then
             self:createPowerupText("SUPER COOLANT!", powerup.x, powerup.y, { 0, 0.7, 1 })
           else
             self:createPowerupText("HEAT RESET!", powerup.x, powerup.y, { 0, 0.5, 1 })
           end
+        elseif result.type == "homingMissile" then
+          -- Enable homing missiles for duration
+          self.scene.activePowerups.homingMissile = duration
+          self:createPowerupText("HOMING MISSILES!", powerup.x, powerup.y, { 1, 1, 1 })
         end
       elseif result == true and powerup.type == "shield" then
         -- Enhanced shield gives more shield points
@@ -2025,7 +2031,6 @@ function PlayingState:drawLasers()
       lg.setColor(constants.laser.alienColor)
       lg.rectangle("fill", laser.x - laser.width / 2, laser.y - laser.height / 2, laser.width, laser.height)
     end
-
     -- Emit trail particle for alien lasers
     local t = self.trailPool:get()
     t.x = laser.x
@@ -2039,6 +2044,50 @@ function PlayingState:drawLasers()
     t.isTrail = true
     t.pool = self.trailPool
     table.insert(self.scene.explosions, t)
+  end
+
+  -- Draw homing missiles and emit trail glows
+  if missiles and #missiles > 0 then
+    for _, m in ipairs(missiles) do
+      local w, h = (m.width or 8), (m.height or 18)
+      local angle = 0
+      if m.vx and m.vy then
+        angle = (math.atan2 and math.atan2(m.vy, m.vx) or math.atan(m.vy, m.vx)) - math.pi / 2
+      end
+      if Game and Game.missileSprite then
+        local img = Game.missileSprite
+        local iw, ih = img:getWidth(), img:getHeight()
+        local sx = w / math.max(1, iw)
+        local sy = h / math.max(1, ih)
+        lg.setColor(1, 1, 1, 1)
+        lg.draw(img, m.x, m.y, angle, sx, sy, iw / 2, ih / 2)
+      else
+        -- Fallback: simple dart with flame
+        lg.push()
+        lg.translate(m.x, m.y)
+        lg.rotate(angle)
+        lg.setColor(1, 1, 1, 1)
+        lg.rectangle("fill", -w / 2, -h / 2, w, h)
+        lg.setColor(1, 0.8, 0.2, 0.8)
+        lg.rectangle("fill", -w / 4, h / 2 - 3, w / 2, 3)
+        lg.pop()
+      end
+      -- Emit a warm trail particle behind missile
+      local mt = self.trailPool:get()
+      if mt then
+        mt.x = m.x
+        mt.y = m.y + (h / 2)
+        mt.vx = 0
+        mt.vy = 40
+        mt.life = 0.25
+        mt.maxLife = 0.25
+        mt.size = 3
+        mt.color = { 1, 0.8, 0.2, 1 }
+        mt.isTrail = true
+        mt.pool = self.trailPool
+        table.insert(self.scene.explosions, mt)
+      end
+    end
   end
   love.graphics.setBlendMode(prevBlend or "alpha", prevAlpha)
 end
@@ -2255,6 +2304,7 @@ function PlayingState:drawUI()
         boost = { 0, 1, 0 },
         coolant = { 0, 0.5, 1 },
         magnet = { 0.8, 0.2, 1.0 },
+        homingMissile = { 1, 1, 1 },
       }
 
       local color = colors[powerup] or { 1, 1, 1 }
@@ -2264,10 +2314,17 @@ function PlayingState:drawUI()
       lg.rectangle("fill", 5, powerupY, 170, 16, 2)
 
       lg.setColor(color[1], color[2], color[3], 0.8)
-      local duration = constants.powerup
-          and constants.powerup.duration
-          and constants.powerup.duration[powerup]
-        or 10
+      local durationMap = {
+        shield = 15,
+        rapid = 8,
+        spread = 10,
+        multiShot = 10,
+        boost = 6,
+        coolant = 10,
+        magnet = 8,
+        homingMissile = 5,
+      }
+      local duration = durationMap[powerup] or 10
       lg.rectangle("fill", 5, powerupY, 170 * (timer / duration), 16, 2)
 
       -- Text
@@ -2594,7 +2651,9 @@ function PlayingState:createBossLaser(x, y, angle, isBeam)
 end
 
 function PlayingState:updateBossPhase()
-  local healthPercent = boss.health / boss.maxHealth
+  local maxH = (boss and (boss.maxHealth or boss.maxHP)) or 1
+  local curH = (boss and (boss.health or boss.hp)) or maxH
+  local healthPercent = (maxH > 0) and (curH / maxH) or 0
   local newPhase = 1
 
   if healthPercent <= 0.25 then

@@ -20,6 +20,9 @@ function Boss02.new(level)
   -- stats scale with level
   self.maxHP = 400 + level * 75
   self.hp    = self.maxHP
+  -- Mirror fields for systems using health/maxHealth
+  self.maxHealth = self.maxHP
+  self.health    = self.hp
   self.level = level
 
   -- phase system
@@ -41,6 +44,15 @@ function Boss02.new(level)
   self.scale      = 1.5
   self.flashTimer = 0
   self.color      = { 0.3, 0.5, 1.0 } -- blue tint
+
+  -- collision extents (updated dynamically if scale changes)
+  self.tag    = "boss"
+  local texW  = (self.sprite and self.sprite:getWidth())  or 64
+  local texH  = (self.sprite and self.sprite:getHeight()) or 64
+  local drawScale = self.scale * 4
+  self.width  = texW * drawScale
+  self.height = texH * drawScale
+  self.size   = math.max(self.width, self.height)
 
   return self
 end
@@ -92,6 +104,15 @@ function Boss02:update(dt, bullets)
   -- keep on-screen
   local margin = 60
   self.x = math.max(margin, math.min(lg.getWidth() - margin, self.x))
+
+  -- Update collision extents in case scale/rotation changed
+  if self.sprite then
+    local texW, texH = self.sprite:getWidth(), self.sprite:getHeight()
+    local drawScale = (self.scale or 1) * 4
+    self.width  = texW * drawScale
+    self.height = texH * drawScale
+    self.size   = math.max(self.width, self.height)
+  end
 end
 
 function Boss02:executePattern(bullets)
@@ -134,6 +155,14 @@ function Boss02:onPhaseChange(phase)
   self.flashTimer = 1.0
   if     phase == 2 then self.color = { 1.0, 0.5, 0.3 }; self.scale = 1.7
   elseif phase == 3 then self.color = { 1.0, 0.3, 0.3 }; self.scale = 2.0 end
+  -- Recompute extents for new scale
+  if self.sprite then
+    local texW, texH = self.sprite:getWidth(), self.sprite:getHeight()
+    local drawScale = (self.scale or 1) * 4
+    self.width  = texW * drawScale
+    self.height = texH * drawScale
+    self.size   = math.max(self.width, self.height)
+  end
 end
 
 -- draw ----------------------------------------------------------------------

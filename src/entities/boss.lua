@@ -32,9 +32,19 @@ function Boss.new(level, opts)
   self.x = (opts.x or (lg.getWidth()  / 2))
   self.y = (opts.y or (-self.sprite:getHeight()))
 
+  -- collision + draw scale
+  self.scale = 4
+  self.width  = (self.sprite and self.sprite:getWidth()  * self.scale) or 64
+  self.height = (self.sprite and self.sprite:getHeight() * self.scale) or 64
+  self.size   = math.max(self.width, self.height)
+  self.tag    = "boss"
+
   -- stats scale with level
   self.maxHP = 250 + level * 50
   self.hp    = self.maxHP
+  -- Mirror fields for systems using health/maxHealth
+  self.maxHealth = self.maxHP
+  self.health    = self.hp
   self.phase = 1
   self.cool  = BULLET_COOLDOWN
 
@@ -63,7 +73,7 @@ function Boss:draw()
     self.sprite,
     self.x, self.y,
     0,                         -- rotation
-    4, 4,                      -- scale
+    self.scale, self.scale,    -- scale
     self.sprite:getWidth()  / 2,
     self.sprite:getHeight() / 2
   )

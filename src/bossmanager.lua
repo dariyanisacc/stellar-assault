@@ -56,6 +56,31 @@ function BossManager:update(dt, bullets)
   end
 end
 
+--- Apply damage to the active boss, normalizing hp/health fields.
+-- @param amount number
+function BossManager:takeDamage(amount)
+  local b = self.activeBoss
+  if not b or not amount or amount <= 0 then return end
+  -- Normalize fields
+  local maxH = b.maxHealth or b.maxHP or 0
+  local curH = (b.health ~= nil) and b.health or b.hp
+  if curH == nil then
+    -- Initialize to a sane default if missing
+    curH = maxH > 0 and maxH or 100
+  end
+  curH = math.max(0, curH - amount)
+  -- Write back to both conventions
+  b.health = curH
+  if b.hp ~= nil then b.hp = curH end
+  if b.maxHealth == nil and b.maxHP ~= nil then b.maxHealth = b.maxHP end
+
+  -- Enter dying state if depleted
+  if curH <= 0 then
+    b.state = "dying"
+    b.stateTimer = 0
+  end
+end
+
 --- Draw the active boss.
 function BossManager:draw()
   if self.activeBoss and self.activeBoss.draw then
