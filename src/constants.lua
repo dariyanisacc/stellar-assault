@@ -64,31 +64,42 @@ constants.player = {
 local shipsFromFile = loadJson("data/ships.json")
 
 constants.ships = next(shipsFromFile) and shipsFromFile or {
-  alpha = {
-    name             = "Alpha",
+  falcon = {
+    name             = "Falcon",
     spread           = 0.00,      -- straight shot
     fireRate         = 0.30,      -- seconds
     speedMultiplier  = 1.0,
     shieldMultiplier = 1.0,
-    description      = "Balanced fighter",
+    heatMultiplier   = 1.0,
+    coolMultiplier   = 1.0,
+    description      = "All‑rounder",
   },
-  beta = {
-    name             = "Beta",
+  wraith = {
+    name             = "Wraith",
     spread           = 0.20,      -- narrow V
     fireRate         = 0.25,
     speedMultiplier  = 1.3,
     shieldMultiplier = 0.7,
-    description      = "Fast interceptor with spread shot",
+    heatMultiplier   = 1.25,
+    coolMultiplier   = 0.95,
+    description      = "Glass cannon with spread",
   },
-  gamma = {
-    name             = "Gamma",
+  titan = {
+    name             = "Titan",
     spread           = 0.35,      -- wide spray
     fireRate         = 0.40,
     speedMultiplier  = 0.8,
     shieldMultiplier = 1.5,
-    description      = "Heavy tank with wide spread",
+    heatMultiplier   = 0.9,
+    coolMultiplier   = 1.1,
+    description      = "Tank with wide spread",
   },
 }
+
+-- Back-compat aliases so existing saves/tests using alpha/beta/gamma keep working
+constants.ships.alpha = constants.ships.alpha or constants.ships.falcon
+constants.ships.beta  = constants.ships.beta  or constants.ships.wraith
+constants.ships.gamma = constants.ships.gamma or constants.ships.titan
 
 -- ---------------------------------------------------------------------------
 -- Laser
@@ -246,7 +257,19 @@ constants.balance = {
   specialPowerupChance      = 0.10,
   alienLaserSpeedMultiplier = 0.7,
   bossSpawnRate             = 4,
+  -- Heat system defaults (override via data/balance.json)
+  heatPerShot               = 8,    -- heat added per shot (base)
+  coolRate                  = 10,   -- cooling per second (base)
+  softLaserMargin           = 8,    -- safety margin below maxLasers for per-trigger soft cap
 }
+
+-- Attempt to override balance from data/balance.json if provided
+local balanceFromFile = loadJson("data/balance.json")
+if next(balanceFromFile) then
+  for k, v in pairs(balanceFromFile) do
+    constants.balance[k] = v
+  end
+end
 
 -- ---------------------------------------------------------------------------
 -- Audio defaults

@@ -47,8 +47,8 @@ describe("Large dt stability", function()
     state.scene.activePowerups = {}
   end)
 
-  it("scales heat with dt", function()
-    PlayerControl.update(state, 3) -- large dt step
-    assert.are.equal(15, player.heat)
+  it("adds heat per shot regardless of dt", function()
+    PlayerControl.update(state, 3) -- large dt step should not multiply heat per shot
+    assert.are.equal(player.heatRate, player.heat)
   end)
 end)

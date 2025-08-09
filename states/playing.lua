@@ -278,8 +278,8 @@ function PlayingState:initializeGame()
   self.screenHeight = lg.getHeight()
 
   -- Player initialization with ship-specific stats
-  local shipId = (Game and Game.selectedShip) or _G.selectedShip or "alpha"
-  local shipConfig = constants.ships[shipId] or constants.ships.alpha
+  local shipId = (Game and Game.selectedShip) or _G.selectedShip or "falcon"
+  local shipConfig = constants.ships[shipId] or constants.ships.falcon
 
   -- Apply shop upgrades
   local speedUpgrade = 1 + (Persistence.getUpgradeLevel("speedMultiplier") or 0)
@@ -291,10 +291,11 @@ function PlayingState:initializeGame()
     y = self.screenHeight - 100,
     width = constants.player.width,
     height = constants.player.height,
-    speed = constants.player.speed * shipConfig.speedMultiplier * speedUpgrade,
-    shield = math.floor(constants.player.shield * shipConfig.shieldMultiplier) + shieldUpgrade,
-    maxShield = math.floor(constants.player.maxShield * shipConfig.shieldMultiplier)
-      + shieldUpgrade,
+    -- Derive speed from absolute per-ship speed if provided; fallback to multiplier
+    speed = (shipConfig.speed or (constants.player.speed * (shipConfig.speedMultiplier or 1.0))) * speedUpgrade,
+    -- Map ship Hull (HP) to shield capacity proportionally (100 hull = base shields)
+    shield = math.max(1, math.floor(constants.player.shield * ((shipConfig.hull or 100) / 100))) + shieldUpgrade,
+    maxShield = math.max(1, math.floor(constants.player.maxShield * ((shipConfig.hull or 100) / 100))) + shieldUpgrade,
     teleportCooldown = 0,
     canTeleport = true,
     isTeleporting = false,
@@ -305,14 +306,14 @@ function PlayingState:initializeGame()
     -- Inertia physics
     vx = 0,
     vy = 0,
-    thrust = constants.player.thrust * shipConfig.speedMultiplier * speedUpgrade,
-    maxSpeed = constants.player.maxSpeed * shipConfig.speedMultiplier * speedUpgrade,
+    thrust = constants.player.thrust * ((shipConfig.speed and (shipConfig.speed / 200)) or (shipConfig.speedMultiplier or 1.0)) * speedUpgrade,
+    maxSpeed = constants.player.maxSpeed * ((shipConfig.speed and (shipConfig.speed / 200)) or (shipConfig.speedMultiplier or 1.0)) * speedUpgrade,
     drag = constants.player.drag,
     -- Heat system
     heat = 0, -- Current heat level (0-100)
     maxHeat = 100, -- Max before overheat
-    heatRate = 5 * (shipConfig.heatMultiplier or 1), -- Heat added per shot (adjusted by ship type)
-    coolRate = 25, -- Cooling per second (continuous)
+    heatRate = (constants.balance.heatPerShot or 8) * (shipConfig.heatMultiplier or 1), -- Heat added per shot
+    coolRate = (constants.balance.coolRate or 10) * (shipConfig.coolMultiplier or 1), -- Cooling per second (continuous)
     overheatPenalty = 1.5, -- Seconds unable to shoot on overheat (reduced for faster recovery)
     overheatTimer = 0, -- Timer when overheated
   }
@@ -815,7 +816,7 @@ function PlayingState:checkPlayerCollisions()
         local idx = self:findEntityIndex(self.scene.asteroids, entity)
         if self.scene.activePowerups.shield then
           self:handleShieldHit(entity, idx or 1)
-        else
+        elseif invulnerableTime <= 0 then
           self:handlePlayerHit(entity, idx or 1)
         end
       end
@@ -824,7 +825,7 @@ function PlayingState:checkPlayerCollisions()
         local idx = self:findEntityIndex(self.scene.aliens, entity)
         if self.scene.activePowerups.shield then
           self:handleShieldHit(entity, idx or 1, self.scene.aliens)
-        else
+        elseif invulnerableTime <= 0 then
           self:handlePlayerHit(entity, idx or 1, self.scene.aliens)
         end
       end
@@ -840,7 +841,7 @@ function PlayingState:checkPlayerCollisions()
           if Game and Game.audioPool then
             Game.audioPool:play("shield_break", entity.x + entity.width / 2, entity.y + entity.height / 2)
           end
-        else
+        elseif invulnerableTime <= 0 then
           self:playerHit()
           local enemySize = math.max(entity.width, entity.height)
           self:createExplosion(entity.x + entity.width / 2, entity.y + entity.height / 2, enemySize)
@@ -855,8 +856,9 @@ function PlayingState:checkPlayerCollisions()
   -- Player vs Alien Lasers
   for i = #self.scene.alienLasers, 1, -1 do
     local laser = self.scene.alienLasers[i]
-    if aabbMixed(player, laser) or sweptHit(laser, player) then
-      if not self.scene.activePowerups.shield then
+    -- Use conservative AABB to avoid rare false positives from swept tests
+    if aabbMixed(player, laser) then
+      if not self.scene.activePowerups.shield and invulnerableTime <= 0 then
         self:playerHit()
       end
       self.laserPool:release(laser)
@@ -1061,7 +1063,13 @@ function PlayingState:checkBossCollisions()
   end
 
   -- Boss vs Player
-  if (aabbMixed(player, bossEntity)) and invulnerableTime <= 0 then
+  -- Use a slightly shrunken boss hitbox to avoid near-miss frustration
+  local px, py, pw, ph = _rectTopLeft(player)
+  local bx, by, bw, bh = _rectTopLeft(bossEntity)
+  local shrink = 0.75
+  local sbw, sbh = bw * shrink, bh * shrink
+  local sbx, sby = bx + (bw - sbw) * 0.5, by + (bh - sbh) * 0.5
+  if (Collision.aabb(px, py, pw, ph, sbx, sby, sbw, sbh)) and invulnerableTime <= 0 then
     if not self.scene.activePowerups.shield then
       self:playerHit()
     end
@@ -2046,6 +2054,9 @@ function PlayingState:drawLasers()
     table.insert(self.scene.explosions, t)
   end
 
+  -- Restore previous blend mode
+  love.graphics.setBlendMode(prevBlend, prevAlpha)
+
   -- Draw homing missiles and emit trail glows
   if missiles and #missiles > 0 then
     for _, m in ipairs(missiles) do
@@ -2249,6 +2260,22 @@ function PlayingState:drawUI()
   -- Heat bar
   local heatPercent = player.heat / player.maxHeat
   self:drawBar(barX, 42, barWidth, barHeight, heatPercent, { 1, heatPercent, 0 }, nil)
+
+  -- Ship info (name • hull • fire rate)
+  do
+    local shipId = (Game and Game.selectedShip) or _G.selectedShip or "falcon"
+    local cfg = constants.ships[shipId] or constants.ships.falcon
+    local name = cfg.name or shipId
+    local hull = cfg.hull or math.floor(100 * (cfg.shieldMultiplier or 1.0))
+    local fr = cfg.fireRate or 0.30
+    local guns = cfg.guns or 1
+    local frTxt = guns > 1 and string.format("%.2fs x%d", fr, guns) or string.format("%.2fs", fr)
+    local info = string.format("%s • HP %d • FR %s", name, hull, frTxt)
+    lg.setFont(Game.smallFont or lg.newFont(12))
+    lg.setColor(0.8, 0.8, 0.8, 0.9)
+    local iw = lg.getFont():getWidth(info)
+    lg.print(info, barX + (barWidth - iw) / 2, 52)
+  end
 
   -- === RIGHT SECTION: High Score/Lives/Bombs ===
   lg.setFont(Game.uiFont or lg.newFont(16))

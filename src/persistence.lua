@@ -78,7 +78,7 @@ local defaultSaveData = {
     totalPlayTime        = 0,
     totalEnemiesDefeated = 0,
     totalDeaths          = 0,
-    favoriteShip         = "alpha",
+    favoriteShip         = "falcon",
     bestKillCount        = 0,
     bestSurvivalTime     = 0,
   },
@@ -90,7 +90,7 @@ local defaultSaveData = {
     masterVolume  = 1.0,
     sfxVolume     = 1.0,
     musicVolume   = 0.2,
-    selectedShip  = "alpha",
+    selectedShip  = "falcon",
     displayMode   = "fullscreen",   -- default first run: fullscreen
     resolutionIndex = 3,             -- default 1280x720 for windowed/fullscreen
     highContrast  = false,

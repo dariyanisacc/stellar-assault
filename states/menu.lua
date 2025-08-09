@@ -12,7 +12,7 @@ local function saveSettings()
   -- Load (or create) current save-data table
   local data = Persistence.load()
   data.settings = data.settings or {}
-  data.settings.selectedShip = Game.selectedShip or "alpha"
+  data.settings.selectedShip = Game.selectedShip or "falcon"
   -- Write it back
   Persistence.save(data)
 end
@@ -346,9 +346,9 @@ function MenuState:drawShipSelect()
   lg.setFont(Game.smallFont)
   lg.setColor(0.8, 0.8, 0.8)
   local stats = {
-    alpha = "Balanced - Good all-around performance",
-    beta = "Fast    - Higher speed, lower shields",
-    gamma = "Tank    - Higher shields, slower speed",
+    falcon = "All-rounder - Balanced pace and heat",
+    wraith = "Glass-cannon - Fast, overheats quicker",
+    titan  = "Tank - Slower, more sustain",
   }
   local txt = stats[Game.availableShips[self.selectedShipIndex]] or "Standard fighter"
   lg.print(txt, self.screenWidth / 2 - lg.getFont():getWidth(txt) / 2, 380)

@@ -265,7 +265,14 @@ local function initWindow()
   Game.sfxVolume    = settings.sfxVolume or Game.sfxVolume
   Game.musicVolume  = settings.musicVolume or Game.musicVolume
   Game.displayMode  = settings.displayMode or Game.displayMode or "borderless"
-  Game.selectedShip = settings.selectedShip or Game.selectedShip or "alpha"
+  Game.selectedShip = settings.selectedShip or Game.selectedShip or "falcon"
+  -- Back-compat migration for saved ids
+  do
+    local migrate = { alpha = "falcon", beta = "wraith", gamma = "titan" }
+    if migrate[Game.selectedShip] then
+      Game.selectedShip = migrate[Game.selectedShip]
+    end
+  end
   _G.selectedShip   = Game.selectedShip
   Game.fontScale    = settings.fontScale or Game.fontScale or 1
   Game.highContrast = settings.highContrast or false
@@ -641,9 +648,14 @@ function love.load()
     return nil
   end
   -- Attempt to load the three player ships by known filenames
+  -- Legacy names (alpha/beta/gamma)
   Game.playerShips.alpha = tryImg("assets/gfx/ship_alpha@1024x1024.png")
   Game.playerShips.beta  = tryImg("assets/gfx/Player Ship Beta.png")
   Game.playerShips.gamma = tryImg("assets/gfx/Player Ship Gamma.png")
+  -- New canonical ids (falcon/wraith/titan) map to legacy sprites if present
+  Game.playerShips.falcon = Game.playerShips.alpha or Game.playerShips.falcon
+  Game.playerShips.wraith = Game.playerShips.beta  or Game.playerShips.wraith
+  Game.playerShips.titan  = Game.playerShips.gamma or Game.playerShips.titan
 
   -- Load enemy ship sprites by known filenames (fallback to rectangles if missing)
   -- Keys match behavior/type used by WaveManager and PlayingState (basic, homing, zigzag, dive, formation)
@@ -727,8 +739,13 @@ function love.load()
   _G.bossSprite  = Game.bossSprites[1]
   _G.boss2Sprite = Game.bossSprites[2]
 
-  Game.availableShips = { "alpha", "beta", "gamma" }
-  Game.selectedShip = Game.selectedShip or "alpha"
+  Game.availableShips = { "falcon", "titan", "wraith" }
+  -- Back-compat: migrate old ids to new ids
+  local migrate = { alpha = "falcon", beta = "wraith", gamma = "titan" }
+  if Game.selectedShip and migrate[Game.selectedShip] then
+    Game.selectedShip = migrate[Game.selectedShip]
+  end
+  Game.selectedShip = Game.selectedShip or "falcon"
   _G.selectedShip = Game.selectedShip
   Game.spriteScale = 0.15
 

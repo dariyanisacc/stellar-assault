@@ -275,7 +275,7 @@ function LevelSelectState:drawShipSelection()
   local shipY = y + 60
   lg.setFont(Game.uiFont)
 
-  local shipsList = Game.availableShips or { "alpha", "beta", "gamma" }
+  local shipsList = Game.availableShips or { "falcon", "titan", "wraith" }
   for i, shipName in ipairs(shipsList) do
     local isUnlocked = Persistence.isShipUnlocked(shipName)
     local isSelected = (Game and Game.selectedShip) == shipName
@@ -314,24 +314,26 @@ function LevelSelectState:drawShipSelection()
         )
       end
 
-      -- Ship stats
+      -- Ship stats (from data)
       lg.setFont(Game.smallFont)
       lg.setColor(0.7, 0.7, 0.7)
+      local speedValue = shipConfig.speed or (200 * (shipConfig.speedMultiplier or 1.0))
+      local hullValue  = shipConfig.hull or math.floor(100 * (shipConfig.shieldMultiplier or 1.0))
+      local fireRate   = shipConfig.fireRate or 0.3
+      local guns       = shipConfig.guns or 1
       lg.print(
-        "Speed: " .. string.format("%.0f%%", shipConfig.speedMultiplier * 100),
+        string.format("Hull: %d", hullValue),
         x + 20,
         shipY + 20
       )
       lg.print(
-        "Shield: " .. string.format("%.0f%%", shipConfig.shieldMultiplier * 100),
+        string.format("Speed: %d px/s", speedValue),
         x + 20,
         shipY + 35
       )
-      lg.print(
-        "Fire Rate: " .. string.format("%.0f%%", shipConfig.fireRateMultiplier * 100),
-        x + 20,
-        shipY + 50
-      )
+      local frText = guns > 1 and string.format("Fire Rate: %.2fs x%d", fireRate, guns)
+        or string.format("Fire Rate: %.2fs", fireRate)
+      lg.print(frText, x + 20, shipY + 50)
       lg.setFont(Game.uiFont)
     else
       lg.setColor(0.4, 0.4, 0.4)
@@ -378,7 +380,7 @@ function LevelSelectState:mousepressed(x, y, button)
     -- Ship selection
     if self.shipSelectOpen then
       local shipY = 160
-      local shipsList = Game.availableShips or { "alpha", "beta", "gamma" }
+      local shipsList = Game.availableShips or { "falcon", "titan", "wraith" }
       for i, shipName in ipairs(shipsList) do
         if y >= shipY - 5 and y <= shipY + 80 and x >= 30 and x <= 310 then
           if Persistence.isShipUnlocked(shipName) then

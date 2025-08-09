@@ -126,8 +126,14 @@ function EnemyAI.alienShoot(state, alien)
     return
   end
   laser.x = alien.x
-  laser.y = alien.y + alien.height / 2
-  laser.speed = constants.laser.speed * constants.balance.alienLaserSpeedMultiplier
+  laser.y = alien.y + (alien.height or 0) / 2
+  -- Explicit dimensions for consistent collisions and visuals
+  laser.width = constants.laser.width
+  laser.height = constants.laser.height
+  -- Downward velocity
+  local spd = constants.laser.speed * (constants.balance.alienLaserSpeedMultiplier or 0.7)
+  laser.vx = 0
+  laser.vy = spd
   laser.isAlien = true
   local scene = state.scene or state
   table.insert(scene.alienLasers or _G.alienLasers, laser)

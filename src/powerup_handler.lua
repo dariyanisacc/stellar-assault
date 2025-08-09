@@ -13,7 +13,7 @@ function PowerupHandler.update(state, dt)
     local powerup = powerups[i]
     powerup:update(dt)
     -- Magnet field: attract powerups toward player while keeping downward drift
-    if activePowerups.magnet and _G.player then
+    if ((activePowerups.magnet or 0) > 0) and _G.player then
       local dx = player.x - powerup.x
       local dy = player.y - powerup.y
       local dist = math.sqrt(dx * dx + dy * dy)

@@ -87,6 +87,24 @@ function PlayerControl.update(state, dt)
   local scene          = state.scene or state
   local lasers         = scene.lasers         or _G.lasers         or {}
   local activePowerups = scene.activePowerups or _G.activePowerups or {}
+  -- Local soft-cap helper for this shot
+  local __maxCapShots = (constants.balance.maxLasers or 100) - (constants.balance.softLaserMargin or 8)
+  local function canSpawn()
+    return #lasers < __maxCapShots
+  end
+  -- Soft cap helper: avoid overfilling the laser pool on burst
+  local maxCapShots = (constants.balance.maxLasers or 100) - (constants.balance.softLaserMargin or 8)
+  local function canSpawn()
+    return #lasers < maxCapShots
+  end
+  local maxCapShots    = (constants.balance.maxLasers or 100) - (constants.balance.softLaserMargin or 8)
+  local function canSpawn()
+    return #lasers < maxCapShots
+  end
+  local maxCapShots    = (constants.balance.maxLasers or 100) - (constants.balance.softLaserMargin or 8)
+  local function canSpawn()
+    return #lasers < maxCapShots
+  end
 
   --------------------------------------------------------------------
   -- Aggregate input -------------------------------------------------
@@ -138,7 +156,7 @@ function PlayerControl.update(state, dt)
     dx, dy = dx / len, dy / len
 
     local thrustMult = 1
-    if activePowerups.boost then thrustMult = thrustMult * 1.5 end
+    if ((activePowerups.boost or 0) > 0) then thrustMult = thrustMult * 1.5 end
     if state.keys.boost      then thrustMult = thrustMult * 2   end
 
     player.vx = player.vx + dx * player.thrust * dt * thrustMult
@@ -150,7 +168,7 @@ function PlayerControl.update(state, dt)
 
   local speed      = math.sqrt(player.vx * player.vx + player.vy * player.vy)
   local baseMaxVel = player.maxSpeed or 300
-  local maxVel     = activePowerups.boost and baseMaxVel * 1.5 or baseMaxVel
+  local maxVel     = (((activePowerups.boost or 0) > 0) and (baseMaxVel * 1.5)) or baseMaxVel
   if speed > maxVel then
     player.vx = (player.vx / speed) * maxVel
     player.vy = (player.vy / speed) * maxVel
@@ -189,7 +207,7 @@ function PlayerControl.update(state, dt)
   end
 
   if player.heat > 0 then
-    local coolMult = activePowerups.coolant and 1.5 or 1
+    local coolMult = (((activePowerups.coolant or 0) > 0) and 1.5) or 1
     if player.overheatTimer > 0 then coolMult = coolMult * 2 end
     player.heat = math.max(0, player.heat - player.coolRate * dt * coolMult)
   end
@@ -235,20 +253,35 @@ function PlayerControl.shoot(state, dt)
   if (state.shootCooldown and state.shootCooldown > 0) or (player.overheatTimer or 0) > 0 then
     return
   end
-  if (player.heat or 0) >= (player.maxHeat or 100) then
+  
+  -- Predict heat and trigger overheat BEFORE spawning if it would exceed max
+  local weaponPU = ((activePowerups.rapid or 0) > 0)
+               or ((activePowerups.multiShot or 0) > 0)
+               or ((activePowerups.spread or 0) > 0)
+  local heatAdd = weaponPU and 0 or (player.heatRate or 5)
+  local maxHeat = player.maxHeat or 100
+  if (player.heat or 0) + heatAdd >= maxHeat then
     player.overheatTimer = player.overheatPenalty
-    -- Use pooled audio if available; otherwise skip silently
     if _G.Game and Game.audioPool then Game.audioPool:play("explosion", player.x, player.y) end
-    if state.showDebug then
-      print("OVERHEAT! Starting cooldown period")
-    end
+    if state.showDebug then print("OVERHEAT! Starting cooldown period") end
     return
   end
 
-  local shipId = (Game and Game.selectedShip) or _G.selectedShip or "alpha"
-  local shipCfg = constants.ships[shipId] or constants.ships.alpha
+  local shipId = (Game and Game.selectedShip) or _G.selectedShip or "falcon"
+  local shipCfg = constants.ships[shipId] or constants.ships.falcon
   local spread  = shipCfg.spread or 0
+  -- Local soft-cap helper for this shot
+  local __maxCapShots = (constants.balance.maxLasers or 100) - (constants.balance.softLaserMargin or 8)
+  local function canSpawn()
+    return #lasers < __maxCapShots
+  end
   if not state.laserPool or not state.laserPool.get then return end
+  if not canSpawn() then
+    -- Soft-cap reached: apply cooldown but skip spawning
+    local baseCDcap = (((activePowerups.rapid or 0) > 0) and 0.1) or (shipCfg.fireRate or 0.3)
+    state.shootCooldown = baseCDcap * (player.fireRateMultiplier or 1)
+    return
+  end
   local laser   = state.laserPool:get()
   if not laser then
     if state.showDebug then
@@ -265,10 +298,64 @@ function PlayerControl.shoot(state, dt)
   laser.vx, laser.vy = nil, nil
   laser._remove, laser.isAlien = false, false
 
-  table.insert(lasers, laser)
-  if state.laserGrid then state.laserGrid:insert(laser) end
+  -- Support multiple guns (e.g., Titan twin guns)
+  local guns = shipCfg.guns or 1
+  if guns > 1 then
+    -- Reposition first laser to left barrel and spawn a mirrored one
+    -- Offset scales with rendered sprite width when available
+    local offset
+    do
+      local ships = _G.Game and Game.playerShips
+      local sid = (Game and Game.selectedShip) or _G.selectedShip
+      local scale = (Game and Game.spriteScale) or 0.15
+      local spr = ships and sid and ships[sid]
+      if spr and spr.getWidth then
+        offset = math.max(8, (spr:getWidth() * scale) * 0.22)
+      end
+    end
+    offset = offset or math.max(8, (player.width or 20) * 0.4)
+    laser.x = player.x - offset
+    if canSpawn() then table.insert(lasers, laser) end
+    if state.laserGrid then state.laserGrid:insert(laser) end
 
-  if activePowerups.homingMissile then
+    local l2 = state.laserPool:get()
+    if l2 then
+      l2.x      = player.x + offset
+      l2.y      = laser.y
+      l2.width  = laser.width
+      l2.height = laser.height
+      l2.speed  = laser.speed
+      l2.vx, l2.vy = nil, nil
+      l2._remove, l2.isAlien = false, false
+      if canSpawn() then table.insert(lasers, l2) end
+      if state.laserGrid then state.laserGrid:insert(l2) end
+      -- Angle outward slightly at high lateral speeds (visual flair)
+      local spd = l2.speed or constants.laser.speed
+      local mv = math.min(1, math.abs(player.vx or 0) / math.max(1, player.maxSpeed or 1))
+      local frac = 0.18 * mv
+      if frac > 0 then
+        local vx2 = spd * frac
+        local vy2 = -math.sqrt(math.max(0, spd * spd - vx2 * vx2))
+        l2.vx, l2.vy = vx2, vy2
+      end
+    end
+    -- Angle outward for left barrel as well
+    do
+      local spd = laser.speed or constants.laser.speed
+      local mv = math.min(1, math.abs(player.vx or 0) / math.max(1, player.maxSpeed or 1))
+      local frac = 0.18 * mv
+      if frac > 0 then
+        local vx1 = -spd * frac
+        local vy1 = -math.sqrt(math.max(0, spd * spd - vx1 * vx1))
+        laser.vx, laser.vy = vx1, vy1
+      end
+    end
+  else
+    if canSpawn() then table.insert(lasers, laser) end
+    if state.laserGrid then state.laserGrid:insert(laser) end
+  end
+
+  if ((activePowerups.homingMissile or 0) > 0) then
     missiles = missiles or {}
     table.insert(missiles, {
       x = laser.x,
@@ -282,48 +369,87 @@ function PlayerControl.shoot(state, dt)
   end
 
   if spread > 0 then
-    for dir = -1, 1, 2 do
-      local lz = state.laserPool:get()
-      if lz then
-        lz.x, lz.y  = laser.x, laser.y
-        lz.width    = laser.width
-        lz.height   = laser.height
-        lz.speed    = laser.speed
-        lz.vx       = dir * math.sin(spread) * lz.speed
-        lz.vy       = -math.cos(spread) * lz.speed
-        lz._remove, lz.isAlien = false, false
-        table.insert(lasers, lz)
-        if state.laserGrid then state.laserGrid:insert(lz) end
+    -- Determine barrel positions to emit spread from
+    local barrelXs = { laser.x }
+    if guns > 1 then
+      -- Recompute right barrel X to mirror
+      local off
+      do
+        local ships = _G.Game and Game.playerShips
+        local sid = (Game and Game.selectedShip) or _G.selectedShip
+        local scale = (Game and Game.spriteScale) or 0.15
+        local spr = ships and sid and ships[sid]
+        if spr and spr.getWidth then
+          off = math.max(8, (spr:getWidth() * scale) * 0.22)
+        end
+      end
+      off = off or math.max(8, (player.width or 20) * 0.4)
+      table.insert(barrelXs, player.x + off)
+    end
+    for _, bx in ipairs(barrelXs) do
+      for dir = -1, 1, 2 do
+        if not canSpawn() then break end
+        local lz = state.laserPool:get()
+        if lz then
+          lz.x, lz.y  = bx, laser.y
+          lz.width    = laser.width
+          lz.height   = laser.height
+          lz.speed    = laser.speed
+          lz.vx       = dir * math.sin(spread) * lz.speed
+          lz.vy       = -math.cos(spread) * lz.speed
+          lz._remove, lz.isAlien = false, false
+          if canSpawn() then table.insert(lasers, lz) end
+          if state.laserGrid then state.laserGrid:insert(lz) end
+        end
       end
     end
   end
 
-  local weaponPU = activePowerups.rapid or activePowerups.multiShot or activePowerups.spread
   -- Heat accrues only on non-rapid/multi/spread powerups; clamp defensively
   if not weaponPU then
     local maxHeat = player.maxHeat or 100
     local heatRate = player.heatRate or 5
-    player.heat = math.min(maxHeat, math.max(0, (player.heat or 0) + heatRate * dt))
+    -- heatRate is defined per shot; do not multiply by dt
+    player.heat = math.min(maxHeat, math.max(0, (player.heat or 0) + heatRate))
   end
 
   if _G.Game and Game.audioPool then Game.audioPool:play("laser", player.x, player.y) end
 
-  local baseCD = activePowerups.rapid and 0.1 or shipCfg.fireRate
+  local baseCD = (((activePowerups.rapid or 0) > 0) and 0.1) or shipCfg.fireRate
   state.shootCooldown = baseCD * (player.fireRateMultiplier or 1)
 
-  if activePowerups.multiShot or activePowerups.spread then
-    for offset = -15, 15, 30 do
-      local lz = state.laserPool:get()
-      if lz then
-        lz.x      = player.x + offset
-        lz.y      = laser.y
-        lz.width  = laser.width
-        lz.height = laser.height
-        lz.speed  = laser.speed
-        lz.vx, lz.vy = nil, nil
-        lz._remove, lz.isAlien = false, false
-        table.insert(lasers, lz)
-        if state.laserGrid then state.laserGrid:insert(lz) end
+  if ((activePowerups.multiShot or 0) > 0) or ((activePowerups.spread or 0) > 0) then
+    -- Multi-shot around each barrel
+    local bases = { laser.x }
+    if guns > 1 then
+      local off
+      do
+        local ships = _G.Game and Game.playerShips
+        local sid = (Game and Game.selectedShip) or _G.selectedShip
+        local scale = (Game and Game.spriteScale) or 0.15
+        local spr = ships and sid and ships[sid]
+        if spr and spr.getWidth then
+          off = math.max(8, (spr:getWidth() * scale) * 0.22)
+        end
+      end
+      off = off or math.max(8, (player.width or 20) * 0.4)
+      table.insert(bases, player.x + off)
+    end
+    for _, baseX in ipairs(bases) do
+      for offset = -15, 15, 30 do
+        if not canSpawn() then break end
+        local lz = state.laserPool:get()
+        if lz then
+          lz.x      = baseX + offset
+          lz.y      = laser.y
+          lz.width  = laser.width
+          lz.height = laser.height
+          lz.speed  = laser.speed
+          lz.vx, lz.vy = nil, nil
+          lz._remove, lz.isAlien = false, false
+          if canSpawn() then table.insert(lasers, lz) end
+          if state.laserGrid then state.laserGrid:insert(lz) end
+        end
       end
     end
   end

@@ -1,26 +1,39 @@
 {
-  "alpha": {
-    "name": "Alpha",
+  "falcon": {
+    "name": "Falcon",
+    "hull": 100,
+    "speed": 200,
     "spread": 0,
     "fireRate": 0.3,
     "speedMultiplier": 1.0,
     "shieldMultiplier": 1.0,
-    "description": "Balanced fighter"
+    "heatMultiplier": 1.0,
+    "coolMultiplier": 1.0,
+    "description": "All-rounder"
   },
-  "beta": {
-    "name": "Beta",
+  "wraith": {
+    "name": "Wraith",
+    "hull": 80,
+    "speed": 240,
     "spread": 0.20,
-    "fireRate": 0.25,
+    "fireRate": 0.20,
     "speedMultiplier": 1.3,
     "shieldMultiplier": 0.7,
-    "description": "Fast interceptor with spread shot"
+    "heatMultiplier": 1.25,
+    "coolMultiplier": 0.95,
+    "description": "Glass cannon with spread"
   },
-  "gamma": {
-    "name": "Gamma",
-    "spread": 0.35,
-    "fireRate": 0.4,
+  "titan": {
+    "name": "Titan",
+    "hull": 160,
+    "speed": 140,
+    "guns": 2,
+    "spread": 0,
+    "fireRate": 0.50,
     "speedMultiplier": 0.8,
     "shieldMultiplier": 1.5,
-    "description": "Heavy tank with wide spread"
+    "heatMultiplier": 0.9,
+    "coolMultiplier": 1.1,
+    "description": "Tank with wide spread"
   }
 }
