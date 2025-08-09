@@ -2467,7 +2467,25 @@ function PlayingState:updateBoss(dt)
   end
 
   local prev = self.bossManager.activeBoss
-  self.bossManager:update(dt)
+  -- Provide a lightweight bullets adapter so legacy boss entities can emit shots
+  local bulletsAdapter = {
+    spawn = function(_, x, y, angle, speed)
+      -- Prefer the game's laser creator to ensure visuals and collisions are consistent
+      if self.createBossLaser then
+        self:createBossLaser(x, y, angle, false)
+      else
+        -- Fallback: insert a simple alien laser
+        local l = self.laserPool and self.laserPool:get() or {}
+        l.x, l.y = x, y
+        l.width, l.height = 6, 12
+        l.vx = math.cos(angle) * (speed or 300)
+        l.vy = math.sin(angle) * (speed or 300)
+        l.isAlien = true
+        table.insert(self.scene.alienLasers, l)
+      end
+    end,
+  }
+  self.bossManager:update(dt, bulletsAdapter)
   boss = self.bossManager.activeBoss
 
   -- Check for defeat
