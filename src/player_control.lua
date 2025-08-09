@@ -30,7 +30,8 @@ end
 local function pad()
   local c = Persistence.getControls and Persistence.getControls().gamepad
   return c or {
-    shoot = "rightshoulder",
+    shoot = "a",
+    bomb  = "b",
     boost = "x",
   }
 end
@@ -66,8 +67,19 @@ function PlayerControl.update(state, dt)
     clearIfReleased("right", b.right)
     clearIfReleased("up",    b.up)
     clearIfReleased("down",  b.down)
-    clearIfReleased("shoot", b.shoot)
-    clearIfReleased("boost", b.boost)
+    -- Do not clear shoot/boost here if gamepad is the active device,
+    -- to allow continuous fire while holding A/RT.
+    local usingGamepad = _G.Game and Game.lastInputType == "gamepad"
+    if not usingGamepad then
+      clearIfReleased("shoot", b.shoot)
+      clearIfReleased("boost", b.boost)
+    end
+  end
+  -- Optional: treat left mouse as shoot hold as well
+  if love and love.mouse and love.mouse.isDown then
+    if love.mouse.isDown(1) then
+      state.keys.shoot = true
+    end
   end
   --------------------------------------------------------------------
   -- Scene‑scoped references (supporting new scene/EC‑style infra) ---
@@ -329,6 +341,8 @@ function PlayerControl.handleKeyPress(state, key)
   elseif key == b.down  then state.keys.down  = true
   elseif key == b.shoot then state.keys.shoot = true
   elseif key == b.boost then state.keys.boost = true
+  elseif key == b.bomb  then
+    PlayerControl.useBomb(state)
   end
 end
 
@@ -345,7 +359,12 @@ end
 
 function PlayerControl.handleGamepadPress(state, button)
   local b = pad()
-  if     button == b.shoot then PlayerControl.shoot(state, 0)
+  if     button == b.shoot then
+    -- Fire immediately and latch for continuous fire while held
+    PlayerControl.shoot(state, 0)
+    state.keys.shoot = true
+  elseif button == b.bomb then
+    PlayerControl.useBomb(state)
   elseif button == b.boost then state.keys.boost = true
   end
 end
@@ -353,6 +372,20 @@ end
 function PlayerControl.handleGamepadRelease(state, button)
   local b = pad()
   if button == b.boost then state.keys.boost = false end
+  if button == b.shoot then state.keys.shoot = false end
+end
+
+----------------------------------------------------------------------
+-- BOMB ACTION -------------------------------------------------------
+----------------------------------------------------------------------
+
+function PlayerControl.useBomb(state)
+  if not _G.player then return end
+  if not state or not state.screenBomb then return end
+  if player.bombs and player.bombs > 0 then
+    player.bombs = player.bombs - 1
+    state:screenBomb()
+  end
 end
 
 ----------------------------------------------------------------------

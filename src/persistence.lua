@@ -57,8 +57,8 @@ local defaultControls = {
     shoot  = "space", boost = "lshift", bomb = "b",    pause = "escape",
   },
   gamepad = {
-    shoot = "rightshoulder",
-    bomb  = "a",
+    shoot = "a",
+    bomb  = "b",
     boost = "x",
     pause = "start",
   },
@@ -235,6 +235,16 @@ function Persistence.getControls()
   local data = Persistence.getSaveData()
   data.settings = data.settings or {}
   data.settings.controls = data.settings.controls or deepcopy(defaultControls)
+  -- Migrate gamepad mapping: prefer A=shoot, B=bomb if old mapping present
+  local gp = data.settings.controls.gamepad or {}
+  local migrated = false
+  if gp.shoot == "rightshoulder" and gp.bomb == "a" then
+    gp.shoot = "a"
+    gp.bomb  = "b"
+    data.settings.controls.gamepad = gp
+    migrated = true
+  end
+  if migrated then Persistence.save(data) end
   Persistence.settings = data.settings
   return deepcopy(data.settings.controls)
 end
