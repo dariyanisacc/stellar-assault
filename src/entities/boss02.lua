@@ -124,7 +124,8 @@ function Boss02:patternLastStand(bullets)
   end
   if player then
     local dx, dy = player.x - self.x, player.y - self.y
-    bullets:spawn(self.x, self.y, math.atan2(dy, dx), 350)
+    local atan2 = math.atan2 or function(y, x) return math.atan(y, x) end
+    bullets:spawn(self.x, self.y, atan2(dy, dx), 350)
   end
 end
 
