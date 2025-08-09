@@ -7,11 +7,10 @@ local LoadingState = {}
 function LoadingState:enter(params)
   self.nextState = params and params.nextState or "intro"
   self.done = false
-  -- Preload all discoverable assets. This is safe to call even if
-  -- some asset folders are missing; the AssetManager checks existence.
-  if Game.assetManager and Game.assetManager.loadAll then
-    Game.assetManager.loadAll()
-  end
+  -- Keep loading snappy: defer heavy audio/video preloads to first use.
+  -- We avoid calling AssetManager.loadAll() here because it streams many
+  -- audio sources and videos, which can stall startup on some systems.
+  -- Images needed for menus are already fetched during love.load.
   self.done = true
   self.timer = 0.2
 end

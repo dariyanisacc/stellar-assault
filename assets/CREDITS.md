@@ -12,14 +12,8 @@ The palette files in `assets/palettes` are original works by Dariyan Jones and a
 
 ## Audio
 
-Sound effects are sourced from the open source **Sci‑Fi Sounds** pack by [Kenney.nl](https://www.kenney.nl/) and are licensed CC0 1.0. These files are not stored in the repository. To use them, copy the following into `assets/sfx/`:
+Sound effects are sourced from the open source **Sci‑Fi Sounds** pack by [Kenney.nl](https://www.kenney.nl/) and are licensed CC0 1.0. These files are included under `assets/kenny assets/Sci-Fi Sounds/Audio/`.
 
-- `gameover.ogg` – game over jingle
-- `victory.ogg` – victory fanfare
-- `laser.ogg` – player laser shot
-- `explosion.ogg` – explosion effect
-- `powerup.ogg` – power‑up pickup
-- `shield_break.ogg` – shield break effect
-- `menu.ogg` – menu select sound
+The game references audio exclusively via data files. See `data/sounds.json` for the mapping from logical sound keys (e.g., `laser`, `explosion`, `background`) to the concrete `.ogg` files from the Kenney pack.
 
 All other assets not listed here were created specifically for this game and are released under CC0 1.0 unless noted otherwise.

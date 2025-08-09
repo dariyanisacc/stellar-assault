@@ -10,7 +10,7 @@ mkdir -p "$BUILD_DIR"
 
 # Create .love archive
 zip -9 -r "$BUILD_DIR/$GAME_NAME.love" \
-    main.lua assets src states \
+    main.lua assets src states data \
     -x "*/.DS_Store" > /dev/null
 
 # If running on macOS, package into an app bundle

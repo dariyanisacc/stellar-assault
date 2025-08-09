@@ -264,15 +264,15 @@ constants.audio = {
 local soundsFromFile = loadJson("data/sounds.json")
 
 constants.sounds = next(soundsFromFile) and soundsFromFile or {
-  laser        = "Sci-Fi Sounds/Audio/laserLarge_000.ogg",
-  explosion    = "Sci-Fi Sounds/Audio/explosionCrunch_000.ogg",
-  powerup      = "Sci-Fi Sounds/Audio/slime_000.ogg",
-  shield_break = "Sci-Fi Sounds/Audio/impactMetal_000.ogg",
-  gameover     = "Sci-Fi Sounds/Audio/computerNoise_001.ogg",
-  menu         = "Sci-Fi Sounds/Audio/computerNoise_000.ogg",
-  victory      = "Sci-Fi Sounds/Audio/computerNoise_003.ogg",
-  background   = "Sci-Fi Sounds/Audio/computerNoise_004.ogg",
-  boss         = "Sci-Fi Sounds/Audio/computerNoise_002.ogg",
+  laser        = "assets/kenny assets/Sci-Fi Sounds/Audio/laserLarge_000.ogg",
+  explosion    = "assets/kenny assets/Sci-Fi Sounds/Audio/explosionCrunch_000.ogg",
+  powerup      = "assets/kenny assets/Sci-Fi Sounds/Audio/slime_000.ogg",
+  shield_break = "assets/kenny assets/Sci-Fi Sounds/Audio/impactMetal_000.ogg",
+  gameover     = "assets/kenny assets/Sci-Fi Sounds/Audio/computerNoise_001.ogg",
+  menu         = "assets/kenny assets/Sci-Fi Sounds/Audio/computerNoise_000.ogg",
+  victory      = "assets/kenny assets/Sci-Fi Sounds/Audio/computerNoise_003.ogg",
+  background   = "assets/kenny assets/Sci-Fi Sounds/Audio/spaceEngine_001.ogg",
+  boss         = "assets/kenny assets/Sci-Fi Sounds/Audio/engineCircular_003.ogg",
 }
 
 -- ---------------------------------------------------------------------------

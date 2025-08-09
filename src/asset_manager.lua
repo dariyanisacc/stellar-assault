@@ -48,12 +48,19 @@ end
 
 function AssetManager.getSound(path, kind)
   if not love.filesystem.getInfo(path, "file") then
-    print("Warning: Sound file not found: "..path)
+    print("[Audio] Sound file not found: " .. tostring(path))
     return nil
   end
   kind = kind or "static"
   local key = path .. ":" .. kind
-  return cache(AssetManager.sounds, key, function() return la.newSource(path, kind) end)
+  return cache(AssetManager.sounds, key, function()
+    local ok, srcOrErr = pcall(function() return la.newSource(path, kind) end)
+    if not ok then
+      print("[Audio] Failed to load sound: " .. tostring(path) .. " (" .. tostring(srcOrErr) .. ")")
+      return nil
+    end
+    return srcOrErr
+  end)
 end
 
 ---Get and cache a video at `path`.

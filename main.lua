@@ -135,9 +135,16 @@ local RES_LIST = {
 local function setWindowFromGame()
   local minw, minh = constants.window.minWidth, constants.window.minHeight
   local mode = Game.displayMode or "fullscreen"
+  local function trySet(w, h, opts)
+    local ok, err = pcall(lw.setMode, w, h, opts)
+    if not ok then
+      io.stderr:write("[Window] setMode failed: " .. tostring(err) .. "\n")
+    end
+    return ok
+  end
   if mode == "borderless" then
     local dw, dh = lw.getDesktopDimensions()
-    lw.setMode(dw, dh, {
+    if not trySet(dw, dh, {
       fullscreen = false,
       borderless = true,
       resizable = false,
@@ -145,29 +152,68 @@ local function setWindowFromGame()
       display = 1,
       minwidth = minw,
       minheight = minh,
-    })
+    }) then
+      -- Fallback to windowed 1280x720
+      trySet(1280, 720, {
+        fullscreen = false,
+        borderless = false,
+        resizable = true,
+        minwidth = minw,
+        minheight = minh,
+      })
+    end
     lw.setPosition(0, 0)
     lw.maximize()
   elseif mode == "fullscreen" then
     local idx = math.max(1, math.min(#RES_LIST, Game.currentResolution or 3))
     local rw, rh = RES_LIST[idx][1], RES_LIST[idx][2]
-    lw.setMode(rw, rh, {
+    if not trySet(rw, rh, {
       fullscreen = true,
-      fullscreentype = "exclusive",
+      fullscreentype = "desktop",
       resizable = false,
       minwidth = minw,
       minheight = minh,
-    })
+    }) then
+      -- Fallback to borderless at desktop size
+      local dw, dh = lw.getDesktopDimensions()
+      if not trySet(dw, dh, {
+        fullscreen = false,
+        borderless = true,
+        resizable = false,
+        vsync = 1,
+        display = 1,
+        minwidth = minw,
+        minheight = minh,
+      }) then
+        -- Final fallback to windowed 1280x720
+        trySet(1280, 720, {
+          fullscreen = false,
+          borderless = false,
+          resizable = true,
+          minwidth = minw,
+          minheight = minh,
+        })
+      end
+      Game.displayMode = "borderless"
+    end
   else -- windowed
     local idx = math.max(1, math.min(#RES_LIST, Game.currentResolution or 3))
     local rw, rh = RES_LIST[idx][1], RES_LIST[idx][2]
-    lw.setMode(rw, rh, {
+    if not trySet(rw, rh, {
       fullscreen = false,
       borderless = false,
       resizable = true,
       minwidth = minw,
       minheight = minh,
-    })
+    }) then
+      trySet(1280, 720, {
+        fullscreen = false,
+        borderless = false,
+        resizable = true,
+        minwidth = minw,
+        minheight = minh,
+      })
+    end
   end
 end
 
@@ -218,7 +264,7 @@ local function initWindow()
   Game.masterVolume = settings.masterVolume or Game.masterVolume
   Game.sfxVolume    = settings.sfxVolume or Game.sfxVolume
   Game.musicVolume  = settings.musicVolume or Game.musicVolume
-  Game.displayMode  = settings.displayMode or Game.displayMode or "fullscreen"
+  Game.displayMode  = settings.displayMode or Game.displayMode or "borderless"
   Game.selectedShip = settings.selectedShip or Game.selectedShip or "alpha"
   _G.selectedShip   = Game.selectedShip
   Game.fontScale    = settings.fontScale or Game.fontScale or 1
@@ -572,42 +618,23 @@ function love.load()
     initStarfield()
   end
 
-  -- Images / sprites: scan assets/gfx and populate Game sprite tables
+  -- Lightweight boot: only load a minimal set of sprites needed for menus;
+  -- gameplay will fall back to simple shapes if sprites are absent.
   local lf = love.filesystem
-  local function keyForPng(filename)
-    local base = filename:gsub("%.png$", "")
-    local k = base:lower():gsub("%s+", "_")
-    if k:find("^player_ship_") then
-      k = k:gsub("^player_ship_", "player_")
-    elseif k:find("^ship_alpha") then
-      k = "player_alpha"
-    end
-    return k
-  end
-
   Game.playerShips, Game.enemyShips, Game.bossSprites = {}, {}, {}
   Game.spriteByKey = {}
-  if lf.getInfo("assets/gfx", "directory") then
-    for _, name in ipairs(lf.getDirectoryItems("assets/gfx")) do
-      if name:lower():sub(-4) == ".png" then
-        local key = keyForPng(name)
-        local img = AssetManager.getImage("assets/gfx/" .. name)
-        if img then
-          Game.spriteByKey[key] = img
-          if key:find("^player_") then
-            local ship = key:match("^player_(.+)$")
-            if ship then Game.playerShips[ship] = img end
-          elseif key:find("^enemy_") then
-            local etype = key:match("^enemy_(.+)$")
-            if etype then Game.enemyShips[etype] = img end
-          elseif key:find("^boss_") then
-            local id = tonumber(key:match("^boss_(%d+)$") or "")
-            if id then Game.bossSprites[id] = img end
-          end
-        end
-      end
+  local function tryImg(path)
+    if lf.getInfo(path, "file") then
+      local ok, img = pcall(function() return AssetManager.getImage(path) end)
+      if ok and img and img.setFilter then img:setFilter("linear", "linear") end
+      return ok and img or nil
     end
+    return nil
   end
+  -- Attempt to load the three player ships by known filenames
+  Game.playerShips.alpha = tryImg("assets/gfx/ship_alpha@1024x1024.png")
+  Game.playerShips.beta  = tryImg("assets/gfx/Player Ship Beta.png")
+  Game.playerShips.gamma = tryImg("assets/gfx/Player Ship Gamma.png")
 
   -- Kenny assets: load nicer laser sprites if available
   do
