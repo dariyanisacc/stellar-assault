@@ -32,8 +32,8 @@ function Boss.new(level, opts)
   self.x = (opts.x or (lg.getWidth()  / 2))
   self.y = (opts.y or (-self.sprite:getHeight()))
 
-  -- collision + draw scale
-  self.scale = 4
+  -- collision + draw scale (reduced by 25%)
+  self.scale = 3
   self.width  = (self.sprite and self.sprite:getWidth()  * self.scale) or 64
   self.height = (self.sprite and self.sprite:getHeight() * self.scale) or 64
   self.size   = math.max(self.width, self.height)

@@ -747,7 +747,8 @@ function love.load()
   end
   Game.selectedShip = Game.selectedShip or "falcon"
   _G.selectedShip = Game.selectedShip
-  Game.spriteScale = 0.15
+  -- Global sprite scale (player/enemy/boss); reduced by 25% per request
+  Game.spriteScale = 0.1125
 
   initStates()
   logger.info("Stellar Assault started")

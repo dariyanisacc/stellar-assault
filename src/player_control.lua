@@ -9,6 +9,23 @@ local Persistence = require("src.persistence")
 
 local PlayerControl = {}
 
+-- Simple WASD aliases so arrows and WASD both work by default,
+-- without interfering with user-remappable bindings.
+local KEY_ALIASES = {
+  left  = { "a" },
+  right = { "d" },
+  up    = { "w" },
+  down  = { "s" },
+}
+
+local function keyIn(list, k)
+  if not list then return false end
+  for _, v in ipairs(list) do
+    if k == v then return true end
+  end
+  return false
+end
+
 ----------------------------------------------------------------------
 -- INTERNAL HELPERS --------------------------------------------------
 ----------------------------------------------------------------------
@@ -55,18 +72,28 @@ function PlayerControl.update(state, dt)
   -- change), clear it to prevent perpetual movement/shooting.
   if love and love.keyboard and love.keyboard.isDown then
     local b = kbd()
-    local function clearIfReleased(action, keyname)
-      local k = keyname
-      if state.keys[action] and type(k) == "string" and k ~= "" then
-        if not love.keyboard.isDown(k) then
+    local function anyDown(primary, aliases)
+      if type(primary) == "string" and primary ~= "" and love.keyboard.isDown(primary) then
+        return true
+      end
+      if aliases then
+        for _, k in ipairs(aliases) do
+          if love.keyboard.isDown(k) then return true end
+        end
+      end
+      return false
+    end
+    local function clearIfReleased(action, primary, aliases)
+      if state.keys[action] then
+        if not anyDown(primary, aliases) then
           state.keys[action] = false
         end
       end
     end
-    clearIfReleased("left",  b.left)
-    clearIfReleased("right", b.right)
-    clearIfReleased("up",    b.up)
-    clearIfReleased("down",  b.down)
+    clearIfReleased("left",  b.left,  KEY_ALIASES.left)
+    clearIfReleased("right", b.right, KEY_ALIASES.right)
+    clearIfReleased("up",    b.up,    KEY_ALIASES.up)
+    clearIfReleased("down",  b.down,  KEY_ALIASES.down)
     -- Do not clear shoot/boost here if gamepad is the active device,
     -- to allow continuous fire while holding A/RT.
     local usingGamepad = _G.Game and Game.lastInputType == "gamepad"
@@ -461,10 +488,10 @@ end
 
 function PlayerControl.handleKeyPress(state, key)
   local b = kbd()
-  if     key == b.left  then state.keys.left  = true
-  elseif key == b.right then state.keys.right = true
-  elseif key == b.up    then state.keys.up    = true
-  elseif key == b.down  then state.keys.down  = true
+  if     key == b.left  or keyIn(KEY_ALIASES.left,  key) then state.keys.left  = true
+  elseif key == b.right or keyIn(KEY_ALIASES.right, key) then state.keys.right = true
+  elseif key == b.up    or keyIn(KEY_ALIASES.up,    key) then state.keys.up    = true
+  elseif key == b.down  or keyIn(KEY_ALIASES.down,  key) then state.keys.down  = true
   elseif key == b.shoot then state.keys.shoot = true
   elseif key == b.boost then state.keys.boost = true
   elseif key == b.bomb  then
@@ -474,12 +501,27 @@ end
 
 function PlayerControl.handleKeyRelease(state, key)
   local b = kbd()
-  if     key == b.left  then state.keys.left  = false
-  elseif key == b.right then state.keys.right = false
-  elseif key == b.up    then state.keys.up    = false
-  elseif key == b.down  then state.keys.down  = false
-  elseif key == b.shoot then state.keys.shoot = false
-  elseif key == b.boost then state.keys.boost = false
+  local function stillHeld(primary, aliases)
+    if love and love.keyboard and love.keyboard.isDown then
+      if type(primary) == "string" and primary ~= "" and love.keyboard.isDown(primary) then return true end
+      if aliases then
+        for _, k in ipairs(aliases) do if love.keyboard.isDown(k) then return true end end
+      end
+    end
+    return false
+  end
+  if key == b.left or keyIn(KEY_ALIASES.left, key) then
+    if not stillHeld(b.left, KEY_ALIASES.left) then state.keys.left = false end
+  elseif key == b.right or keyIn(KEY_ALIASES.right, key) then
+    if not stillHeld(b.right, KEY_ALIASES.right) then state.keys.right = false end
+  elseif key == b.up or keyIn(KEY_ALIASES.up, key) then
+    if not stillHeld(b.up, KEY_ALIASES.up) then state.keys.up = false end
+  elseif key == b.down or keyIn(KEY_ALIASES.down, key) then
+    if not stillHeld(b.down, KEY_ALIASES.down) then state.keys.down = false end
+  elseif key == b.shoot then
+    state.keys.shoot = false
+  elseif key == b.boost then
+    state.keys.boost = false
   end
 end
 

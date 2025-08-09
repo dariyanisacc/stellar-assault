@@ -50,8 +50,9 @@ constants.player = {
   lives               = 3,
   maxLives            = 5,
   invulnerabilityTime = 2,
-  width               = 30,
-  height              = 30,
+  -- Reduce player collision bounds by 25%
+  width               = 22.5,
+  height              = 22.5,
   -- Inertia physics
   thrust   = 1500,
   maxSpeed = 800,
@@ -130,8 +131,9 @@ constants.asteroid = {
 constants.alien = {
   speed         = 60,
   shootInterval = 2,
-  width         = 40,
-  height        = 40,
+  -- Reduce alien collision bounds by 25%
+  width         = 30,
+  height        = 30,
   spawnInterval = 5,
 }
 

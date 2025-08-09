@@ -49,7 +49,7 @@ function Boss02.new(level)
   self.tag    = "boss"
   local texW  = (self.sprite and self.sprite:getWidth())  or 64
   local texH  = (self.sprite and self.sprite:getHeight()) or 64
-  local drawScale = self.scale * 4
+  local drawScale = self.scale * 3
   self.width  = texW * drawScale
   self.height = texH * drawScale
   self.size   = math.max(self.width, self.height)
@@ -108,7 +108,7 @@ function Boss02:update(dt, bullets)
   -- Update collision extents in case scale/rotation changed
   if self.sprite then
     local texW, texH = self.sprite:getWidth(), self.sprite:getHeight()
-    local drawScale = (self.scale or 1) * 4
+    local drawScale = (self.scale or 1) * 3
     self.width  = texW * drawScale
     self.height = texH * drawScale
     self.size   = math.max(self.width, self.height)
@@ -158,7 +158,7 @@ function Boss02:onPhaseChange(phase)
   -- Recompute extents for new scale
   if self.sprite then
     local texW, texH = self.sprite:getWidth(), self.sprite:getHeight()
-    local drawScale = (self.scale or 1) * 4
+    local drawScale = (self.scale or 1) * 3
     self.width  = texW * drawScale
     self.height = texH * drawScale
     self.size   = math.max(self.width, self.height)
@@ -182,7 +182,7 @@ function Boss02:draw()
   lg.setColor(r, g, b, 1)
 
   if self.sprite then
-    lg.draw(self.sprite, 0, 0, 0, self.scale * 4, self.scale * 4,
+    lg.draw(self.sprite, 0, 0, 0, self.scale * 3, self.scale * 3,
             self.sprite:getWidth() / 2, self.sprite:getHeight() / 2)
   else
     lg.circle("fill", 0, 0, 40 * self.scale)

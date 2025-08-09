@@ -18,8 +18,9 @@ function Enemy:new(o)
   o.x = o.x or 0
   o.y = o.y or 0
   o.speed = o.speed or 100
-  o.width = o.width or 40
-  o.height = o.height or 40
+  -- Reduce base collision bounds by 25%
+  o.width = o.width or 30
+  o.height = o.height or 30
   o.size = o.size or math.max(o.width or 40, o.height or 40) -- Add size for compatibility
   o.behavior = o.behavior or "move_left"
   o.health = o.health or 1
@@ -536,7 +537,7 @@ function WaveManager:draw()
     -- Draw sprite if available, otherwise fall back to rectangles
     if sprite then
       love.graphics.setColor((Game and Game.palette and Game.palette.enemy) or {1,1,1})
-      -- Calculate scale to fit enemy dimensions * 4
+      -- Calculate scale to fit enemy dimensions; using 4x to match visual style
       local scaleX = (enemy.width / sprite:getWidth()) * 4
       local scaleY = (enemy.height / sprite:getHeight()) * 4
       -- Draw centered at enemy position
