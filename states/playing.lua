@@ -2623,13 +2623,14 @@ function PlayingState:drawBoss()
   local b = self.bossManager.activeBoss
   if b.sprite then
     lg.setColor(1, 1, 1, 1)
+    local scale = (Game and Game.spriteScale) or 0.15
     lg.draw(
       b.sprite,
-      b.x - b.sprite:getWidth() * spriteScale / 2,
-      b.y - b.sprite:getHeight() * spriteScale / 2,
+      b.x - b.sprite:getWidth() * scale / 2,
+      b.y - b.sprite:getHeight() * scale / 2,
       0,
-      spriteScale,
-      spriteScale
+      scale,
+      scale
     )
     -- Draw any attack effects from the boss manager
     if self.bossManager.drawAttackEffects then
